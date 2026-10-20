@@ -19,6 +19,7 @@ mempalace.yaml
 entities.json
 !/ml/
 !/docs/
+!/tests/
 /ml/**/data/
 /ml/**/runs/
 /ml/**/*.pt

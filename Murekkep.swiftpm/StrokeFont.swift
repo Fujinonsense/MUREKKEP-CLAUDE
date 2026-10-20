@@ -362,11 +362,28 @@ enum StrokeText {
     }
 
     /// One stroke per pen path. Grass keeps its flower setting through `flowerLevel`.
+    /// Straight pieces are filled in with points: the renderer draws a smooth curve through the
+    /// points, and between far-apart corners that curve would bulge (an octagon became a circle).
     static func strokes(_ paths: [[SIMD2<Float>]], style: Style, flowerLevel: Int, birth: Double) -> [Stroke] {
         let r = max(style.width * 0.5, 0.35)
+        let spacing = max(0.6, r * 0.5)
         return paths.compactMap { path -> Stroke? in
             guard !path.isEmpty else { return nil }
-            let pts = path.map { InkPoint(x: $0.x, y: $0.y, r: r, ink: 0.55) }
+            var pts: [InkPoint] = []
+            pts.reserveCapacity(path.count * 4)
+            for i in path.indices {
+                let a = path[i]
+                pts.append(InkPoint(x: a.x, y: a.y, r: r, ink: 0.55))
+                guard i + 1 < path.count else { continue }
+                let b = path[i + 1]
+                let n = Int(vlength(b - a) / spacing)
+                if n > 1 {
+                    for k in 1..<n {
+                        let p = a + (b - a) * (Float(k) / Float(n))
+                        pts.append(InkPoint(x: p.x, y: p.y, r: r, ink: 0.55))
+                    }
+                }
+            }
             let random = Float.random(in: 0..<1)
             let seed = style.brush == .grass ? GrassGenerator.seed(level: flowerLevel, random: random) : random
             return Stroke(brush: style.brush, color: style.color, width: style.width, birth: birth, seed: seed, points: pts)
