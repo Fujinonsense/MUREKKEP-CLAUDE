@@ -66,7 +66,7 @@ struct PageNavigator: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    TextField("\(editor.currentPage + 1)", text: $number)
+                    TextField(String(editor.currentPage + 1), text: $number)
                         .font(.system(size: 34, weight: .semibold, design: .rounded).monospacedDigit())
                         .keyboardType(.numberPad)
                         .focused($typing)

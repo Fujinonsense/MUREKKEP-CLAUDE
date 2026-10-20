@@ -15,8 +15,8 @@ let package = Package(
             name: "Murekkep",
             targets: ["AppModule"],
             bundleIdentifier: "com.murekkep.app",
-            displayVersion: "2.9",
-            bundleVersion: "12",
+            displayVersion: "3.0",
+            bundleVersion: "13",
             appIcon: .asset("AppIcon"),
             supportedDeviceFamilies: [
                 .pad,
