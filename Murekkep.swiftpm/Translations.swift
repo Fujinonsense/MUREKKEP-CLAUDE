@@ -997,5 +997,9 @@ enum Translations {
         "Bölümler · {0} video": "Chapters · {0} videos",
         "Seçtiğin her bölüm için ayrı bir video hazırlanır; sırayla, biri bitince öbürü.": "Each chapter you choose gets its own video, made one after another.",
         "Cihazdaki model videoyu planlıyor…": "The on-device model is planning the video…",
+        "Numaralı bölümler, çizimler": "Numbered sections, drawings",
+        "Limit ve Yaklaşım": "Limits and Approach",
+        "Sıfıra bölmeyi aşmak": "Getting past division by zero",
+        "Çizimler hazırlanıyor…": "Drawing the illustrations…",
     ]
 }

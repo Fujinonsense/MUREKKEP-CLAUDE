@@ -3,9 +3,11 @@ import UIKit
 
 // MARK: - Assets
 
-/// Pictures prepared for the slides: the figures cropped from the source PDFs.
+/// Pictures prepared for the slides: the figures cropped from the source PDFs, and the illustrations
+/// drawn for the overview ("file:" art in its folder).
 final class SlideAssets: @unchecked Sendable {
     private var figures: [UUID: UIImage] = [:]
+    private var illustrations: [UUID: UIImage] = [:]
     private let lock = NSLock()
 
     func figure(_ sceneID: UUID) -> UIImage? {
@@ -20,19 +22,44 @@ final class SlideAssets: @unchecked Sendable {
         lock.unlock()
     }
 
-    static func load(for overview: Overview, library: LibraryStore) async -> SlideAssets {
+    func illustration(_ sceneID: UUID) -> UIImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        return illustrations[sceneID]
+    }
+
+    func set(illustration image: UIImage, for sceneID: UUID) {
+        lock.lock()
+        illustrations[sceneID] = image
+        lock.unlock()
+    }
+
+    static func load(for overview: Overview, library: LibraryStore, folder: URL? = nil) async -> SlideAssets {
         let assets = SlideAssets()
         var jobs: [(id: UUID, url: URL, figure: FigureRef)] = []
         for scene in overview.scenes {
             guard let f = scene.figure, overview.sourceIDs.indices.contains(f.source) else { continue }
             jobs.append((id: scene.id, url: library.pdfURL(for: overview.sourceIDs[f.source]), figure: f))
         }
-        guard !jobs.isEmpty else { return assets }
+        var drawings: [(id: UUID, url: URL)] = []
+        if let folder {
+            for scene in overview.scenes {
+                guard let art = scene.art, art.hasPrefix("file:") else { continue }
+                drawings.append((id: scene.id, url: folder.appendingPathComponent(String(art.dropFirst(5)))))
+            }
+        }
+        guard !jobs.isEmpty || !drawings.isEmpty else { return assets }
         let list = jobs
+        let pictures = drawings
         await Task.detached(priority: .userInitiated) {
             for job in list {
                 if let image = SlideAssets.renderFigure(job.url, job.figure) {
                     assets.set(image, for: job.id)
+                }
+            }
+            for d in pictures {
+                if let image = UIImage(contentsOfFile: d.url.path) {
+                    assets.set(illustration: image, for: d.id)
                 }
             }
         }.value
@@ -80,8 +107,36 @@ enum SlideRenderer {
         var chalk: Bool
     }
 
+    /// The explainer look's accent colours: one per overview, picked by its title.
+    static let explainerAccents: [UIColor] = [
+        UIColor(red: 0xF2 / 255, green: 0x8C / 255, blue: 0x28 / 255, alpha: 1),
+        UIColor(red: 0x1A / 255, green: 0x73 / 255, blue: 0xE8 / 255, alpha: 1),
+        UIColor(red: 0x0F / 255, green: 0x9D / 255, blue: 0x58 / 255, alpha: 1),
+        UIColor(red: 0x8E / 255, green: 0x44 / 255, blue: 0xAD / 255, alpha: 1),
+    ]
+
+    /// 32-bit FNV-1a of the title's UTF-8 bytes (twin of tests/ports/highlight.py), so an overview
+    /// keeps its colour.
+    static func accentIndex(_ title: String) -> Int {
+        var h: UInt32 = 0x811C_9DC5
+        for b in title.utf8 {
+            h ^= UInt32(b)
+            h = h &* 0x0100_0193
+        }
+        return Int(h % UInt32(explainerAccents.count))
+    }
+
+    static let marker = UIColor(red: 1.0, green: 0.898, blue: 0.541, alpha: 1)
+    static let ink = UIColor(red: 0.09, green: 0.106, blue: 0.141, alpha: 1)
+
     static func palette(_ theme: SlideTheme) -> Palette {
         switch theme {
+        case .explainer:
+            return Palette(top: UIColor(red: 0.969, green: 0.973, blue: 0.980, alpha: 1), bottom: UIColor(red: 0.969, green: 0.973, blue: 0.980, alpha: 1),
+                           text: ink, muted: UIColor(red: 0.357, green: 0.384, blue: 0.443, alpha: 1),
+                           accent: explainerAccents[1], accent2: explainerAccents[1],
+                           good: UIColor(red: 0.06, green: 0.62, blue: 0.35, alpha: 1), card: .white,
+                           cardText: ink, usesInk: false, chalk: false)
         case .modern:
             return Palette(top: UIColor(red: 0.97, green: 0.98, blue: 1.0, alpha: 1), bottom: UIColor(red: 0.91, green: 0.94, blue: 0.99, alpha: 1),
                            text: UIColor(red: 0.08, green: 0.10, blue: 0.17, alpha: 1), muted: UIColor(red: 0.36, green: 0.40, blue: 0.48, alpha: 1),
@@ -117,7 +172,12 @@ enum SlideRenderer {
         ctx.saveGState()
         ctx.scaleBy(x: size.width / canvas.width, y: size.height / canvas.height)
         let theme = overview.options.theme
-        let p = palette(theme)
+        var p = palette(theme)
+        if theme == .explainer {
+            let accent = explainerAccents[accentIndex(overview.title)]
+            p.accent = accent
+            p.accent2 = accent.withAlphaComponent(0.75)
+        }
         if staticBackground {
             // The export draws thousands of frames: the background is drawn once.
             UIGraphicsPushContext(ctx)
@@ -169,12 +229,12 @@ enum SlideRenderer {
     }
 
     /// A still of the title slide (cards and thumbnails), without captions.
-    static func poster(_ overview: Overview, size: CGSize, in ctx: CGContext) {
+    static func poster(_ overview: Overview, size: CGSize, assets: SlideAssets? = nil, in ctx: CGContext) {
         var timeline = overview.timeline
         if timeline.starts.isEmpty {
             timeline = OverviewTimeline(durations: overview.scenes.map { _ in 6 }, kind: .video)
         }
-        drawFrame(overview, timeline: timeline, time: timeline.sceneStart(0) + 4, assets: nil, captions: false, size: size, in: ctx)
+        drawFrame(overview, timeline: timeline, time: timeline.sceneStart(0) + 4, assets: assets, captions: false, size: size, in: ctx)
     }
 
     // MARK: Animation helpers
@@ -212,6 +272,23 @@ enum SlideRenderer {
         }
         let drift = CGFloat(sin(time * 0.12)) * 60
         switch theme {
+        case .explainer:
+            // Grid paper.
+            ctx.setStrokeColor(UIColor(red: 0.902, green: 0.914, blue: 0.937, alpha: 1).cgColor)
+            ctx.setLineWidth(1.5)
+            var x: CGFloat = 28
+            while x < canvas.width {
+                ctx.move(to: CGPoint(x: x, y: 0))
+                ctx.addLine(to: CGPoint(x: x, y: canvas.height))
+                x += 28
+            }
+            var y: CGFloat = 28
+            while y < canvas.height {
+                ctx.move(to: CGPoint(x: 0, y: y))
+                ctx.addLine(to: CGPoint(x: canvas.width, y: y))
+                y += 28
+            }
+            ctx.strokePath()
         case .modern, .night:
             let a: CGFloat = theme == .night ? 0.28 : 0.11
             blob(CGPoint(x: 1560 + drift, y: 180 - drift * 0.5), radius: 620, color: p.accent.withAlphaComponent(a), in: ctx)
@@ -362,7 +439,7 @@ enum SlideRenderer {
         if layout == .figure && figure == nil { layout = scene.bullets.isEmpty ? .title : .bullets }
         switch layout {
         case .title:
-            drawTitleScene(scene, enter: enter, p: p, theme: theme, overview: overview, in: ctx)
+            drawTitleScene(scene, enter: enter, p: p, theme: theme, overview: overview, picture: assets?.illustration(scene.id), in: ctx)
         case .bullets, .steps, .summary:
             drawHeading(scene.title, enter: enter, p: p, theme: theme, in: ctx)
             if layout == .steps && scene.bullets.count >= 2 && scene.bullets.count <= 5 {
@@ -393,19 +470,195 @@ enum SlideRenderer {
             drawQuote(scene, enter: enter, p: p, theme: theme, in: ctx)
         case .quiz:
             drawQuiz(scene, t: t, duration: duration, p: p, theme: theme, en: en, in: ctx)
-        case .question, .section:
-            drawTitleScene(scene, enter: enter, p: p, theme: theme, overview: overview, in: ctx)
+        case .question:
+            drawQuestion(scene, enter: enter, p: p, theme: theme, picture: assets?.illustration(scene.id), in: ctx)
+        case .section:
+            drawSectionCard(scene, enter: enter, p: p, theme: theme, picture: assets?.illustration(scene.id), in: ctx)
         case .agenda:
-            drawHeading(scene.title, enter: enter, p: p, theme: theme, in: ctx)
-            drawList(scene.bullets, style: .number, area: CGRect(x: 140, y: 290, width: 1640, height: 610),
-                     t: t, duration: duration, p: p, theme: theme, in: ctx)
+            drawAgenda(scene, t: t, duration: duration, p: p, theme: theme, in: ctx)
+        }
+    }
+
+    // MARK: Explainer slides (NotebookLM-like)
+
+    /// A drawn picture fitted into `rect` (aspect kept), faded in.
+    private static func drawPicture(_ image: UIImage, in rect: CGRect, alpha: Double, in ctx: CGContext) {
+        guard alpha > 0.01, image.size.width > 0, image.size.height > 0 else { return }
+        let k = min(rect.width / image.size.width, rect.height / image.size.height)
+        let w = image.size.width * k
+        let h = image.size.height * k
+        UIGraphicsPushContext(ctx)
+        image.draw(in: CGRect(x: rect.midX - w / 2, y: rect.midY - h / 2, width: w, height: h), blendMode: .normal, alpha: CGFloat(alpha))
+        UIGraphicsPopContext()
+    }
+
+    /// A big question; its highlighted words get a yellow marker that sweeps in.
+    private static func drawQuestion(_ scene: OverviewScene, enter: Double, p: Palette, theme: SlideTheme, picture: UIImage?,
+                                     in ctx: CGContext) {
+        let parsed = Highlight.parse(scene.title)
+        let a = appear(enter, at: 0.1, length: 0.7)
+        text("?", in: CGRect(x: 560, y: 20, width: 800, height: 900), font: UIFont.systemFont(ofSize: 760, weight: .black),
+             color: p.accent.withAlphaComponent(0.07), align: .center, alpha: a, ctx: ctx)
+        var area = CGRect(x: 200, y: 250, width: 1520, height: 560)
+        if let picture {
+            drawPicture(picture, in: CGRect(x: 120, y: 250, width: 620, height: 560), alpha: appear(enter, at: 0.4, length: 0.8), in: ctx)
+            area = CGRect(x: 800, y: 250, width: 980, height: 560)
+        }
+        let f = fitted(parsed.text, width: area.width, height: area.height, base: 92, minSize: 50, weight: .bold, theme: theme)
+        let h = measure(parsed.text, width: area.width, font: f, lineSpacing: 14)
+        let para = NSMutableParagraphStyle()
+        para.alignment = picture == nil ? .center : .left
+        para.lineSpacing = 14
+        para.lineBreakMode = .byWordWrapping
+        let body = NSMutableAttributedString(string: parsed.text, attributes: [
+            .font: f, .foregroundColor: p.text.withAlphaComponent(CGFloat(a)), .paragraphStyle: para,
+        ])
+        let m = appear(enter, at: 0.9, length: 0.5)
+        if m > 0 {
+            for r in parsed.ranges where r.location + r.length <= body.length {
+                body.addAttribute(.backgroundColor, value: marker.withAlphaComponent(CGFloat(m)), range: r)
+            }
+        }
+        UIGraphicsPushContext(ctx)
+        body.draw(with: CGRect(x: area.minX, y: area.midY - h / 2 + CGFloat(1 - a) * 24, width: area.width, height: h + 12),
+                  options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        UIGraphicsPopContext()
+    }
+
+    /// A section card: the number big on an accent panel, the title on a white card beside it.
+    private static func drawSectionCard(_ scene: OverviewScene, enter: Double, p: Palette, theme: SlideTheme, picture: UIImage?,
+                                        in ctx: CGContext) {
+        let a = appear(enter, at: 0, length: 0.6)
+        let panel = CGRect(x: 0, y: 0, width: 760 * CGFloat(a), height: canvas.height)
+        ctx.setFillColor(p.accent.cgColor)
+        ctx.fill(panel)
+        // Faint diagonal hatching on the panel.
+        ctx.saveGState()
+        ctx.clip(to: panel)
+        ctx.setStrokeColor(UIColor(white: 1, alpha: 0.10).cgColor)
+        ctx.setLineWidth(10)
+        var x: CGFloat = -1080
+        while x < 760 {
+            ctx.move(to: CGPoint(x: x, y: canvas.height))
+            ctx.addLine(to: CGPoint(x: x + 1080, y: 0))
+            x += 64
+        }
+        ctx.strokePath()
+        ctx.restoreGState()
+
+        let n = appear(enter, at: 0.25, length: 0.6)
+        if let number = scene.number, n > 0 {
+            let numeral = NSAttributedString(string: "\(number)", attributes: [
+                .font: UIFont.systemFont(ofSize: 560 * CGFloat(0.85 + 0.15 * n), weight: .heavy),
+                .foregroundColor: UIColor.white.withAlphaComponent(CGFloat(n)),
+                .strokeColor: ink.withAlphaComponent(CGFloat(n)),
+                .strokeWidth: -2.5,
+            ])
+            let size = numeral.size()
+            UIGraphicsPushContext(ctx)
+            numeral.draw(at: CGPoint(x: 380 - size.width / 2, y: 540 - size.height / 2))
+            UIGraphicsPopContext()
+        }
+
+        let c = appear(enter, at: 0.35, length: 0.6)
+        guard c > 0 else { return }
+        let card = CGRect(x: 640 + CGFloat(1 - c) * 60, y: 300, width: 1180, height: 480)
+        ctx.saveGState()
+        ctx.setAlpha(CGFloat(c))
+        // A hard offset shadow, then the card with an ink outline.
+        ctx.setFillColor(ink.withAlphaComponent(0.85).cgColor)
+        ctx.addPath(UIBezierPath(roundedRect: card.offsetBy(dx: 14, dy: 14), cornerRadius: 44).cgPath)
+        ctx.fillPath()
+        ctx.setFillColor(UIColor.white.cgColor)
+        ctx.addPath(UIBezierPath(roundedRect: card, cornerRadius: 44).cgPath)
+        ctx.fillPath()
+        ctx.setStrokeColor(ink.cgColor)
+        ctx.setLineWidth(5)
+        ctx.addPath(UIBezierPath(roundedRect: card, cornerRadius: 44).cgPath)
+        ctx.strokePath()
+        ctx.restoreGState()
+
+        var inner = card.insetBy(dx: 70, dy: 60)
+        if let picture {
+            drawPicture(picture, in: CGRect(x: card.maxX - 400, y: card.minY + 60, width: 340, height: card.height - 120),
+                        alpha: appear(enter, at: 0.7, length: 0.6), in: ctx)
+            inner.size.width -= 360
+        }
+        let titleFont = fitted(scene.title, width: inner.width, height: 240, base: 76, minSize: 44, weight: .bold, theme: theme)
+        let th = measure(scene.title, width: inner.width, font: titleFont, lineSpacing: 8)
+        let sub = scene.subtitle ?? ""
+        let subFont = font(40, .medium, theme)
+        let sh = sub.isEmpty ? 0 : measure(sub, width: inner.width, font: subFont) + 24
+        let top = inner.midY - (th + sh) / 2
+        text(scene.title, in: CGRect(x: inner.minX, y: top, width: inner.width, height: th + 8), font: titleFont, color: ink,
+             alpha: c, lineSpacing: 8, ctx: ctx)
+        if !sub.isEmpty {
+            text(sub, in: CGRect(x: inner.minX, y: top + th + 24, width: inner.width, height: sh), font: subFont, color: p.muted,
+                 alpha: appear(enter, at: 0.6), ctx: ctx)
+        }
+    }
+
+    /// The roadmap: numbered tiles, three to a row, appearing one by one while they are read.
+    private static func drawAgenda(_ scene: OverviewScene, t: Double, duration: Double, p: Palette, theme: SlideTheme, in ctx: CGContext) {
+        let enter = t + 0.5
+        drawHeading(scene.title, enter: enter, p: p, theme: theme, in: ctx)
+        let items = Array(scene.bullets.prefix(VideoOutline.maxSections))
+        guard !items.isEmpty else { return }
+        let columns = min(3, items.count)
+        let rows = (items.count + columns - 1) / columns
+        let w: CGFloat = 500
+        let h: CGFloat = rows > 1 ? 240 : 300
+        let gap: CGFloat = 44
+        let left = (canvas.width - CGFloat(columns) * w - CGFloat(columns - 1) * gap) / 2
+        let top: CGFloat = rows > 1 ? 320 : 420
+        let step = max(0.5, (duration - 1.5) / Double(items.count))
+        for (i, item) in items.enumerated() {
+            let a = appear(t, at: 0.8 + Double(i) * step, length: 0.45)
+            guard a > 0 else { continue }
+            let col = i % columns
+            let row = i / columns
+            let rect = CGRect(x: left + CGFloat(col) * (w + gap), y: top + CGFloat(row) * (h + gap) + CGFloat(1 - a) * 24, width: w, height: h)
+            ctx.saveGState()
+            ctx.setAlpha(CGFloat(a))
+            ctx.setFillColor(p.accent.cgColor)
+            ctx.addPath(UIBezierPath(roundedRect: rect.offsetBy(dx: 10, dy: 10), cornerRadius: 26).cgPath)
+            ctx.fillPath()
+            ctx.setFillColor(p.card.cgColor)
+            ctx.addPath(UIBezierPath(roundedRect: rect, cornerRadius: 26).cgPath)
+            ctx.fillPath()
+            ctx.setStrokeColor(p.text.withAlphaComponent(0.85).cgColor)
+            ctx.setLineWidth(3)
+            ctx.addPath(UIBezierPath(roundedRect: rect, cornerRadius: 26).cgPath)
+            ctx.strokePath()
+            ctx.setFillColor(p.accent.cgColor)
+            ctx.fillEllipse(in: CGRect(x: rect.maxX - 46, y: rect.maxY - 46, width: 20, height: 20))
+            ctx.restoreGState()
+            text("\(i + 1)", in: CGRect(x: rect.minX + 32, y: rect.minY + 22, width: 120, height: 70), font: font(54, .bold, theme),
+                 color: p.accent, alpha: a, ctx: ctx)
+            let body = CGRect(x: rect.minX + 32, y: rect.minY + 96, width: rect.width - 90, height: rect.height - 120)
+            text(item, in: body, font: fitted(item, width: body.width, height: body.height, base: 40, minSize: 26, weight: .semibold,
+                                              theme: theme),
+                 color: p.cardText, alpha: a, lineSpacing: 6, ctx: ctx)
         }
     }
 
     private static func drawTitleScene(_ scene: OverviewScene, enter: Double, p: Palette, theme: SlideTheme,
-                                       overview: Overview, in ctx: CGContext) {
-        let hasArt = scene.art != nil
-        if let art = scene.art {
+                                       overview: Overview, picture: UIImage? = nil, in ctx: CGContext) {
+        if let picture {
+            // An illustrated title: the drawing above, the title under it.
+            drawPicture(picture, in: CGRect(x: 610, y: 110, width: 700, height: 470), alpha: appear(enter, at: 0.1, length: 0.8), in: ctx)
+            let titleRect = CGRect(x: 180, y: 620, width: 1560, height: 200)
+            let h = headline(VideoOutline.plain(scene.title), in: titleRect, base: 92, minSize: 54, enter: enter, delay: 0.3,
+                             centered: true, p: p, theme: theme, in: ctx)
+            if let sub = scene.subtitle {
+                let a = appear(enter, at: 1.1)
+                text(sub, in: CGRect(x: 260, y: 640 + h, width: 1400, height: 80), font: font(40, .medium, theme), color: p.muted,
+                     align: .center, alpha: a, ctx: ctx)
+            }
+            return
+        }
+        let hasArt = scene.art != nil && !(scene.art ?? "").hasPrefix("file:")
+        if let art = scene.art, hasArt {
             let a = appear(enter, at: 0.1, length: 0.8)
             let bob = CGFloat(sin(enter * 1.2)) * 8
             let side: CGFloat = 250 * (0.8 + 0.2 * CGFloat(a))
@@ -642,7 +895,7 @@ enum SlideRenderer {
             ctx.saveGState()
             ctx.setAlpha(CGFloat(a))
             ctx.setFillColor(p.card.cgColor)
-            if theme == .modern {
+            if theme == .modern || theme == .explainer {
                 ctx.setShadow(offset: CGSize(width: 0, height: 10), blur: 30, color: UIColor(white: 0, alpha: 0.10).cgColor)
             }
             ctx.addPath(UIBezierPath(roundedRect: rect, cornerRadius: 30).cgPath)
@@ -668,7 +921,7 @@ enum SlideRenderer {
             ctx.saveGState()
             ctx.setAlpha(CGFloat(a))
             ctx.setFillColor(p.card.cgColor)
-            if theme == .modern {
+            if theme == .modern || theme == .explainer {
                 ctx.setShadow(offset: CGSize(width: 0, height: 10), blur: 30, color: UIColor(white: 0, alpha: 0.10).cgColor)
             }
             ctx.addPath(UIBezierPath(roundedRect: shifted, cornerRadius: 30).cgPath)
@@ -935,6 +1188,8 @@ enum SlideRenderer {
             if let f = UIFont(name: bold ? "Noteworthy-Bold" : "Noteworthy-Light", size: size) { return f }
         case .chalkboard:
             if let f = UIFont(name: bold ? "ChalkboardSE-Bold" : "ChalkboardSE-Regular", size: size) { return f }
+        case .explainer:
+            return UIFont.systemFont(ofSize: size, weight: weight)
         case .modern, .night:
             break
         }

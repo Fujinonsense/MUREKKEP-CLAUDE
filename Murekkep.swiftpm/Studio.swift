@@ -177,6 +177,8 @@ enum OverviewLanguage: String, Codable, CaseIterable, Identifiable {
 
 /// The look of the video's slides.
 enum SlideTheme: String, Codable, CaseIterable, Identifiable {
+    /// Grid paper, one accent colour, numbered section cards and sketch illustrations.
+    case explainer
     case modern
     case notebook
     case chalkboard
@@ -186,6 +188,7 @@ enum SlideTheme: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .explainer: return Loc.t("Açıklayıcı")
         case .modern: return "Modern"
         case .notebook: return Loc.t("Defter")
         case .chalkboard: return Loc.t("Kara tahta")
@@ -195,6 +198,7 @@ enum SlideTheme: String, Codable, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
+        case .explainer: return Loc.t("Numaralı bölümler, çizimler")
         case .modern: return Loc.t("Temiz kartlar")
         case .notebook: return Loc.t("Mürekkeple yazılır")
         case .chalkboard: return Loc.t("Tebeşirle yazılır")
@@ -209,7 +213,7 @@ struct OverviewOptions: Codable, Hashable {
     var length: OverviewLength = .standard
     var level: OverviewLevel = .university
     var language: OverviewLanguage = .auto
-    var theme: SlideTheme = .modern
+    var theme: SlideTheme = .explainer
     var focus: String = ""
 }
 
@@ -551,9 +555,16 @@ final class StudioStore: ObservableObject {
                 }
                 overview.sectionID = sectionID
                 try Task.checkCancellation()
+                let folder = self.folder(for: overview.id)
+                if overview.kind == .video && (options.theme == .explainer || options.theme == .modern) {
+                    job.phase = Loc.t("Çizimler hazırlanıyor…")
+                    await StudioIllustrator.illustrate(&overview, folder: folder) { fraction in
+                        job.progress = 0.58 + 0.02 * fraction
+                    }
+                    try Task.checkCancellation()
+                }
                 job.phase = Loc.t("Seslendiriliyor…")
                 job.progress = 0.6
-                let folder = self.folder(for: overview.id)
                 guard VoiceSettings.shared.engine != nil else {
                     // Without a voice key the script is kept, to be voiced once a key is added.
                     await OverviewThumbnail.make(for: overview, folder: folder, library: library)

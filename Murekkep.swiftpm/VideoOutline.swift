@@ -1,5 +1,22 @@
 import Foundation
 
+/// The highlighted words of a slide question: "**…**" pairs are removed and their ranges come back in
+/// UTF-16 units; a marker without a partner is dropped (twin of tests/ports/highlight.py).
+enum Highlight {
+    static func parse(_ s: String) -> (text: String, ranges: [NSRange]) {
+        let pieces = s.components(separatedBy: "**")
+        var text = ""
+        var ranges: [NSRange] = []
+        for (k, piece) in pieces.enumerated() {
+            if k % 2 == 1 && k < pieces.count - 1 {
+                ranges.append(NSRange(location: text.utf16.count, length: piece.utf16.count))
+            }
+            text += piece
+        }
+        return (text: text, ranges: ranges)
+    }
+}
+
 /// One section of a video overview: its card and the scenes after it.
 struct OutlineSection {
     var title: String

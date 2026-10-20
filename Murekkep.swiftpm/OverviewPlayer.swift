@@ -93,7 +93,7 @@ final class OverviewPlayback: ObservableObject {
             return
         }
         if overview.kind == .video {
-            assets = await SlideAssets.load(for: overview, library: library)
+            assets = await SlideAssets.load(for: overview, library: library, folder: folder)
         }
         do {
             let comp = try await OverviewAudio.composition(overview, folder: folder)
@@ -931,6 +931,8 @@ enum OverviewThumbnail {
     static func make(for overview: Overview, folder: URL, library: LibraryStore) async {
         let url = folder.appendingPathComponent("thumb.jpg")
         let o = overview
+        // The title slide's illustration, when one was drawn.
+        let assets = o.kind == .video ? await SlideAssets.load(for: o, library: library, folder: folder) : nil
         await Task.detached(priority: .utility) {
             let size = CGSize(width: 960, height: 540)
             let format = UIGraphicsImageRendererFormat()
@@ -938,7 +940,7 @@ enum OverviewThumbnail {
             format.opaque = true
             let image = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
                 if o.kind == .video {
-                    SlideRenderer.poster(o, size: size, in: ctx.cgContext)
+                    SlideRenderer.poster(o, size: size, assets: assets, in: ctx.cgContext)
                 } else {
                     OverviewThumbnail.drawAudioCover(o, size: size, in: ctx.cgContext)
                 }

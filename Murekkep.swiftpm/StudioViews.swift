@@ -452,8 +452,14 @@ struct ThemePreview: View {
         let image = await Task.detached(priority: .userInitiated) { () -> UIImage in
             var options = OverviewOptions()
             options.theme = theme
-            let scene = OverviewScene(layout: .title, title: Loc.t("Kalbin İletim Sistemi"), subtitle: Loc.t("Video özeti"),
+            var scene = OverviewScene(layout: .title, title: Loc.t("Kalbin İletim Sistemi"), subtitle: Loc.t("Video özeti"),
                                       narration: Loc.t("Örnek"), art: "art:heart")
+            if theme == .explainer {
+                // The look's own slide: a numbered section card.
+                scene = OverviewScene(layout: .section, title: Loc.t("Limit ve Yaklaşım"), subtitle: Loc.t("Sıfıra bölmeyi aşmak"),
+                                      narration: Loc.t("Örnek"))
+                scene.number = 2
+            }
             let sample = Overview(title: Loc.t("Örnek"), sectionID: nil, sourceIDs: [], sourceTitles: [Loc.t("Kardiyoloji")], options: options,
                                   language: .turkish, hosts: OverviewLanguage.turkish.hostNames, scenes: [scene])
             let size = CGSize(width: 352, height: 198)
