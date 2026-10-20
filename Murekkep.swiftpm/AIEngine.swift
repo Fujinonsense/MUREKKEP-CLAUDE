@@ -156,11 +156,12 @@ enum AnswerLanguage: Sendable {
     /// The app's own language, for when the text does not tell.
     static var app: AnswerLanguage { Loc.isEnglish ? .english : .turkish }
 
-    static func detect(_ text: String, context: String = "") -> AnswerLanguage {
+    /// `fallback` (the app's language when nil) is the answer when the text does not tell.
+    static func detect(_ text: String, context: String = "", fallback: AnswerLanguage? = nil) -> AnswerLanguage {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.range(of: "[çğıöşüÇĞİÖŞÜ]", options: .regularExpression) != nil { return .turkish }
         let sample = t.count >= 14 ? t : (t + " " + String(context.prefix(800)))
-        guard sample.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 else { return app }
+        guard sample.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 else { return fallback ?? app }
         if sample.range(of: "[çğıöşüÇĞİÖŞÜ]", options: .regularExpression) != nil, t.count < 14 { return .turkish }
         let recognizer = NLLanguageRecognizer()
         recognizer.languageConstraints = [.turkish, .english]
@@ -170,7 +171,29 @@ enum AnswerLanguage: Sendable {
         let tr = h[.turkish] ?? 0
         if en > tr + 0.15 { return .english }
         if tr > en + 0.15 { return .turkish }
-        return app
+        return fallback ?? app
+    }
+
+    /// Words of a short request about what is on the page ("bu soruyu çöz", "solve question 3").
+    private static let pageCues = ["soru", "çöz", "cevap", "yanıt", "şık", "sayfa", "alıştırma",
+                                   "solve", "question", "answer", "exercise", "page"]
+
+    /// A short request about the page rather than a question in the user's own words.
+    static func isPageCommand(_ text: String) -> Bool {
+        let words = text.lowercased().split { !$0.isLetter && !$0.isNumber }
+        guard !words.isEmpty, words.count <= 8 else { return false }
+        return words.contains { w in pageCues.contains { w.hasPrefix($0) } }
+    }
+
+    /// The language of an answer: a question in the user's own words is answered in its language;
+    /// a short request about the page ("bu soruyu çöz") and the ready-made actions are answered in
+    /// the page's language, so an English exam question gets an English answer. The request's
+    /// language when the page has no text.
+    static func forAnswer(question: String, isAction: Bool, page: String) -> AnswerLanguage {
+        if isAction || isPageCommand(question) {
+            return detect(page, fallback: detect(question))
+        }
+        return detect(question, context: page)
     }
 
     /// Added to every model's instructions, which are written in Turkish.

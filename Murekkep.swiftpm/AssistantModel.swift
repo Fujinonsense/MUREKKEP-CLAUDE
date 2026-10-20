@@ -557,10 +557,10 @@ final class AssistantModel: ObservableObject {
         return OfflineBrain.keyTerms(of: q, count: 6).joined(separator: " ")
     }
 
-    /// The question's language; for the ready-made actions (written in Turkish) the notes' language.
+    /// See `AnswerLanguage.forAnswer`.
     static func answerLanguage(question: String, action: QuickAction?, pages: [PageText]) -> AnswerLanguage {
         let notes = String(pages.prefix(4).map(\.text).joined(separator: " ").prefix(1_500))
-        return action == nil ? AnswerLanguage.detect(question, context: notes) : AnswerLanguage.detect(notes)
+        return AnswerLanguage.forAnswer(question: question, isAction: action != nil, page: notes)
     }
 
     static func instructions(web: Bool, tool: Bool, language: AnswerLanguage) -> String {
@@ -666,11 +666,11 @@ final class AssistantModel: ObservableObject {
         setEngine("Claude · \(settings.model.title)")
         do {
             let (context, note) = try await prepareContext(apiKey: apiKey)
-            // Same language rule as the keyless engines: the question's, or the page's for an action.
+            // Same language rule as the keyless engines (see `AnswerLanguage.forAnswer`).
             let question = messages.last(where: { $0.role == .user })?.text ?? ""
             let pageText = editor.map { $0.plainText(page: $0.currentPage) } ?? ""
             let isAction = QuickAction.allCases.contains { $0.prompt == question }
-            let language = isAction ? AnswerLanguage.detect(pageText) : AnswerLanguage.detect(question, context: pageText)
+            let language = AnswerLanguage.forAnswer(question: question, isAction: isAction, page: pageText)
             let request = ClaudeRequest(model: settings.model.rawValue,
                                         effort: settings.effort.rawValue,
                                         maxTokens: 16_000,

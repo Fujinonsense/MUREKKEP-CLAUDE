@@ -230,11 +230,15 @@ struct PageAnglePanel: View {
                     Button {
                         settings.pageAngle = Double(d)
                     } label: {
+                        // One line always: a wrapped "−30°" dropped its last digit below the rest.
                         Text(d < 0 ? "−\(-d)°" : "\(d)°")
                             .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .tint(Int(settings.pageAngle.rounded()) == d ? Theme.ink : .secondary)
                 }
             }
@@ -247,7 +251,7 @@ struct PageAnglePanel: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
-        .frame(width: 330)
+        .frame(width: 360)
     }
 }
 
