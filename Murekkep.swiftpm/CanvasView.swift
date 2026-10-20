@@ -99,6 +99,9 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var selectionDrag: SelectionDrag?
     /// Index of the shape handle under the pencil (see `EditorModel.shapeEdit`).
     private var shapeHandleDrag: Int?
+    /// From the touch to the dragged handle (page space), so a shape grabbed anywhere moves with
+    /// the touch instead of jumping its handle under it.
+    private var shapeHandleOffset = CGPoint.zero
     private var lastShapeSnapped = false
     private var lassoZoom: CGFloat = 1
     private var compassDraft: (page: Int, center: CGPoint)?
@@ -198,7 +201,15 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         redoTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         redoTap.delegate = self
         scrollView.addGestureRecognizer(redoTap)
-        for tap in [undoTap, redoTap] {
+        // One finger tapping the page puts away a shape's handles or a sticker's box (in pencil-only
+        // mode such a finger never reaches the ink gesture).
+        let finishTap = UITapGestureRecognizer(target: self, action: #selector(fingerTapped(_:)))
+        finishTap.numberOfTouchesRequired = 1
+        finishTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        finishTap.cancelsTouchesInView = false
+        finishTap.delegate = self
+        scrollView.addGestureRecognizer(finishTap)
+        for tap in [undoTap, redoTap, finishTap] {
             if let pinch = scrollView.pinchGestureRecognizer {
                 tap.require(toFail: pinch)
             }
@@ -806,8 +817,11 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         // A recognized shape shows handles on its corners: a handle is dragged, any other touch
         // puts them away (and then does what the tool does).
         if let edit = model.shapeEdit {
-            if let index = shapeHandle(at: docPoint, in: edit, zoom: zoom, reach: finger ? Self.fingerReach : 26) {
+            if let index = shapeHandle(at: docPoint, in: edit, zoom: zoom, reach: finger ? Self.fingerReach : 16) {
                 shapeHandleDrag = index
+                let o = pageOrigin(edit.page)
+                let handle = edit.shape.handles[index]
+                shapeHandleOffset = CGPoint(x: handle.x + o.x - docPoint.x, y: handle.y + o.y - docPoint.y)
                 lastShapeSnapped = false
                 model.beginShapeHandleDrag()
                 return
@@ -1399,27 +1413,45 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     // MARK: - Shape handles
 
     /// The handle of the recognized shape under the pencil (or finger), if any. `reach` is in
-    /// screen points.
-    private func shapeHandle(at docPoint: CGPoint, in edit: ShapeEditState, zoom: CGFloat, reach: CGFloat = 26) -> Int? {
+    /// screen points. With `inside`, a touch within a closed shape (or along an open one) that
+    /// misses the corner handles takes the move handle, so the shape moves from anywhere on it.
+    private func shapeHandle(at docPoint: CGPoint, in edit: ShapeEditState, zoom: CGFloat, reach: CGFloat = 16,
+                             inside: Bool = true) -> Int? {
         let o = pageOrigin(edit.page)
         let p = CGPoint(x: docPoint.x - o.x, y: docPoint.y - o.y)
+        let handles = edit.shape.handles
         var best: Int?
         var bestDistance = reach / max(zoom, 0.01)
-        for (i, h) in edit.shape.handles.enumerated() {
+        for (i, h) in handles.enumerated() {
             let d = hypot(p.x - h.x, p.y - h.y)
             if d < bestDistance {
                 bestDistance = d
                 best = i
             }
         }
-        return best
+        if best != nil || !inside || handles.isEmpty { return best }
+        let outline = edit.shape.path()
+        guard outline.count >= 2 else { return nil }
+        switch edit.shape.kind {
+        case .polygon, .oval:
+            let path = CGMutablePath()
+            path.addLines(between: outline)
+            path.closeSubpath()
+            if path.contains(p) { return handles.count - 1 }
+        case .polyline, .curve:
+            let tolerance = 14 / max(zoom, 0.01)
+            for i in 1..<outline.count where Geo.segmentDistance(p, outline[i - 1], outline[i]) <= tolerance {
+                return handles.count - 1
+            }
+        }
+        return nil
     }
 
     private func dragShapeHandle(_ index: Int, to docPoint: CGPoint) {
         guard let edit = model.shapeEdit else { return }
         let o = pageOrigin(edit.page)
         let zoom = docTransform.zoom
-        let p = CGPoint(x: docPoint.x - o.x, y: docPoint.y - o.y)
+        let p = CGPoint(x: docPoint.x - o.x + shapeHandleOffset.x, y: docPoint.y - o.y + shapeHandleOffset.y)
         guard let feedback = model.moveShapeHandle(index, to: p, snap: 9 / max(zoom, 0.01)) else { return }
         if feedback.snapped && !lastShapeSnapped {
             playHaptic(.alignment, at: nil)
@@ -1648,6 +1680,28 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     /// steering the page, not tapping.
     private var viewportJustMoved: Bool {
         CACurrentMediaTime() - lastViewportChange < 0.4
+    }
+
+    /// A finger tap anywhere but on a corner handle (or the sticker box's corner and turn handles)
+    /// settles the shape or the sticker.
+    @objc private func fingerTapped(_ g: UITapGestureRecognizer) {
+        guard g.state == .ended, model.shapeEdit != nil || model.placingSticker != nil else { return }
+        let p = g.location(in: zoomContainer)
+        let zoom = docTransform.zoom
+        if let edit = model.shapeEdit, shapeHandle(at: p, in: edit, zoom: zoom, reach: Self.fingerReach, inside: false) != nil {
+            return
+        }
+        if model.placingSticker != nil, let sel = model.displayedSelection {
+            let o = pageOrigin(sel.page)
+            switch selectionGrab(at: CGPoint(x: p.x - o.x, y: p.y - o.y), in: sel, zoom: zoom, reach: Self.fingerReach) {
+            case .scale?, .rotate?: return
+            default: break
+            }
+        }
+        if model.shapeEdit != nil { model.finishShapeEdit() }
+        if model.placingSticker != nil { model.finishPlacing() }
+        playHaptic(.selection, at: nil)
+        setNeedsRender()
     }
 
     @objc private func twoFingerTap() {
