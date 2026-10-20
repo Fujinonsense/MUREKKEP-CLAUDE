@@ -75,9 +75,10 @@ enum HandwritingConverter {
     /// `keepPosition`: words start where they were written (the text pen) instead of at the margin.
     /// `ai`: read with Claude first (falls back to the device). `continueFrom`: where the text pen's
     /// previous words ended; writing that goes on along the same line follows them with one space.
+    /// `obstacles`: bounds of the page's other ink, which the typed words keep clear of.
     static func convert(strokes: [Stroke], paper: PaperStyle, pageSize: CGSize, flowerLevel: Int,
                         keepPosition: Bool = false, ai: HandwritingAI.Access? = nil,
-                        continueFrom: TextEnd? = nil) async -> ConversionResult? {
+                        continueFrom: TextEnd? = nil, obstacles: [CGRect] = []) async -> ConversionResult? {
         let source = strokes.filter { $0.brush != .highlighter && !$0.points.isEmpty }
         guard !source.isEmpty else { return nil }
         var lines: [OCRLine] = []
@@ -132,7 +133,15 @@ enum HandwritingConverter {
                 members.append(mine)
             }
         }
-        let ruling = paper.ruling(pageSize: pageSize) ?? estimatedRuling(lines, pageSize: pageSize)
+        let printed = paper.ruling(pageSize: pageSize)
+        var ruling = printed ?? estimatedRuling(lines, pageSize: pageSize)
+        // On a page without printed lines the text pen keeps to the line its last words sat on.
+        if printed == nil, keepPosition, let previous = continueFrom, let first = lines.first {
+            let handBaseline = first.box.maxY - first.box.height * 0.15
+            if abs(handBaseline - previous.baseline) < max(ruling.spacing * 0.6, ruling.capHeight * 1.2) {
+                ruling.top = previous.baseline.truncatingRemainder(dividingBy: ruling.spacing)
+            }
+        }
 
         let birth = Date().timeIntervalSinceReferenceDate
         var added: [Stroke] = []
@@ -142,43 +151,47 @@ enum HandwritingConverter {
         var end: TextEnd?
         let unit = ruling.capHeight / 10
         let space = CGFloat(StrokeFont.spaceAdvance) * unit
+        let hairline = CGFloat(StrokeFont.tracking) * unit
+        var blocking = TextPlacement.obstacles(obstacles, ruling: ruling)
+        if keepPosition, let previous = continueFrom {
+            // Where the text pen's last words ended, so the next ones follow them.
+            blocking.append(CGRect(x: previous.x - 1, y: previous.baseline - ruling.capHeight, width: 1, height: ruling.capHeight))
+        }
         for (i, line) in lines.enumerated() where !members[i].isEmpty {
             // The handwriting box includes some of the descenders; the baseline sits a bit above its bottom.
             let handBaseline = line.box.maxY - line.box.height * 0.15
-            var k = max(ruling.index(nearBaseline: handBaseline), nextLine)
-            var baseline = ruling.baseline(k)
+            let k = max(ruling.index(nearBaseline: handBaseline), nextLine)
             let indented = line.box.minX > ruling.left + ruling.spacing * 2
-            var x = indented || keepPosition ? max(ruling.left, min(line.box.minX, ruling.right - 20)) : ruling.left
-            // The text pen goes on along the line it wrote last: the next words follow the earlier
-            // ones on the same baseline with exactly one space, however close or far the hand put them.
-            if i == 0, keepPosition, let previous = continueFrom,
-               abs(handBaseline - previous.baseline) < max(ruling.spacing * 0.6, ruling.capHeight * 1.2),
-               line.box.minX > previous.x - ruling.capHeight * 2.5,
-               line.box.minX < previous.x + ruling.capHeight * 9 {
-                baseline = previous.baseline
-                k = ruling.index(nearBaseline: previous.baseline)
-                let joins = line.text.first.map { ".,;:!?)]}%".contains($0) } ?? false
-                x = previous.x + (joins ? CGFloat(StrokeFont.tracking) * unit : space)
-            }
+            let startX = indented || keepPosition ? line.box.minX : ruling.left
             let words = line.words.isEmpty ? [OCRWord(text: line.text, box: line.box)] : line.words
             let fallback = dominantStyle(members[i], capHeight: ruling.capHeight)
+            var styles: [StrokeText.Style] = []
+            var trackings: [Float] = []
+            var widths: [CGFloat] = []
             for word in words {
                 let nearby = members[i].filter { CGRect(ink: $0.bounds).insetBy(dx: -2, dy: -2).intersects(word.box) }
                 let style = nearby.isEmpty ? fallback : dominantStyle(nearby, capHeight: ruling.capHeight)
                 let tracking = letterTracking(style.width, unit: unit)
-                let width = CGFloat(StrokeFont.width(word.text, tracking: tracking)) * unit
-                if x + width > ruling.right && x > ruling.left + 1 {
-                    k += 1
-                    baseline += ruling.spacing
-                    x = ruling.left
-                }
-                let origin = SIMD2<Float>(Float(x), Float(baseline))
-                let paths = StrokeFont.paths(word.text, origin: origin, capHeight: Float(ruling.capHeight), tracking: tracking)
-                added += StrokeText.strokes(paths, style: style, flowerLevel: flowerLevel, birth: birth)
-                end = TextEnd(baseline: baseline, x: x + width)
-                x += width + space
+                styles.append(style)
+                trackings.append(tracking)
+                widths.append(CGFloat(StrokeFont.width(word.text, tracking: tracking)) * unit)
             }
-            nextLine = k + 1
+            let joins = line.text.first.map { ".,;:!?)]}%".contains($0) } ?? false
+            let spots = TextPlacement.place(widths: widths, startX: startX, startLine: k, ruling: ruling, space: space,
+                                            joinGap: joins ? hairline : space, obstacles: blocking)
+            var lastLine = k
+            for (j, word) in words.enumerated() {
+                let baseline = ruling.baseline(spots[j].line)
+                let x = spots[j].x
+                let origin = SIMD2<Float>(Float(x), Float(baseline))
+                let paths = StrokeFont.paths(word.text, origin: origin, capHeight: Float(ruling.capHeight), tracking: trackings[j])
+                added += StrokeText.strokes(paths, style: styles[j], flowerLevel: flowerLevel, birth: birth)
+                end = TextEnd(baseline: baseline, x: x + widths[j])
+                // Later lines of this batch keep clear of the words just placed.
+                blocking.append(CGRect(x: x, y: baseline - ruling.capHeight * 1.1, width: widths[j], height: ruling.capHeight * 1.3))
+                lastLine = spots[j].line
+            }
+            nextLine = lastLine + 1
             for s in members[i] { removed.insert(s.id) }
             texts.append(line.text)
         }

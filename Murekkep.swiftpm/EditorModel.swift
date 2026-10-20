@@ -887,11 +887,13 @@ final class EditorModel: ObservableObject {
         let flowers = settings.flowerLevel
         let access = handwritingAccess
         let previous = lastTextEnd?.page == batch.page ? lastTextEnd?.end : nil
+        // The page's other ink, which the typed words keep clear of.
+        let others = strokes(on: batch.page).filter { !ids.contains($0.id) && !$0.points.isEmpty }.map { CGRect(ink: $0.bounds) }
         isTypesetting = true
         Task { @MainActor [weak self] in
             let converted = await HandwritingConverter.convert(strokes: source, paper: paper, pageSize: size,
                                                                flowerLevel: flowers, keepPosition: true,
-                                                               ai: access, continueFrom: previous)
+                                                               ai: access, continueFrom: previous, obstacles: others)
             guard let self else { return }
             self.isTypesetting = false
             // Small marks that read as nothing but punctuation stay as ink, quietly.
