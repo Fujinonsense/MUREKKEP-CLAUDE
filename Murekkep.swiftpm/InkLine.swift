@@ -97,3 +97,159 @@ enum InkLine {
         return InkLineImage(width: w, pixels: pixels, scale: scale, origin: CGPoint(x: dx, y: dy))
     }
 }
+
+// MARK: - Lines, marks and exponents
+
+/// Which strokes form a line of writing, where dots and accents belong, and which small raised
+/// strokes are exponents (twin of tests/ports/inkline.py). Letter-size strokes (at least 0.6 × the
+/// median stroke height) build the lines, each joining the line whose band it overlaps by 40 % of the
+/// smaller height; the band follows the line's slope once it has three letters. Every smaller stroke
+/// (dots, accents, commas, exponents) then joins the nearest line, preferring lines it lies beside.
+extension InkLine {
+    private static let primaryShare: CGFloat = 0.6
+    private static let joinShare: CGFloat = 0.4
+    private static let raisedBottom: CGFloat = 0.3
+    private static let raisedMin: CGFloat = 0.25
+    private static let overLetter: CGFloat = 0.1
+    private static let groupGap: CGFloat = 0.5
+
+    private struct Box {
+        let minX: CGFloat
+        let maxX: CGFloat
+        let minY: CGFloat
+        let maxY: CGFloat
+        var h: CGFloat { maxY - minY }
+        var cx: CGFloat { (minX + maxX) / 2 }
+        var cy: CGFloat { (minY + maxY) / 2 }
+
+        init(_ r: InkRect) {
+            minX = CGFloat(r.minX)
+            maxX = CGFloat(r.maxX)
+            minY = CGFloat(r.minY)
+            maxY = CGFloat(r.maxY)
+        }
+    }
+
+    /// Python's statistics.median.
+    private static func median(_ values: [CGFloat]) -> CGFloat {
+        let v = values.sorted()
+        guard !v.isEmpty else { return 0 }
+        let m = v.count / 2
+        return v.count % 2 == 1 ? v[m] : (v[m - 1] + v[m]) / 2
+    }
+
+    private static func letterHeight(_ boxes: [Box]) -> CGFloat {
+        let hs = boxes.map(\.h).filter { $0 >= 3 }
+        return hs.isEmpty ? max(boxes.map(\.h).max() ?? 1, 1) : median(hs)
+    }
+
+    /// Top and bottom of a line's letters at `x`.
+    private static func band(_ members: [Int], _ boxes: [Box], at x: CGFloat) -> (top: CGFloat, bottom: CGFloat) {
+        let ms = members.map { boxes[$0] }
+        guard ms.count >= 3 else {
+            return (ms.map(\.minY).min() ?? 0, ms.map(\.maxY).max() ?? 0)
+        }
+        let core = median(ms.map(\.h))
+        let n = CGFloat(ms.count)
+        let mx = ms.reduce(0) { $0 + $1.cx } / n
+        let my = ms.reduce(0) { $0 + $1.cy } / n
+        let sxx = ms.reduce(0) { $0 + ($1.cx - mx) * ($1.cx - mx) }
+        let sxy = ms.reduce(0) { $0 + ($1.cx - mx) * ($1.cy - my) }
+        let a = sxx > 1e-9 ? sxy / sxx : 0
+        let yc = my + a * (x - mx)
+        return (yc - core / 2, yc + core / 2)
+    }
+
+    /// The lines of a batch of strokes, top to bottom; each keeps the strokes' original order.
+    static func lines(_ strokes: [Stroke]) -> [[Stroke]] {
+        guard !strokes.isEmpty else { return [] }
+        let boxes = strokes.map { Box($0.bounds) }
+        let letter = letterHeight(boxes)
+        let primary = boxes.indices.filter { boxes[$0].h >= primaryShare * letter }
+            .sorted { (boxes[$0].minX, $0) < (boxes[$1].minX, $1) }
+        guard !primary.isEmpty else { return [strokes] }
+        var found: [[Int]] = []
+        for i in primary {
+            let b = boxes[i]
+            var best: Int?
+            var bestRatio: CGFloat = 0
+            for (k, members) in found.enumerated() {
+                let (top, bottom) = band(members, boxes, at: b.cx)
+                let overlap = max(0, min(b.maxY, bottom) - max(b.minY, top))
+                let ratio = overlap / max(min(b.h, bottom - top), 1e-6)
+                if ratio > bestRatio {
+                    best = k
+                    bestRatio = ratio
+                }
+            }
+            if let k = best, bestRatio >= joinShare {
+                found[k].append(i)
+            } else {
+                found.append([i])
+            }
+        }
+        let taken = Set(primary)
+        for (i, b) in boxes.enumerated() where !taken.contains(i) {
+            var best = 0
+            var bestKey: (Int, CGFloat)?
+            for (k, members) in found.enumerated() {
+                let (top, bottom) = band(members, boxes, at: b.cx)
+                let gap: CGFloat = b.cy >= top && b.cy <= bottom ? 0 : min(abs(b.cy - top), abs(b.cy - bottom))
+                let reach = 2 * (bottom - top)
+                let left = members.map { boxes[$0].minX }.min() ?? 0
+                let right = members.map { boxes[$0].maxX }.max() ?? 0
+                let beside = b.cx >= left - reach && b.cx <= right + reach
+                let key = (beside ? 0 : 1, gap)
+                if bestKey == nil || key < bestKey! {
+                    best = k
+                    bestKey = key
+                }
+            }
+            found[best].append(i)
+        }
+        let ordered = found.map { $0.sorted() }.sorted { a, b in
+            let ma = a.reduce(0) { $0 + boxes[$1].cy } / CGFloat(a.count)
+            let mb = b.reduce(0) { $0 + boxes[$1].cy } / CGFloat(b.count)
+            return (ma, a[0]) < (mb, b[0])
+        }
+        return ordered.map { $0.map { strokes[$0] } }
+    }
+
+    /// A line without its exponents, and the exponents (small, high, after a letter, not a dot or
+    /// accent over one) grouped left to right with where each group starts.
+    static func splitRaised(_ line: [Stroke]) -> (base: [Stroke], raised: [(strokes: [Stroke], x: CGFloat)]) {
+        let boxes = line.map { Box($0.bounds) }
+        let letter = letterHeight(boxes)
+        let primary = boxes.indices.filter { boxes[$0].h >= primaryShare * letter }
+        guard !primary.isEmpty else { return (line, []) }
+        let core = median(primary.map { boxes[$0].h })
+        let firstX = primary.map { boxes[$0].minX }.min() ?? 0
+        let primarySet = Set(primary)
+        var raised: [Int] = []
+        for (i, b) in boxes.enumerated() where !primarySet.contains(i) {
+            let top = band(primary, boxes, at: b.cx).top
+            let overALetter = primary.contains { j in
+                b.cx >= boxes[j].minX - overLetter * core && b.cx <= boxes[j].maxX + overLetter * core
+            }
+            if b.maxY < top + raisedBottom * core, b.h >= raisedMin * core, !overALetter, b.minX > firstX {
+                raised.append(i)
+            }
+        }
+        raised.sort { (boxes[$0].minX, $0) < (boxes[$1].minX, $1) }
+        var groups: [[Int]] = []
+        for i in raised {
+            if let last = groups.last, let right = last.map({ boxes[$0].maxX }).max(),
+               boxes[i].minX - right < groupGap * core {
+                groups[groups.count - 1].append(i)
+            } else {
+                groups.append([i])
+            }
+        }
+        let raisedSet = Set(raised)
+        let base = line.indices.filter { !raisedSet.contains($0) }.map { line[$0] }
+        let exponents = groups.map { g -> (strokes: [Stroke], x: CGFloat) in
+            (strokes: g.map { line[$0] }, x: g.map { boxes[$0].minX }.min() ?? 0)
+        }
+        return (base, exponents)
+    }
+}
