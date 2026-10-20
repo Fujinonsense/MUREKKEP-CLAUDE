@@ -932,7 +932,11 @@ enum OverviewThumbnail {
         let url = folder.appendingPathComponent("thumb.jpg")
         let o = overview
         // The title slide's illustration, when one was drawn.
-        let assets = o.kind == .video ? await SlideAssets.load(for: o, library: library, folder: folder) : nil
+        var loaded: SlideAssets?
+        if o.kind == .video {
+            loaded = await SlideAssets.load(for: o, library: library, folder: folder)
+        }
+        let assets = loaded
         await Task.detached(priority: .utility) {
             let size = CGSize(width: 960, height: 540)
             let format = UIGraphicsImageRendererFormat()

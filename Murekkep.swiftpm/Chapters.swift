@@ -40,7 +40,7 @@ struct PageHead {
 enum ChapterFinder {
     static let headLines = 8
 
-    private struct Rx {
+    fileprivate struct Rx {
         let re: NSRegularExpression
 
         init(_ pattern: String, caseless: Bool = false) {
@@ -54,7 +54,7 @@ enum ChapterFinder {
         }
     }
 
-    private struct Hit {
+    fileprivate struct Hit {
         let ns: NSString
         let m: NSTextCheckingResult
 
@@ -117,14 +117,18 @@ enum ChapterFinder {
     }
 
     private static func titleCase(_ words: [String], turkish: Bool) -> [String] {
-        words.enumerated().map { k, w in
+        var out: [String] = []
+        for (k, w) in words.enumerated() {
             let source = turkish ? w.replacingOccurrences(of: "I", with: "ı").replacingOccurrences(of: "İ", with: "i") : w
             let low = source.lowercased()
-            if k > 0 && small.contains(low) { return low }
-            guard let first = low.first else { return low }
+            guard let first = low.first, !(k > 0 && small.contains(low)) else {
+                out.append(low)
+                continue
+            }
             let head = turkish && first == "i" ? "İ" : String(first).uppercased()
-            return head + low.dropFirst()
+            out.append(head + String(low.dropFirst()))
         }
+        return out
     }
 
     /// A title as people write it: no bullets, bars or bylines; ALL-CAPS words in Title Case
