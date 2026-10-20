@@ -5,7 +5,7 @@ enum Translations {
     static let english: [String: String] = {
         var all: [String: String] = [:]
         all.reserveCapacity(920)
-        for part in [part1, part2, part3, part4, part5, part6, part7, part8] {
+        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9] {
             all.merge(part) { first, _ in first }
         }
         return all
@@ -953,5 +953,10 @@ enum Translations {
         "ρ hava = 1,225 kg/m³": "ρ air = 1,225 kg/m³",
         "ρ su = 1000 kg/m³": "ρ water = 1000 kg/m³",
         "ρ çelik ≈ 7850 kg/m³": "ρ steel ≈ 7850 kg/m³",
+    ]
+
+    /// Texts added in 3.0.
+    private static let part9: [String: String] = [
+        "Eğri": "Curve",
     ]
 }

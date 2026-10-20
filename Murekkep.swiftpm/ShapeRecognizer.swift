@@ -10,8 +10,8 @@ struct ShapeMatch {
         case rectangle
         case circle
         case ellipse
-        case arc
-        case parabola
+        /// A smooth bend between two ends (a quadratic Bézier, so a piece of a parabola); no arrowhead.
+        case curve
     }
 
     /// Center, radii and turn of a circle or an ellipse.
@@ -22,6 +22,34 @@ struct ShapeMatch {
         var angle: CGFloat
     }
 
+    /// The two ends of a curve and the control point between them.
+    struct Curve: Equatable {
+        var start: CGPoint
+        var control: CGPoint
+        var end: CGPoint
+
+        func point(at t: CGFloat) -> CGPoint {
+            let u = 1 - t
+            let x: CGFloat = u * u * start.x + 2 * u * t * control.x + t * t * end.x
+            let y: CGFloat = u * u * start.y + 2 * u * t * control.y + t * t * end.y
+            return CGPoint(x: x, y: y)
+        }
+
+        /// The point the curve passes through halfway, where its bend handle sits.
+        var middle: CGPoint { point(at: 0.5) }
+
+        /// The control point that makes the curve pass through `m` halfway.
+        static func control(start: CGPoint, through m: CGPoint, end: CGPoint) -> CGPoint {
+            CGPoint(x: 2 * m.x - (start.x + end.x) / 2, y: 2 * m.y - (start.y + end.y) / 2)
+        }
+
+        func path() -> [CGPoint] {
+            let length = Geo.dist(start, control) + Geo.dist(control, end)
+            let n = max(24, min(240, Int((length / 2).rounded(.up))))
+            return (0...n).map { i in point(at: CGFloat(i) / CGFloat(n)) }
+        }
+    }
+
     let kind: Kind
     let title: String
     let path: [CGPoint]
@@ -29,6 +57,8 @@ struct ShapeMatch {
     var corners: [CGPoint] = []
     /// Set for circles and ellipses: their axes get handles instead of corners.
     var oval: Oval? = nil
+    /// Set for curves: the ends and the bend get handles.
+    var curve: Curve? = nil
 
     /// Closed shapes turn and scale around their middle, open ones around where they started.
     var isClosed: Bool {
@@ -39,8 +69,8 @@ struct ShapeMatch {
     }
 }
 
-/// Hold-to-shape: lines, broken lines, triangles, rectangles and other polygons, circles, ellipses,
-/// arcs and parabolas. Real handwriting shakes, so the stroke is smoothed first and every possible
+/// Hold-to-shape: lines, broken lines, triangles, rectangles and other polygons, circles, ellipses
+/// and curves. Real handwriting shakes, so the stroke is smoothed first and every possible
 /// shape is fitted; the one with the smallest error wins, and only when it really follows the
 /// drawing. Every test is relative to the drawing's size.
 ///
@@ -109,22 +139,11 @@ enum ShapeRecognizer {
                                         rms: Geo.polylineRMS(pts, v, closed: false),
                                         penalty: 1 + 0.08 * CGFloat(v.count - 3)))
         }
-        if let circle = Fit.circle(pts) {
-            var sweep: CGFloat = 0
-            var prev = atan2(pts[0].y - circle.center.y, pts[0].x - circle.center.x)
-            for q in pts {
-                let a = atan2(q.y - circle.center.y, q.x - circle.center.x)
-                sweep += Geo.wrap(a - prev)
-                prev = a
-            }
-            if abs(sweep) > 25 * .pi / 180, abs(sweep) < 340 * .pi / 180, circle.radius < 3 * diag {
-                candidates.append(Candidate(match: ShapeMatch(kind: .arc, title: Loc.t("Yay"), path: arcPath(circle, start: pts[0], sweep: sweep)),
-                                            rms: circle.rms, penalty: 1))
-            }
-        }
-        if let parabola = Fit.parabola(pts) {
-            candidates.append(Candidate(match: ShapeMatch(kind: .parabola, title: Loc.t("Parabol"), path: parabola.path()),
-                                        rms: parabola.rms, penalty: 1.05))
+        // Any smooth bend becomes a curve with a handle on its bend: no arcs, no arrowheads.
+        if let first = pts.first, let last = pts.last, let fit = Fit.quadraticBezier(pts) {
+            let curve = ShapeMatch.Curve(start: first, control: fit.control, end: last)
+            candidates.append(Candidate(match: ShapeMatch(kind: .curve, title: Loc.t("Eğri"), path: curve.path(), curve: curve),
+                                        rms: fit.rms, penalty: 1.05))
         }
         return pick(candidates, limit: 0.06 * diag)
     }
@@ -389,15 +408,6 @@ enum ShapeRecognizer {
         abs(Geo.dist(r[0], r[1]) - Geo.dist(r[1], r[2])) < 0.01 * Geo.dist(r[0], r[2])
     }
 
-    private static func arcPath(_ c: Fit.Circle, start: CGPoint, sweep: CGFloat) -> [CGPoint] {
-        let a0 = atan2(start.y - c.center.y, start.x - c.center.x)
-        let n = max(12, Int((abs(sweep) * c.radius / 3).rounded(.up)))
-        return (0...n).map { i in
-            let a = a0 + sweep * CGFloat(i) / CGFloat(n)
-            return CGPoint(x: c.center.x + cos(a) * c.radius, y: c.center.y + sin(a) * c.radius)
-        }
-    }
-
     /// Starts where the user started and runs the same way round.
     private static func ellipsePath(center: CGPoint, rx: CGFloat, ry: CGFloat, angle: CGFloat, following pts: [CGPoint]) -> [CGPoint] {
         var area: CGFloat = 0
@@ -477,6 +487,29 @@ enum Geo {
             acc += d
         }
         while out.count < n { out.append(p[p.count - 1]) }
+        return out
+    }
+
+    /// Points no more than `spacing` apart along `p`, keeping every point of `p` (corners stay sharp,
+    /// unlike `resample`, which can step over a corner).
+    static func densify(_ p: [CGPoint], spacing: CGFloat) -> [CGPoint] {
+        guard p.count >= 2 else { return p }
+        let step = max(spacing, 0.5)
+        var out: [CGPoint] = []
+        out.reserveCapacity(Int(length(p) / step) + p.count)
+        for i in 0..<(p.count - 1) {
+            let a = p[i]
+            let b = p[i + 1]
+            out.append(a)
+            let n = min(Int(dist(a, b) / step), 4000)
+            if n > 1 {
+                for k in 1..<n {
+                    let t = CGFloat(k) / CGFloat(n)
+                    out.append(CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+                }
+            }
+        }
+        out.append(p[p.count - 1])
         return out
     }
 
@@ -725,33 +758,6 @@ enum Fit {
         let rms: CGFloat
     }
 
-    struct Parabola {
-        let angle: CGFloat
-        let a: CGFloat
-        let b: CGFloat
-        let c: CGFloat
-        let mean: CGFloat
-        let uMin: CGFloat
-        let uMax: CGFloat
-        let rms: CGFloat
-        var span: CGFloat { uMax - uMin }
-
-        func value(_ u: CGFloat) -> CGFloat {
-            let x = u - mean
-            return a * x * x + b * x + c
-        }
-
-        func path() -> [CGPoint] {
-            let cs = cos(angle)
-            let sn = sin(angle)
-            return (0...64).map { i in
-                let u = uMin + span * CGFloat(i) / 64
-                let v = value(u)
-                return CGPoint(x: u * cs - v * sn, y: u * sn + v * cs)
-            }
-        }
-    }
-
     private static func solve3(_ m: [[CGFloat]], _ v: [CGFloat]) -> [CGFloat]? {
         func det(_ a: [[CGFloat]]) -> CGFloat {
             a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
@@ -848,63 +854,64 @@ enum Fit {
                        residual: (e / n).squareRoot(), rms: (ed / n).squareRoot())
     }
 
-    private static func parabola(_ p: [CGPoint], angle: CGFloat) -> (fit: Parabola, ok: Bool)? {
-        let cs = cos(angle)
-        let sn = sin(angle)
-        let q = p.map { (u: $0.x * cs + $0.y * sn, v: -$0.x * sn + $0.y * cs) }
-        let n = CGFloat(q.count)
-        let mean = q.reduce(0) { $0 + $1.u } / n
-        var su: CGFloat = 0, su2: CGFloat = 0, su3: CGFloat = 0, su4: CGFloat = 0
-        var sv: CGFloat = 0, suv: CGFloat = 0, su2v: CGFloat = 0
-        var uMin = CGFloat.infinity
-        var uMax = -CGFloat.infinity
-        for t in q {
-            let u = t.u - mean
-            su += u
-            su2 += u * u
-            su3 += u * u * u
-            su4 += u * u * u * u
-            sv += t.v
-            suv += u * t.v
-            su2v += u * u * t.v
-            uMin = min(uMin, t.u)
-            uMax = max(uMax, t.u)
+    /// Quadratic Bézier through the first and last point that follows `p` best (least squares). The
+    /// control point is solved for the points' curve parameters, which then move to the nearest
+    /// point of the curve (two Newton steps), 24 rounds. Returns the control point and the RMS
+    /// distance in points.
+    static func quadraticBezier(_ p: [CGPoint]) -> (control: CGPoint, rms: CGFloat)? {
+        let n = p.count
+        guard n >= 3, let p0 = p.first, let p2 = p.last else { return nil }
+        var ts = [CGFloat](repeating: 0, count: n)
+        var run: CGFloat = 0
+        for i in 1..<n {
+            run += Geo.dist(p[i - 1], p[i])
+            ts[i] = run
         }
-        guard let s = solve3([[su4, su3, su2], [su3, su2, su], [su2, su, n]], [su2v, suv, sv]), abs(s[0]) > 1e-9 else {
-            return nil
+        guard run > 1e-6 else { return nil }
+        for i in 0..<n { ts[i] /= run }
+        var c = CGPoint.zero
+        for _ in 0..<24 {
+            var nx: CGFloat = 0
+            var ny: CGFloat = 0
+            var den: CGFloat = 0
+            for i in 0..<n {
+                let t = ts[i]
+                let u = 1 - t
+                let w: CGFloat = 2 * t * u
+                let rx: CGFloat = p[i].x - u * u * p0.x - t * t * p2.x
+                let ry: CGFloat = p[i].y - u * u * p0.y - t * t * p2.y
+                nx += w * rx
+                ny += w * ry
+                den += w * w
+            }
+            guard den > 1e-9 else { return nil }
+            c = CGPoint(x: nx / den, y: ny / den)
+            let d2 = CGPoint(x: 2 * (p2.x - 2 * c.x + p0.x), y: 2 * (p2.y - 2 * c.y + p0.y))
+            for i in 1..<(n - 1) {
+                var t = ts[i]
+                for _ in 0..<2 {
+                    let u = 1 - t
+                    let bx: CGFloat = u * u * p0.x + 2 * u * t * c.x + t * t * p2.x
+                    let by: CGFloat = u * u * p0.y + 2 * u * t * c.y + t * t * p2.y
+                    let d1x: CGFloat = 2 * u * (c.x - p0.x) + 2 * t * (p2.x - c.x)
+                    let d1y: CGFloat = 2 * u * (c.y - p0.y) + 2 * t * (p2.y - c.y)
+                    let ex = bx - p[i].x
+                    let ey = by - p[i].y
+                    let f1: CGFloat = ex * d1x + ey * d1y
+                    let f2: CGFloat = d1x * d1x + d1y * d1y + ex * d2.x + ey * d2.y
+                    if f2 > 1e-9 { t = min(max(t - f1 / f2, 0), 1) }
+                }
+                ts[i] = t
+            }
         }
         var e: CGFloat = 0
-        for t in q {
-            let u = t.u - mean
-            let d = s[0] * u * u + s[1] * u + s[2] - t.v
-            e += d * d
+        for i in 0..<n {
+            let t = ts[i]
+            let u = 1 - t
+            let dx: CGFloat = u * u * p0.x + 2 * u * t * c.x + t * t * p2.x - p[i].x
+            let dy: CGFloat = u * u * p0.y + 2 * u * t * c.y + t * t * p2.y - p[i].y
+            e += dx * dx + dy * dy
         }
-        let fit = Parabola(angle: angle, a: s[0], b: s[1], c: s[2], mean: mean, uMin: uMin, uMax: uMax, rms: (e / n).squareRoot())
-        let span = uMax - uMin
-        let vertex = -s[1] / (2 * s[0]) + mean
-        let inside = vertex > uMin + 0.15 * span && vertex < uMax - 0.15 * span
-        let sign: CGFloat = s[0] > 0 ? 1 : -1
-        let top = fit.value(vertex)
-        let arms = min((fit.value(uMin) - top) * sign, (fit.value(uMax) - top) * sign) > 0.15 * span
-        return (fit, inside && arms)
-    }
-
-    /// Tries 36 axis directions; an upright or sideways axis wins when it fits nearly as well.
-    static func parabola(_ p: [CGPoint]) -> Parabola? {
-        var best: Parabola?
-        for k in 0..<36 {
-            if let r = parabola(p, angle: CGFloat(k) * .pi / 36), r.ok, r.fit.rms < (best?.rms ?? .infinity) {
-                best = r.fit
-            }
-        }
-        guard var chosen = best else { return nil }
-        for axis in [CGFloat(0), .pi / 2] {
-            var d = abs(chosen.angle - axis)
-            d = min(d, .pi - d)
-            if d < 0.14, let r = parabola(p, angle: axis), r.ok, r.fit.rms < chosen.rms * 1.35 {
-                chosen = r.fit
-            }
-        }
-        return chosen
+        return (c, (e / CGFloat(n)).squareRoot())
     }
 }

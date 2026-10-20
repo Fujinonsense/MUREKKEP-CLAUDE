@@ -705,7 +705,7 @@ final class EditorModel: ObservableObject {
         let n = Float(max(s.points.count, 1))
         let r = s.points.reduce(Float(0)) { $0 + $1.r } / n
         let ink = s.points.reduce(Float(0)) { $0 + $1.ink } / n
-        let dense = path.count >= 2 ? Geo.resample(path, spacing: CGFloat(max(1.5, r * 0.7))) : path
+        let dense = path.count >= 2 ? Geo.densify(path, spacing: CGFloat(max(1.5, r * 0.7))) : path
         return Stroke(brush: s.brush, color: s.color, width: s.width, birth: s.birth, seed: s.seed,
                       points: dense.map { InkPoint(x: Float($0.x), y: Float($0.y), r: r, ink: ink) }, duration: s.duration)
     }

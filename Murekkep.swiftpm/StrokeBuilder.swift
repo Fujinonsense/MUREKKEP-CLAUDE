@@ -260,7 +260,8 @@ struct StrokeBuilder {
 
     /// Ink points along `path` with the stroke's width and ink (calligraphy follows the direction).
     private mutating func place(_ path: [CGPoint]) {
-        let dense = Geo.resample(path, spacing: CGFloat(max(1.5, shapeRadius * 0.7)))
+        // Corners stay points of the stroke, so a square keeps square corners in every ink.
+        let dense = Geo.densify(path, spacing: CGFloat(max(1.5, shapeRadius * 0.7)))
         var out: [InkPoint] = []
         out.reserveCapacity(dense.count)
         for (i, p) in dense.enumerated() {

@@ -18,6 +18,8 @@ struct EditableShape: Equatable {
         /// Open line through `points` (a straight line has two).
         case polyline
         case oval(center: CGPoint, rx: CGFloat, ry: CGFloat, angle: CGFloat)
+        /// A bend between two ends; its handle sits on the curve halfway.
+        case curve(ShapeMatch.Curve)
     }
 
     var kind: Kind
@@ -31,7 +33,6 @@ struct EditableShape: Equatable {
         self.title = title
     }
 
-    /// nil for shapes without corners to drag (arcs, parabolas).
     init?(match: ShapeMatch) {
         switch match.kind {
         case .line, .polyline:
@@ -44,14 +45,19 @@ struct EditableShape: Equatable {
         case .circle, .ellipse:
             guard let o = match.oval else { return nil }
             self.init(kind: .oval(center: o.center, rx: o.rx, ry: o.ry, angle: o.angle), points: [], title: match.title)
-        case .arc, .parabola:
-            return nil
+        case .curve:
+            guard let c = match.curve else { return nil }
+            self.init(kind: .curve(c), points: [], title: match.title)
         }
     }
 
-    /// Average of the corners (the middle of an oval).
+    /// Average of the corners (the middle of an oval; for a curve, between its ends and its bend).
     var middle: CGPoint {
         if case let .oval(center, _, _, _) = kind { return center }
+        if case let .curve(c) = kind {
+            let m = c.middle
+            return CGPoint(x: (c.start.x + m.x + c.end.x) / 3, y: (c.start.y + m.y + c.end.y) / 3)
+        }
         guard !points.isEmpty else { return .zero }
         let n = CGFloat(points.count)
         return CGPoint(x: points.reduce(CGFloat(0)) { $0 + $1.x } / n, y: points.reduce(CGFloat(0)) { $0 + $1.y } / n)
@@ -70,6 +76,8 @@ struct EditableShape: Equatable {
                     CGPoint(x: center.x - u.x * rx, y: center.y - u.y * rx),
                     CGPoint(x: center.x - v.x * ry, y: center.y - v.y * ry),
                     center]
+        case let .curve(c):
+            return [c.start, c.middle, c.end, middle]
         }
     }
 
@@ -91,6 +99,8 @@ struct EditableShape: Equatable {
                 let y = sin(t) * ry
                 return CGPoint(x: center.x + x * c - y * s, y: center.y + x * s + y * c)
             }
+        case let .curve(c):
+            return c.path()
         }
     }
 
@@ -109,6 +119,9 @@ struct EditableShape: Equatable {
         if case let .oval(center, rx, ry, a) = kind {
             copy.kind = .oval(center: place(center), rx: rx * scale, ry: ry * scale, angle: a + angle)
         }
+        if case let .curve(c) = kind {
+            copy.kind = .curve(ShapeMatch.Curve(start: place(c.start), control: place(c.control), end: place(c.end)))
+        }
         return copy
     }
 
@@ -126,14 +139,48 @@ struct EditableShape: Equatable {
             return moveCorner(index, to: target, snap: snap)
         case let .oval(center, rx, ry, angle):
             return moveAxis(index, to: target, center: center, rx: rx, ry: ry, angle: angle)
+        case let .curve(c):
+            return moveCurveHandle(index, to: target, curve: c, snap: snap)
         }
     }
 
     private mutating func translate(by d: CGPoint) {
-        points = points.map { CGPoint(x: $0.x + d.x, y: $0.y + d.y) }
+        func shift(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + d.x, y: p.y + d.y) }
+        points = points.map { shift($0) }
         if case let .oval(center, rx, ry, angle) = kind {
-            kind = .oval(center: CGPoint(x: center.x + d.x, y: center.y + d.y), rx: rx, ry: ry, angle: angle)
+            kind = .oval(center: shift(center), rx: rx, ry: ry, angle: angle)
         }
+        if case let .curve(c) = kind {
+            kind = .curve(ShapeMatch.Curve(start: shift(c.start), control: shift(c.control), end: shift(c.end)))
+        }
+    }
+
+    /// Curve handles: 0 and 2 are the ends, 1 the bend. Moving an end keeps the bend where it is;
+    /// the ends settle level or upright with each other.
+    private mutating func moveCurveHandle(_ i: Int, to target: CGPoint, curve c: ShapeMatch.Curve,
+                                          snap: CGFloat) -> ShapeHandleFeedback {
+        var next = c
+        if i == 1 {
+            next.control = ShapeMatch.Curve.control(start: c.start, through: target, end: c.end)
+            kind = .curve(next)
+            return ShapeHandleFeedback(label: title, snapped: false)
+        }
+        var p = target
+        var snapped = false
+        let other = i == 0 ? c.end : c.start
+        if abs(p.x - other.x) < snap {
+            p.x = other.x
+            snapped = true
+        }
+        if abs(p.y - other.y) < snap {
+            p.y = other.y
+            snapped = true
+        }
+        let bend = c.middle
+        if i == 0 { next.start = p } else { next.end = p }
+        next.control = ShapeMatch.Curve.control(start: next.start, through: bend, end: next.end)
+        kind = .curve(next)
+        return ShapeHandleFeedback(label: ShapeBuilder.mm(Geo.dist(next.start, next.end) / pointsPerMillimetre), snapped: snapped)
     }
 
     private mutating func moveCorner(_ i: Int, to target: CGPoint, snap: CGFloat) -> ShapeHandleFeedback {
