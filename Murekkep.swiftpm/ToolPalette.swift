@@ -821,6 +821,19 @@ struct TextPenInspector: View {
                 }
                 .pickerStyle(.segmented)
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Loc.t("Punto"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Picker(Loc.t("Punto"), selection: $settings.textPenScale) {
+                    Text(Loc.t("Küçük")).tag(0.8)
+                    Text("Normal").tag(1.0)
+                    Text(Loc.t("Büyük")).tag(1.25)
+                    Text(Loc.t("Çok büyük")).tag(1.5)
+                }
+                .pickerStyle(.segmented)
+            }
             Text(Loc.t("Başka bir kalem seçince bekleyen yazı hemen dönüştürülür. Geri al ile el yazısına dönebilirsin."))
                 .font(.caption)
                 .foregroundStyle(.secondary)

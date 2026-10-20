@@ -1834,7 +1834,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     /// With the text pen only drawings larger than handwriting (a heart, a circle round a word)
     /// become shapes or pictures; letters stay letters.
-    private static let textPenSymbolSize: CGFloat = 28
+    private static func textPenSymbolSize(penWidth: CGFloat) -> CGFloat {
+        // Thick pens write bigger letters; they must stay letters too.
+        max(28, 4 * penWidth)
+    }
 
     private func cancelHold() {
         holdWork?.cancel()
@@ -1849,7 +1852,8 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         let path = b.drawnPath
         if gestureTool == .textPen {
             let box = Geo.bounds(path)
-            guard max(box.width, box.height) >= Self.textPenSymbolSize else { return }
+            let penWidth = CGFloat(model.width(for: model.activeBrush))
+            guard max(box.width, box.height) >= Self.textPenSymbolSize(penWidth: penWidth) else { return }
         }
         if model.settings.sketchSuggestions, let sketch = recognizeSketch(path, page: active.page) {
             pendingSketch = sketch

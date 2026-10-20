@@ -821,7 +821,8 @@ final class EditorModel: ObservableObject {
         defer { isConverting = false }
         let paper = isPDF ? PaperStyle.plain : meta.paper
         guard let result = await HandwritingConverter.convert(strokes: source, paper: paper, pageSize: layout.pageSizes[page],
-                                                              flowerLevel: settings.flowerLevel, ai: handwritingAccess) else {
+                                                              flowerLevel: settings.flowerLevel, ai: handwritingAccess,
+                                                              textScale: settings.textPenScale) else {
             banner = Loc.t("El yazısını okuyamadım. Biraz daha net yazıp tekrar dene.")
             return
         }
@@ -870,7 +871,9 @@ final class EditorModel: ObservableObject {
         let source = strokes(on: batch.page).filter { ids.contains($0.id) }
         guard !source.isEmpty, layout.pageSizes.indices.contains(batch.page) else { return }
         let marks = source.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
-        let isSmall = max(marks.width, marks.height) < 14
+        // Thick pens make bigger dots: the size of a lone mark grows with the pen.
+        let penWidth = CGFloat(source.map(\.width).max() ?? 0)
+        let isSmall = max(marks.width, marks.height) < max(14, 3 * penWidth)
         // A dot or an accent written after its word had already turned into text. Read alone it
         // becomes a stray letter ("i" over "ı", "," under "ç"); the dictionary has already given the
         // word its Turkish letters, so the mark is simply dropped. A mark after the word (a full
@@ -889,11 +892,13 @@ final class EditorModel: ObservableObject {
         let previous = lastTextEnd?.page == batch.page ? lastTextEnd?.end : nil
         // The page's other ink, which the typed words keep clear of.
         let others = strokes(on: batch.page).filter { !ids.contains($0.id) && !$0.points.isEmpty }.map { CGRect(ink: $0.bounds) }
+        let scale = settings.textPenScale
         isTypesetting = true
         Task { @MainActor [weak self] in
             let converted = await HandwritingConverter.convert(strokes: source, paper: paper, pageSize: size,
                                                                flowerLevel: flowers, keepPosition: true,
-                                                               ai: access, continueFrom: previous, obstacles: others)
+                                                               ai: access, continueFrom: previous, obstacles: others,
+                                                               textScale: scale)
             guard let self else { return }
             self.isTypesetting = false
             // Small marks that read as nothing but punctuation stay as ink, quietly.
@@ -933,7 +938,7 @@ final class EditorModel: ObservableObject {
         let style = StrokeText.Style(brush: brush, color: color(for: brush), width: width(for: brush))
         let new = HandwritingConverter.typed(text, at: request.point, paper: isPDF ? .plain : meta.paper,
                                              pageSize: layout.pageSizes[request.page], style: style,
-                                             flowerLevel: settings.flowerLevel)
+                                             flowerLevel: settings.flowerLevel, scale: settings.textPenScale)
         addStrokes(new, toPage: request.page)
     }
 
@@ -941,7 +946,7 @@ final class EditorModel: ObservableObject {
     func typedLayout(page: Int, at point: CGPoint) -> HandwritingConverter.TypedLayout? {
         guard layout.pageSizes.indices.contains(page) else { return nil }
         return HandwritingConverter.typedLayout(at: point, paper: isPDF ? .plain : meta.paper,
-                                                pageSize: layout.pageSizes[page])
+                                                pageSize: layout.pageSizes[page], scale: settings.textPenScale)
     }
 
     /// Color of the typed text (the brush it is written with).

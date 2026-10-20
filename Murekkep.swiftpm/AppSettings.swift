@@ -120,6 +120,11 @@ final class AppSettings: ObservableObject {
     @Published var textPenDelay: Double {
         didSet { UserDefaults.standard.set(textPenDelay, forKey: "textPenDelay") }
     }
+    /// Size of the text pen's and the Aa tool's letters, as a share of the template's: 0.8, 1, 1.25
+    /// or 1.5 (never taller than the ruled lines allow).
+    @Published var textPenScale: Double {
+        didSet { UserDefaults.standard.set(textPenScale, forKey: "textPenScale") }
+    }
     /// Read handwriting (text pen, "convert to text") with Claude when a key is saved: far more
     /// accurate on fast writing and on math. Without a key, or offline, the device reads it.
     @Published var handwritingAI: Bool {
@@ -170,6 +175,7 @@ final class AppSettings: ObservableObject {
             "paperSound": false,
             "paperSoundLevel": 0.4,
             "textPenDelay": 1.3,
+            "textPenScale": 1.0,
             "handwritingAI": true,
             "animations": true,
             "batterySaver": false,
@@ -225,6 +231,8 @@ final class AppSettings: ObservableObject {
         handwritingAI = d.bool(forKey: "handwritingAI")
         paperSoundLevel = min(max(d.double(forKey: "paperSoundLevel"), 0), 1)
         textPenDelay = min(max(d.double(forKey: "textPenDelay"), 0.6), 3)
+        let scale = d.double(forKey: "textPenScale")
+        textPenScale = scale >= 0.8 && scale <= 1.5 ? scale : 1.0
         animations = d.bool(forKey: "animations")
         batterySaver = d.bool(forKey: "batterySaver")
         dryDuration = min(max(d.double(forKey: "dryDuration"), 1), 20)

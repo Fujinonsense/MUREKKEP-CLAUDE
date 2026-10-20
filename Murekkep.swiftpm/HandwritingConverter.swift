@@ -78,7 +78,8 @@ enum HandwritingConverter {
     /// `obstacles`: bounds of the page's other ink, which the typed words keep clear of.
     static func convert(strokes: [Stroke], paper: PaperStyle, pageSize: CGSize, flowerLevel: Int,
                         keepPosition: Bool = false, ai: HandwritingAI.Access? = nil,
-                        continueFrom: TextEnd? = nil, obstacles: [CGRect] = []) async -> ConversionResult? {
+                        continueFrom: TextEnd? = nil, obstacles: [CGRect] = [],
+                        textScale: Double = 1) async -> ConversionResult? {
         let source = strokes.filter { $0.brush != .highlighter && !$0.points.isEmpty }
         guard !source.isEmpty else { return nil }
         var lines: [OCRLine] = []
@@ -135,6 +136,7 @@ enum HandwritingConverter {
         }
         let printed = paper.ruling(pageSize: pageSize)
         var ruling = printed ?? estimatedRuling(lines, pageSize: pageSize)
+        ruling.capHeight = capHeight(ruling: ruling, scale: textScale)
         // On a page without printed lines the text pen keeps to the line its last words sat on.
         if printed == nil, keepPosition, let previous = continueFrom, let first = lines.first {
             let handBaseline = first.box.maxY - first.box.height * 0.15
@@ -306,8 +308,8 @@ enum HandwritingConverter {
 
     /// Typed text placed at `point`: on the next writing line when the page has them.
     static func typed(_ text: String, at point: CGPoint, paper: PaperStyle, pageSize: CGSize, style: StrokeText.Style,
-                      flowerLevel: Int) -> [Stroke] {
-        let lines = typedLayout(at: point, paper: paper, pageSize: pageSize)
+                      flowerLevel: Int, scale: Double = 1) -> [Stroke] {
+        let lines = typedLayout(at: point, paper: paper, pageSize: pageSize, scale: scale)
         let cap = lines.cap
         let unit = cap / 10
         let left = lines.left
@@ -348,9 +350,15 @@ enum HandwritingConverter {
         var spacing: CGFloat
     }
 
-    static func typedLayout(at point: CGPoint, paper: PaperStyle, pageSize: CGSize) -> TypedLayout {
+    /// Capital height of typed text at the chosen size: never taller than 72 % of the space between
+    /// ruled lines.
+    static func capHeight(ruling: Ruling, scale: Double) -> CGFloat {
+        min(ruling.capHeight * CGFloat(scale), ruling.spacing * 0.72)
+    }
+
+    static func typedLayout(at point: CGPoint, paper: PaperStyle, pageSize: CGSize, scale: Double = 1) -> TypedLayout {
         let ruling = paper.ruling(pageSize: pageSize)
-        let cap = ruling?.capHeight ?? 15
+        let cap = ruling.map { capHeight(ruling: $0, scale: scale) } ?? 15 * CGFloat(scale)
         let left = ruling.map { max($0.left, min(point.x, $0.right - 40)) } ?? point.x
         let right = ruling?.right ?? (pageSize.width - 24)
         let spacing = ruling?.spacing ?? cap * 1.8

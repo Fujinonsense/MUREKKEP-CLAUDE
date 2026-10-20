@@ -975,5 +975,9 @@ enum Translations {
         "Işıltı": "Shine",
         "Son kullanılanlar": "Recent",
         "Tüm kalemler": "All pens",
+        "Punto": "Text size",
+        "Küçük": "Small",
+        "Büyük": "Large",
+        "Çok büyük": "Extra large",
     ]
 }
