@@ -85,7 +85,8 @@ final class HandwritingModel {
         guard r.u32() == 1, let nChars = r.u32(), r.pos + nChars <= r.bytes.count,
               let text = String(bytes: r.bytes[r.pos..<(r.pos + nChars)], encoding: .utf8) else { return nil }
         r.pos += nChars
-        charset = Array(text)
+        // Kept local until every stored property is set (a class may not read `self` before that).
+        let chars = Array(text)
         guard let count = r.u32(), count == 26 else { return nil }
         var tensors: [(dims: [Int], values: [Float])] = []
         for _ in 0..<count {
@@ -116,7 +117,8 @@ final class HandwritingModel {
             if k == 1 { inputs = 2 * Self.hidden }
         }
         let fc = tensors[24]
-        guard fc.dims == [charset.count + 1, 2 * Self.hidden] else { return nil }
+        guard fc.dims == [chars.count + 1, 2 * Self.hidden] else { return nil }
+        charset = chars
         self.convs = convs
         self.lstms = lstms
         fcT = Self.transpose(fc.values, rows: fc.dims[0], cols: fc.dims[1])
