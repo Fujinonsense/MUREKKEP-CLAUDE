@@ -71,6 +71,9 @@ struct InkEdit {
     /// The page's stickers before and after, when the edit touched them.
     var stickersBefore: [Sticker]? = nil
     var stickersAfter: [Sticker]? = nil
+    /// Changes on other pages made in the same step (a selection carried to another page): undone
+    /// and redone together with this one.
+    var linked: [InkEdit] = []
 }
 
 /// Ink, tools, undo and persistence for one open note.
@@ -509,6 +512,10 @@ final class EditorModel: ObservableObject {
         }
         guard let sel = selection, let snap = selectionSnapshot, pages.indices.contains(sel.page) else { return }
         selectionSnapshot = nil
+        if let target = dropPage(for: sel) {
+            carrySelection(sel, from: snap, to: target)
+            return
+        }
         let after = pages[sel.page].strokes
         let stickersAfter = pages[sel.page].stickers
         let stickersChanged = stickersAfter != snap.stickers
@@ -520,6 +527,51 @@ final class EditorModel: ObservableObject {
         redoStack.removeAll()
         updateUndoFlags()
         markDirty()
+    }
+
+    /// The page a selection belongs to once dropped with its middle over another page.
+    private func dropPage(for sel: InkSelection) -> Int? {
+        guard layout.pageRects.indices.contains(sel.page) else { return nil }
+        let o = layout.pageRects[sel.page].origin
+        let center = CGPoint(x: o.x + sel.bounds.midX, y: o.y + sel.bounds.midY)
+        guard let target = layout.page(containing: center), target != sel.page, pages.indices.contains(target) else {
+            return nil
+        }
+        return target
+    }
+
+    /// Carries the selected strokes and stickers from their page to `target`, where they stay at the
+    /// same place on the document. One undo step puts both pages back.
+    private func carrySelection(_ sel: InkSelection, from snap: (strokes: [Stroke], ids: Set<Int>, stickers: [Sticker]),
+                                to target: Int) {
+        let from = layout.pageRects[sel.page].origin
+        let to = layout.pageRects[target].origin
+        let dx = from.x - to.x
+        let dy = from.y - to.y
+        let fx = Float(dx)
+        let fy = Float(dy)
+        let carried = pages[sel.page].strokes.filter { sel.ids.contains($0.id) }.map { s in
+            Stroke(brush: s.brush, color: s.color, width: s.width, birth: s.birth, seed: s.seed,
+                   points: s.points.map { InkPoint(x: $0.x + fx, y: $0.y + fy, r: $0.r, ink: $0.ink) },
+                   duration: s.duration)
+        }
+        let carriedStickers = pages[sel.page].stickers.filter { sel.stickers.contains($0.id) }.map { st -> Sticker in
+            var copy = st
+            copy.rect = st.rect.offsetBy(dx: dx, dy: dy)
+            return copy
+        }
+        let targetBefore = pages[target]
+        pages[sel.page].strokes.removeAll { sel.ids.contains($0.id) }
+        pages[sel.page].stickers.removeAll { sel.stickers.contains($0.id) }
+        pages[target].strokes.append(contentsOf: carried)
+        pages[target].stickers.append(contentsOf: carriedStickers)
+        pages[target].version += 1
+        var edit = InkEdit(page: sel.page, before: snap.strokes, after: pages[sel.page].strokes,
+                           stickersBefore: snap.stickers, stickersAfter: pages[sel.page].stickers)
+        edit.linked = [InkEdit(page: target, before: targetBefore.strokes, after: pages[target].strokes,
+                               stickersBefore: targetBefore.stickers, stickersAfter: pages[target].stickers)]
+        record(edit)
+        updateSelection(page: target, ids: Set(carried.map(\.id)), stickers: Set(carriedStickers.map(\.id)))
     }
 
     func deleteSelection() {
@@ -1004,9 +1056,7 @@ final class EditorModel: ObservableObject {
             placingSticker = nil
             clearSelection()
         }
-        pages[edit.page].strokes = edit.before
-        if let s = edit.stickersBefore { pages[edit.page].stickers = s }
-        pages[edit.page].version += 1
+        restore(edit, before: true)
         redoStack.append(edit)
         updateUndoFlags()
         markDirty()
@@ -1022,13 +1072,22 @@ final class EditorModel: ObservableObject {
             placingSticker = nil
             clearSelection()
         }
-        pages[edit.page].strokes = edit.after
-        if let s = edit.stickersAfter { pages[edit.page].stickers = s }
-        pages[edit.page].version += 1
+        restore(edit, before: false)
         undoStack.append(edit)
         updateUndoFlags()
         markDirty()
         onInkChange?()
+    }
+
+    /// Sets the edit's page, and the pages linked to it, as they were before or after the edit.
+    private func restore(_ edit: InkEdit, before: Bool) {
+        // A selection carried to another page would point at strokes that are not there now.
+        if !edit.linked.isEmpty { clearSelection() }
+        for e in [edit] + edit.linked where pages.indices.contains(e.page) {
+            pages[e.page].strokes = before ? e.before : e.after
+            if let s = before ? e.stickersBefore : e.stickersAfter { pages[e.page].stickers = s }
+            pages[e.page].version += 1
+        }
     }
 
     func addPage() {

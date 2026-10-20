@@ -91,6 +91,9 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var shapeStart: (page: Int, point: CGPoint)?
     private var lassoPage: Int?
     private var lassoPoints: [CGPoint] = []
+    /// Length of the lasso loop on screen so far, and when the pencil last ticked along it.
+    private var lassoTravel: CGFloat = 0
+    private var lastLassoTick: CFTimeInterval = 0
     private enum SelectionDrag {
         case move(start: CGPoint)
         case scale(anchor: CGPoint, startDistance: CGFloat)
@@ -1365,6 +1368,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         model.clearSelection()
         lassoPage = page
         lassoPoints = [docPoint]
+        lassoTravel = 0
         overlay.lasso = lassoPoints
         overlayChanged()
     }
@@ -1504,6 +1508,17 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         }
         guard lassoPage != nil else { return }
         if let last = lassoPoints.last, hypot(docPoint.x - last.x, docPoint.y - last.y) < 2 { return }
+        if let last = lassoPoints.last {
+            // The pencil ticks each time the loop grows by one dash and gap of its outline.
+            let period = CanvasOverlayView.lassoDash.reduce(0, +)
+            let before = Int(lassoTravel / period)
+            lassoTravel += hypot(docPoint.x - last.x, docPoint.y - last.y) * lassoZoom
+            let now = CACurrentMediaTime()
+            if Int(lassoTravel / period) > before, now - lastLassoTick > 0.025 {
+                lastLassoTick = now
+                playHaptic(.alignment, at: nil)
+            }
+        }
         lassoPoints.append(docPoint)
         overlay.lasso = lassoPoints
         overlayChanged()

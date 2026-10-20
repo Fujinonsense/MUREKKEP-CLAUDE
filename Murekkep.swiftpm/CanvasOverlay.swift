@@ -21,6 +21,8 @@ final class CanvasOverlayView: UIView {
     var shapeHandles: [CGPoint] = []
 
     private let accent = UIColor(red: 0.10, green: 0.33, blue: 0.80, alpha: 1)
+    /// Dash and gap of the lasso outline, in screen points (the pencil ticks once per period).
+    static let lassoDash: [CGFloat] = [6, 4]
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -68,7 +70,7 @@ final class CanvasOverlayView: UIView {
             ctx.saveGState()
             ctx.setStrokeColor(accent.cgColor)
             ctx.setLineWidth(1.4)
-            ctx.setLineDash(phase: 0, lengths: [6, 4])
+            ctx.setLineDash(phase: 0, lengths: Self.lassoDash)
             ctx.move(to: view(lasso[0]))
             for p in lasso.dropFirst() {
                 ctx.addLine(to: view(p))
