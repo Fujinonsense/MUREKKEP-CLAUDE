@@ -2093,12 +2093,17 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         }
     }
 
-    /// Letting go after erasing with the squeeze held gives the previous tool back; a short squeeze
+    /// A squeeze held at least this long (seconds) is a hold, not a click.
+    private static let squeezeHold: CFTimeInterval = 0.5
+
+    /// Letting go of a held squeeze gives the previous tool back (erased or not); a short squeeze
     /// leaves the eraser in the hand until the next erase is done (or the next squeeze).
     private func endSqueeze() {
+        let now = CACurrentMediaTime()
+        let heldLong = now - squeezeStart >= Self.squeezeHold
         squeezeHeld = false
-        lastSqueezeEnd = CACurrentMediaTime()
-        if squeezeTookEraser && erasedDuringSqueeze && eraserPage == nil && model.isTemporaryEraser {
+        lastSqueezeEnd = now
+        if squeezeTookEraser && (erasedDuringSqueeze || heldLong) && eraserPage == nil && model.isTemporaryEraser {
             model.endTemporaryEraser()
         }
         squeezeTookEraser = false

@@ -104,8 +104,12 @@ enum HandwritingConverter {
                 raw = await PageOCR.lines(in: thick)
             }
             // Real Turkish and English words decide between Vision's readings and bring back ş, ğ, ı…
-            let found = raw
-            lines = await MainActor.run { Spelling.polish(found) }.filter {
+            // One line per trip to the main thread: Pencil taps and touches are handled in between.
+            var polished: [OCRLine] = []
+            for line in raw {
+                polished += await MainActor.run { Spelling.polish([line]) }
+            }
+            lines = polished.filter {
                 !$0.text.trimmingCharacters(in: .whitespaces).isEmpty
             }
             guard !lines.isEmpty else { return nil }

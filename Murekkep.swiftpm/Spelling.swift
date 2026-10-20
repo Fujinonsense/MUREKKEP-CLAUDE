@@ -22,6 +22,9 @@ enum Spelling {
             var bestText = repair(best.text)
             var bestScore = score(bestText)
             for option in options.dropFirst() where !isMath(option.text) {
+                // Scores stop at 1: once the bar is there no other reading can win, and the
+                // dictionary lookups (on the main thread) are skipped.
+                if bestScore + 0.15 >= 1 { break }
                 let text = repair(option.text)
                 let s = score(text)
                 // Another reading must be clearly better made of real words to replace the first one.
