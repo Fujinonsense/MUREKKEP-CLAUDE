@@ -38,7 +38,12 @@ enum SketchRecognizer {
         let toHeart = Geo.chamfer(shape, t.heart)
         let toKidney = t.kidney.map { Geo.chamfer(shape, $0) }.min() ?? .infinity
         let toSpleen = t.spleen.map { Geo.chamfer(shape, $0) }.min() ?? .infinity
-        let notches = concavities(Geo.smooth(Geo.resample(loop, count: 96), closed: true, radius: 2)).filter { $0 > 0.07 }
+        let outline = Geo.smooth(Geo.resample(loop, count: 96), closed: true, radius: 2)
+        let notches = concavities(outline).filter { $0 > 0.07 }
+        // An organ's notch (the hilum) is part of the drawing, not the dent a quick hand leaves
+        // where it closes a circle: dents next to the stroke's two ends do not count, and a real
+        // hilum is at least a tenth of the drawing deep.
+        let organNotches = concavities(outline, ignoringJunction: true).filter { $0 > 0.07 }
         // A heart is told apart by its build (two lobes, a notch on top, a point at the bottom, the
         // halves alike), not by how closely it follows the textbook curve: a quick, lopsided heart
         // is still a heart, while a kidney or a spleen never has the bottom point.
@@ -51,7 +56,7 @@ enum SketchRecognizer {
             candidates.append((.heart, toHeart))
         }
         // A kidney and a spleen both have one clear notch (the hilum); an ellipse or a rectangle has none.
-        let notched = (1...2).contains(notches.count) && notches[0] >= 0.08 && notches[0] < 0.4
+        let notched = (1...2).contains(organNotches.count) && organNotches[0] >= 0.10 && organNotches[0] < 0.4
         if notched, toKidney < 0.06 {
             candidates.append((.kidney, toKidney))
         }
@@ -134,24 +139,34 @@ enum SketchRecognizer {
     }
 
     /// How deep the outline dips inside its convex hull, relative to the drawing's size (deepest first).
-    static func concavities(_ pts: [CGPoint]) -> [CGFloat] {
+    /// `ignoringJunction` leaves out dents whose deepest point lies within 12 % of the loop from
+    /// where the stroke started and ended.
+    static func concavities(_ pts: [CGPoint], ignoringJunction: Bool = false) -> [CGFloat] {
         let n = pts.count
         guard n >= 5 else { return [] }
         let box = Geo.bounds(pts)
         let size = max(box.width, box.height, 1e-6)
         let hull = convexHull(pts).sorted()
         guard hull.count >= 3 else { return [] }
+        let junction = Double(n) * 0.12
         var out: [CGFloat] = []
         for k in hull.indices {
             let a = hull[k]
             let c = hull[(k + 1) % hull.count]
             var depth: CGFloat = 0
+            var deepest = a
             var i = (a + 1) % n
             while i != c {
-                depth = max(depth, Geo.segmentDistance(pts[i], pts[a], pts[c]))
+                let d = Geo.segmentDistance(pts[i], pts[a], pts[c])
+                if d > depth {
+                    depth = d
+                    deepest = i
+                }
                 i = (i + 1) % n
             }
-            if depth > 0 { out.append(depth / size) }
+            guard depth > 0 else { continue }
+            if ignoringJunction && Double(min(deepest, n - deepest)) < junction { continue }
+            out.append(depth / size)
         }
         return out.sorted(by: >)
     }
