@@ -607,7 +607,9 @@ fragment InkOut ink_fragment(RibbonOut in [[stage_in]],
         col = saturate(water + float3(glint));
         alpha = cov * s.color.a;
     } else if (s.brush == BRUSH_LAVA) {
-        float age = fu.time - s.birth;
+        // Cools from where the pen started: each point starts cooling a little after the one before,
+        // at drawing speed (380 pt/s, as InkRenderer.lavaCoolSpeed), counted from when the pen lifted.
+        float age = fu.time - (s.birth + max(arc, 0.0) / 380.0);
         float heat = 1.0 - smoothstep(0.0, max(fu.coolDuration, 0.5), age);
 
         float edgeJag = (valueNoise(P * 0.85 + s.seed * 19.0) - 0.5) * r * 0.10 * (1.0 - 0.5 * heat);
@@ -690,9 +692,13 @@ fragment InkOut ink_fragment(RibbonOut in [[stage_in]],
         float jitter2 = (valueNoise(float2(along * 2.1 + 19.0, floor(flick * 1.3))) - 0.5) * 1.6;
         float fd1 = abs(across * r - jitter1 * r * 0.72);
         float fd2 = abs(across * r - jitter2 * r * 0.85);
-        float core = (1.0 - smoothstep(r * 0.13, r * 0.13 + px * 1.5, fd1))
-                   + (1.0 - smoothstep(r * 0.06, r * 0.06 + px * 1.2, fd2)) * 0.55;
-        float halo = exp(-fd1 / max(r * 0.32, 0.4)) + exp(-fd2 / max(r * 0.20, 0.3)) * 0.35;
+        // In the round caps |u| > |side|: the distance past the end point. The bolt stops at the
+        // pen tip instead of shooting ahead of it; only the soft glow goes round the tip.
+        float beyond = sqrt(max(in.u * in.u - in.side * in.side, 0.0)) * r;
+        float atTip = 1.0 - smoothstep(0.0, r * 0.3, beyond);
+        float core = ((1.0 - smoothstep(r * 0.13, r * 0.13 + px * 1.5, fd1))
+                   + (1.0 - smoothstep(r * 0.06, r * 0.06 + px * 1.2, fd2)) * 0.55) * atTip;
+        float halo = (exp(-fd1 / max(r * 0.32, 0.4)) + exp(-fd2 / max(r * 0.20, 0.3)) * 0.35) * atTip;
         float outer = 0.18 * exp(-1.6 * max(d - r * 0.6, 0.0) / max(r, 0.5));
         float a = saturate(core + halo * 0.85 + outer);
         if (a <= 0.003) {

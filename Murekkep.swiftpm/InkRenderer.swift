@@ -145,7 +145,8 @@ final class PageGPU {
     var latestWetBirth = -Double.infinity
     /// End time of the newest grass stroke (its blades grow and flowers open for a few seconds).
     var latestGrassBirth = -Double.infinity
-    /// End time of the newest lava stroke (it cools into embers over a few seconds).
+    /// When the last point of the newest lava starts cooling (lava cools from its first point to its
+    /// last at `InkRenderer.lavaCoolSpeed`, then takes the cooling time).
     var latestLavaBirth = -Double.infinity
 }
 
@@ -194,6 +195,8 @@ final class InkRenderer {
     static let colorFormat: MTLPixelFormat = .bgra8Unorm
     private static let strokeSlot = 256 // byte offset of points inside the active-stroke buffer
     private static let bladeVertices = 16 // (BLADE_SEGS + 1) * 2 in the shader
+    /// Points per second the cooling runs along a lava stroke (380.0 in the lava shader).
+    static let lavaCoolSpeed: Double = 380
 
     private enum Blend {
         case opaque
@@ -807,7 +810,12 @@ final class InkRenderer {
             if s.brush.isFastAnimated { hasWave = true }
             switch s.brush {
             case .lava:
-                latestLava = max(latestLava, s.birth)
+                var length: Float = 0
+                for i in s.points.indices.dropFirst() {
+                    let step = s.points[i].position - s.points[i - 1].position
+                    length += (step * step).sum().squareRoot()
+                }
+                latestLava = max(latestLava, s.birth + Double(length) / Self.lavaCoolSpeed)
             case .wet:
                 latestWet = max(latestWet, s.birth)
             case .grass:
