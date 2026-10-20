@@ -1,6 +1,6 @@
 import Foundation
 import NaturalLanguage
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !MUREKKEP_PLAIN
 import FoundationModels
 #endif
 
@@ -183,7 +183,7 @@ enum StudioWriter {
     @MainActor
     private static func onDevice(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
                                  progress: @escaping WriteProgress) async throws -> Overview {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !MUREKKEP_PLAIN
         if #available(iOS 26.0, *) {
             let chunks = TextChunks.pick(material.allText, count: max(3, options.length.scenes.lowerBound - 2), size: 1600)
             guard !chunks.isEmpty else { throw StudioWriterError.noText }
@@ -285,7 +285,7 @@ enum StudioWriter {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !MUREKKEP_PLAIN
 @available(iOS 26.0, *)
 @Generable
 struct StudioSceneDraft {

@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !MUREKKEP_PLAIN
 import FoundationModels
 #endif
 
@@ -9,7 +9,7 @@ import FoundationModels
 enum OnDeviceAI {
     /// nil when the model is ready, otherwise a reason the user can act on.
     static var unavailableReason: String? {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !MUREKKEP_PLAIN
         if #available(iOS 26.0, *) {
             return AppleModelBridge.unavailableReason
         }
@@ -25,7 +25,7 @@ enum OnDeviceAI {
     static let contextBudget = 2_200
 
     static func respond(instructions: String, prompt: String, useWeb: Bool, collector: SourceCollector) async throws -> String {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !MUREKKEP_PLAIN
         if #available(iOS 26.0, *) {
             return try await AppleModelBridge.respond(instructions: instructions, prompt: prompt,
                                                       useWeb: useWeb, collector: collector)
@@ -60,7 +60,7 @@ enum OnDeviceAI {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !MUREKKEP_PLAIN
 @available(iOS 26.0, *)
 enum AppleModelBridge {
     static var unavailableReason: String? {

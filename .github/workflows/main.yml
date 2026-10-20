@@ -7,10 +7,127 @@ on:
 
 jobs:
   build-ipa:
-    runs-on: macos-15
+    # macOS 26 + Xcode 26.6 (iOS 26.5 SDK): Apple's on-device language model (FoundationModels) is
+    # compiled in only with an iOS 26 SDK.
+    runs-on: macos-26
     steps:
       - name: Projeyi Indir
         uses: actions/checkout@v4
+
+      - name: Xcode 26.6 Sec
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          xcodebuild -version
+
+      # The embedded voice engine (sherpa-onnx, built for the iPad only) and the Supertonic 3 voices
+      # are prepared once and kept in the cache; later builds take them from there in seconds.
+      - name: Gomulu Ses Motoru Onbellegi
+        id: sherpa-cache
+        uses: actions/cache@v4
+        with:
+          path: sherpa-out
+          key: sherpa-onnx-1.13.8-ort-1.28.2-os64-supertonic3-v1
+
+      - name: Gomulu Ses Motorunu Derle (sherpa-onnx 1.13.8, yalnizca iPad)
+        if: steps.sherpa-cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          OUT="$PWD/sherpa-out"
+          mkdir -p "$OUT/AppVoices/supertonic3"
+          git clone --depth 1 --branch v1.13.8 https://github.com/k2-fsa/sherpa-onnx.git sherpa-src
+          cd sherpa-src
+          mkdir -p build-ios/ios-onnxruntime/1.28.2
+          cd build-ios/ios-onnxruntime/1.28.2
+          curl -sSfL -o ort.zip https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.28.2/onnxruntime-ios-static-xcframework-1.28.2.xcframework.zip
+          unzip -q ort.zip
+          rm ort.zip
+          cd ../..
+          ORT="$PWD/ios-onnxruntime/1.28.2/onnxruntime.xcframework"
+          export SHERPA_ONNXRUNTIME_LIB_DIR="$ORT/ios-arm64"
+          export SHERPA_ONNXRUNTIME_INCLUDE_DIR="$ORT/ios-arm64/onnxruntime.framework/Headers"
+          cmake \
+            -DBUILD_PIPER_PHONMIZE_EXE=OFF \
+            -DBUILD_PIPER_PHONMIZE_TESTS=OFF \
+            -DBUILD_ESPEAK_NG_EXE=OFF \
+            -DBUILD_ESPEAK_NG_TESTS=OFF \
+            -S .. \
+            -DCMAKE_TOOLCHAIN_FILE=./toolchains/ios.toolchain.cmake \
+            -DPLATFORM=OS64 \
+            -DENABLE_BITCODE=0 \
+            -DENABLE_ARC=1 \
+            -DENABLE_VISIBILITY=0 \
+            -DCMAKE_INSTALL_PREFIX=./install \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DSHERPA_ONNX_ENABLE_PYTHON=OFF \
+            -DSHERPA_ONNX_ENABLE_BINARY=OFF \
+            -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+            -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+            -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+            -DSHERPA_ONNX_ENABLE_JNI=OFF \
+            -DSHERPA_ONNX_ENABLE_C_API=ON \
+            -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+            -DDEPLOYMENT_TARGET=13.0 \
+            -B build/os64
+          cmake --build build/os64 -j 4
+          cmake --build build/os64 --target install
+          libtool -static -o build/os64/libsherpa-onnx-all.a \
+            build/os64/lib/libkaldi-native-fbank-core.a \
+            build/os64/lib/libkissfft-float.a \
+            build/os64/lib/libsherpa-onnx-c-api.a \
+            build/os64/lib/libsherpa-onnx-core.a \
+            build/os64/lib/libsherpa-onnx-fstfar.a \
+            build/os64/lib/libsherpa-onnx-fst.a \
+            build/os64/lib/libsherpa-onnx-kaldifst-core.a \
+            build/os64/lib/libkaldi-decoder-core.a \
+            build/os64/lib/libucd.a \
+            build/os64/lib/libpiper_phonemize.a \
+            build/os64/lib/libespeak-ng.a \
+            build/os64/lib/libssentencepiece_core.a
+          FW=build/os64/SherpaOnnxC.framework
+          rm -rf "$FW"
+          mkdir -p "$FW/Headers/sherpa-onnx/c-api" "$FW/Modules"
+          cp build/os64/libsherpa-onnx-all.a "$FW/SherpaOnnxC"
+          cp install/include/sherpa-onnx/c-api/c-api.h "$FW/Headers/sherpa-onnx/c-api/"
+          # The module map lets Swift say `import SherpaOnnxC` (and `#if canImport(SherpaOnnxC)`).
+          printf 'framework module SherpaOnnxC {\n  header "sherpa-onnx/c-api/c-api.h"\n  export *\n}\n' > "$FW/Modules/module.modulemap"
+          cat > "$FW/Info.plist" << 'PEOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleIdentifier</key>
+            <string>com.k2-fsa.sherpa-onnx</string>
+            <key>CFBundleName</key>
+            <string>SherpaOnnxC</string>
+            <key>CFBundlePackageType</key>
+            <string>FMWK</string>
+            <key>CFBundleExecutable</key>
+            <string>SherpaOnnxC</string>
+            <key>CFBundleVersion</key>
+            <string>20260910</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.13.8</string>
+            <key>MinimumOSVersion</key>
+            <string>13.0</string>
+            <key>CFBundleSupportedPlatforms</key>
+            <array>
+              <string>iPhoneOS</string>
+            </array>
+          </dict>
+          </plist>
+          PEOF
+          xcodebuild -create-xcframework -framework "$FW" -output "$OUT/sherpa-onnx.xcframework"
+          cp -RL "$ORT" "$OUT/onnxruntime.xcframework"
+          cd ..
+          # Supertonic 3: one model, 31 languages (Turkish and English), 5 women's and 5 men's voices.
+          curl -sSfL -o voices.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2
+          tar xjf voices.tar.bz2
+          V=sherpa-onnx-supertonic-3-tts-int8-2026-05-11
+          for f in duration_predictor.int8.onnx text_encoder.int8.onnx vector_estimator.int8.onnx vocoder.int8.onnx tts.json unicode_indexer.bin voice.bin LICENSE; do
+            cp "$V/$f" "$OUT/AppVoices/supertonic3/"
+          done
+          ls -la "$OUT" "$OUT/AppVoices/supertonic3"
 
       - name: Klasor Yapisini Hazirla
         run: |
@@ -20,7 +137,7 @@ jobs:
           if [ -d "Murekkep.swiftpm" ]; then
             cp -R Murekkep.swiftpm/* AppSource/
           else
-            find . -maxdepth 1 -not -name "." -not -name ".git" -not -name ".github" -not -name "AppSource" -exec cp -R {} AppSource/ \;
+            find . -maxdepth 1 -not -name "." -not -name ".git" -not -name ".github" -not -name "AppSource" -not -name "sherpa-out" -not -name "sherpa-src" -exec cp -R {} AppSource/ \;
           fi
           find . -maxdepth 1 -name "*.swift" -not -name "*_2.swift" -exec cp -f {} AppSource/ \;
 
@@ -48,6 +165,13 @@ jobs:
                   if f.is_file():
                       f.unlink(missing_ok=True)
           PYEOF
+
+          # The voice engine and the voices (from the cache or the step above).
+          mkdir -p Frameworks
+          if [ -d sherpa-out/sherpa-onnx.xcframework ]; then
+            cp -R sherpa-out/sherpa-onnx.xcframework sherpa-out/onnxruntime.xcframework Frameworks/
+            cp -R sherpa-out/AppVoices AppSource/AppVoices
+          fi
 
           echo "Derlenecek Swift dosyalari: $(ls AppSource/*.swift | wc -l)"
 
@@ -80,6 +204,8 @@ jobs:
               <true/>
               <key>ITSAppUsesNonExemptEncryption</key>
               <false/>
+              <key>UIDesignRequiresCompatibility</key>
+              <true/>
               <key>UIBackgroundModes</key>
               <array>
                   <string>audio</string>
@@ -130,6 +256,15 @@ jobs:
                     - "AppInfo*.plist"
                     - "Package*.swift"
                     - "*_2.swift"
+                    - "AppVoices/**"
+                - path: AppSource/AppVoices
+                  type: folder
+                  buildPhase: resources
+              dependencies:
+                - framework: Frameworks/sherpa-onnx.xcframework
+                  embed: false
+                - framework: Frameworks/onnxruntime.xcframework
+                  embed: false
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
@@ -141,17 +276,61 @@ jobs:
                   SWIFT_VERSION: "5.0"
                   TARGETED_DEVICE_FAMILY: "1,2"
                   ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                  OTHER_LDFLAGS: "$(inherited) -lc++ -framework CoreML -framework Accelerate"
                   CODE_SIGN_IDENTITY: ""
                   CODE_SIGNING_REQUIRED: NO
                   CODE_SIGNING_ALLOWED: NO
                   ENABLE_USER_SCRIPT_SANDBOXING: NO
           EOF
 
-          xcodegen generate
+          # Sade proje: gomulu sesler ve Apple'in cihaz modeli olmadan (MUREKKEP_PLAIN). Ilk derleme
+          # olmazsa bununla derlenir, kullanici yine bir IPA alir.
+          cat << 'EOF' > project-plain.yml
+          name: Murekkep
+          options:
+            bundleIdPrefix: com.murekkep
+            deploymentTarget:
+              iOS: "17.0"
+          targets:
+            Murekkep:
+              type: application
+              platform: iOS
+              sources:
+                - path: AppSource
+                  excludes:
+                    - "Info.plist"
+                    - "AppInfo*.plist"
+                    - "Package*.swift"
+                    - "*_2.swift"
+                    - "AppVoices/**"
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
+                  PRODUCT_NAME: Murekkep
+                  INFOPLIST_FILE: AppSource/Info.plist
+                  GENERATE_INFOPLIST_FILE: NO
+                  MARKETING_VERSION: "3.0"
+                  CURRENT_PROJECT_VERSION: "14"
+                  SWIFT_VERSION: "5.0"
+                  SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MUREKKEP_PLAIN"
+                  TARGETED_DEVICE_FAMILY: "1,2"
+                  ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                  CODE_SIGN_IDENTITY: ""
+                  CODE_SIGNING_REQUIRED: NO
+                  CODE_SIGNING_ALLOWED: NO
+                  ENABLE_USER_SCRIPT_SANDBOXING: NO
+          EOF
 
-      - name: IPA Derle ve Paketle
+      - name: IPA Derle
+        id: build
+        continue-on-error: true
         run: |
           set -o pipefail
+          if [ ! -d Frameworks/sherpa-onnx.xcframework ]; then
+            echo "Ses motoru yok; sade projeye geciliyor."
+            exit 1
+          fi
+          xcodegen generate --spec project.yml
           xcodebuild -project Murekkep.xcodeproj \
             -scheme Murekkep \
             -configuration Release \
@@ -161,16 +340,41 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
 
+      - name: Sade Derleme (ilk derleme olmazsa)
+        if: steps.build.outcome == 'failure'
+        run: |
+          set -o pipefail
+          echo "::warning::Ilk derleme olmadi; gomulu sesler ve Apple'in cihaz modeli olmadan sade derleme yapiliyor. Ilk derlemenin hatalari asagida."
+          if [ -f build.log ]; then
+            grep -E "error:" build.log | sort -u | head -80 || true
+          fi
+          rm -rf build Murekkep.xcodeproj AppSource/AppVoices
+          xcodegen generate --spec project-plain.yml
+          xcodebuild -project Murekkep.xcodeproj \
+            -scheme Murekkep \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build-plain.log
+
+      - name: IPA Paketle
+        run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Murekkep.app Payload/
           zip -qry Murekkep.ipa Payload
+          ls -la Murekkep.ipa
 
       - name: Derleme Hatalarini Goster
         if: failure()
         run: |
-          if [ -f build.log ]; then
-            grep -E "error:|warning: .*(will be an error|unable to type-check)" build.log | sort -u | head -80 || true
-          fi
+          for f in build.log build-plain.log; do
+            if [ -f "$f" ]; then
+              echo "== $f"
+              grep -E "error:|warning: .*(will be an error|unable to type-check)" "$f" | sort -u | head -80 || true
+            fi
+          done
 
       - name: IPA Dosyasini Yukle
         uses: actions/upload-artifact@v4
