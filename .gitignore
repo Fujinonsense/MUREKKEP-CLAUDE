@@ -17,3 +17,9 @@ DerivedData/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+!/ml/
+!/docs/
+/ml/**/data/
+/ml/**/runs/
+/ml/**/*.pt
+/ml/**/*.onnx
