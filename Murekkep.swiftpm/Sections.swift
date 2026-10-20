@@ -24,34 +24,50 @@ struct NoteSection: Codable, Identifiable, Hashable {
     var color: Color { Self.colors[((colorIndex % Self.colors.count) + Self.colors.count) % Self.colors.count] }
 }
 
-/// Reads other notes of a section for section-wide questions: the PDF text layer, or the
-/// handwriting of notebooks through on-device OCR. Runs off the main thread.
+/// Reads notes for section-wide questions and for the Studio: every PDF page (its text layer, or OCR
+/// when it is a scan), and the handwriting of notebooks through on-device OCR. Runs off the main
+/// thread; with a note id, pages read once are kept on disk.
 enum SectionReader {
     struct Page: Sendable {
         let page: Int
         let text: String
         let fromOCR: Bool
+        /// Read from the user's handwriting (not from the PDF).
+        var isHandwriting = false
     }
 
-    static func pages(pdf: URL?, ink: URL, maxPages: Int) async -> [Page] {
+    /// The pages of `range` (all pages when nil); a longer range is sampled evenly down to `maxPages`.
+    /// `progress` gets (pages done, pages to read).
+    static func pages(pdf: URL?, ink: URL, maxPages: Int, noteID: UUID? = nil, range: ClosedRange<Int>? = nil,
+                      progress: (@Sendable (Int, Int) -> Void)? = nil) async -> [Page] {
         await Task.detached(priority: .userInitiated) { () async -> [Page] in
             var out: [Page] = []
-            if let pdf, let doc = PDFDocument(url: pdf) {
-                for i in 0..<min(doc.pageCount, maxPages * 3) where out.count < maxPages {
-                    let text = doc.page(at: i)?.string ?? ""
-                    if text.trimmingCharacters(in: .whitespacesAndNewlines).count >= 25 {
-                        out.append(Page(page: i, text: text, fromOCR: false))
+            if let pdf, let doc = PDFDocument(url: pdf), doc.pageCount > 0 {
+                let lo = max(0, range?.lowerBound ?? 0)
+                let hi = min(doc.pageCount - 1, range?.upperBound ?? doc.pageCount - 1)
+                if lo <= hi {
+                    let picks = PageSample.pages(count: hi - lo + 1, limit: maxPages).map { lo + $0 }
+                    for (n, i) in picks.enumerated() {
+                        if Task.isCancelled { break }
+                        progress?(n, picks.count)
+                        let read = await PDFPageReader.read(doc, page: i, noteID: noteID)
+                        if PDFPageReader.letterCount(read.text) >= (read.fromOCR ? 6 : TextLayer.minLetters) {
+                            out.append(Page(page: i, text: read.text, fromOCR: read.fromOCR))
+                        }
                     }
                 }
             }
             // Handwriting (the ink of notebooks, or notes written on a PDF).
-            if out.count < maxPages, let data = try? Data(contentsOf: ink), let pages = try? InkCodec.decode(data) {
-                for (i, strokes) in pages.enumerated() where !strokes.isEmpty && out.count < maxPages {
+            var inkPages = 0
+            if let data = try? Data(contentsOf: ink), let pages = try? InkCodec.decode(data) {
+                for (i, strokes) in pages.enumerated() where !strokes.isEmpty && inkPages < maxPages && (range?.contains(i) ?? true) {
+                    if Task.isCancelled { break }
                     guard let raster = InkRaster.render(strokes) else { continue }
                     let found = await PageOCR.lines(in: raster)
                     let text = await MainActor.run { Spelling.polish(found) }.map(\.text).joined(separator: "\n")
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).count >= 6 {
-                        out.append(Page(page: i, text: text, fromOCR: true))
+                        out.append(Page(page: i, text: text, fromOCR: true, isHandwriting: true))
+                        inkPages += 1
                     }
                 }
             }

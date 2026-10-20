@@ -514,7 +514,12 @@ final class StudioStore: ObservableObject {
             do {
                 job.phase = Loc.t("Kaynaklar okunuyor…")
                 job.progress = 0.03
-                let material = await StudioMaterial.gather(sources, library: library)
+                let material = await StudioMaterial.gather(sources, library: library) { done, total in
+                    Task { @MainActor in
+                        job.phase = Loc.t("Sayfalar okunuyor ({0}/{1})…", "\(done + 1)", "\(total)")
+                        job.progress = 0.03 + 0.05 * Double(done + 1) / Double(max(total, 1))
+                    }
+                }
                 try Task.checkCancellation()
                 job.phase = Loc.t("Senaryo yazılıyor…")
                 job.progress = 0.08

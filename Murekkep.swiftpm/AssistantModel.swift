@@ -235,7 +235,7 @@ final class AssistantModel: ObservableObject {
                 status = Loc.t("{0} okunuyor…", "\(note.title)")
                 let pdf = note.kind == .pdf ? editor.store.pdfURL(for: note.id) : nil
                 let ink = editor.store.inkURL(for: note.id)
-                pages = await SectionReader.pages(pdf: pdf, ink: ink, maxPages: 6)
+                pages = await SectionReader.pages(pdf: pdf, ink: ink, maxPages: 6, noteID: note.id)
                 sectionCache[note.id] = (note.modified, pages)
             }
             for p in pages where out.count < limit {

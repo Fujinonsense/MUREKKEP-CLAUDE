@@ -986,5 +986,7 @@ enum Translations {
         "Soru {0}/{1} çözülüyor…": "Solving question {0} of {1}…",
         "Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Apple Intelligence (iPadOS 26) ya da bilgisayarındaki yerel sunucu (Ollama, LM Studio) gerekir.": "The offline core cannot really solve questions; it only points out clues on the page. Solving needs Apple Intelligence (iPadOS 26) or a local server on your computer (Ollama, LM Studio).",
         "Bu soru cihazdaki model için çok uzun.": "This question is too long for the on-device model.",
+        "Seçilen sayfalarda okunabilir metin yok (boş ya da çok soluk sayfalar).": "The chosen pages have no readable text (blank or very faint pages).",
+        "Sayfalar okunuyor ({0}/{1})…": "Reading pages ({0}/{1})…",
     ]
 }

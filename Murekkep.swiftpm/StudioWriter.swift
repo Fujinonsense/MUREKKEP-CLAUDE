@@ -26,13 +26,16 @@ struct StudioMaterial {
 
     var sample: String { String(allText.prefix(2000)) }
 
-    static func gather(_ notes: [NoteMeta], library: LibraryStore) async -> StudioMaterial {
+    /// `range`: only these pages (a chapter). Scanned pages are read with OCR (and kept on disk).
+    static func gather(_ notes: [NoteMeta], library: LibraryStore, range: ClosedRange<Int>? = nil,
+                       progress: (@Sendable (Int, Int) -> Void)? = nil) async -> StudioMaterial {
         var items: [Item] = []
         for note in notes {
             let pdf: URL? = note.kind == .pdf ? library.pdfURL(for: note.id) : nil
-            let pages = await SectionReader.pages(pdf: pdf, ink: library.inkURL(for: note.id), maxPages: 120)
+            let pages = await SectionReader.pages(pdf: pdf, ink: library.inkURL(for: note.id), maxPages: 120,
+                                                  noteID: note.id, range: range, progress: progress)
             let text = pages.map { page in
-                "[s. \(page.page + 1)\(page.fromOCR ? ", el yazısı" : "")]\n" + page.text
+                "[s. \(page.page + 1)\(page.isHandwriting ? ", el yazısı" : "")]\n" + page.text
             }.joined(separator: "\n\n")
             items.append(Item(noteID: note.id, title: note.title, kind: note.kind, pageCount: note.pageCount, pdfURL: pdf,
                               text: text, claudeFileID: note.claudeFileID, claudeFileUploaded: note.claudeFileUploaded))
@@ -49,7 +52,7 @@ enum StudioWriterError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noText: return Loc.t("Seçilen kaynaklarda okunabilir metin bulunamadı. Taranmış PDF'ler için Claude'u seç.")
+        case .noText: return Loc.t("Seçilen sayfalarda okunabilir metin yok (boş ya da çok soluk sayfalar).")
         case .unreadableScript: return Loc.t("Senaryo okunamadı. Bir kez daha dene; olmazsa süreyi kısalt.")
         case .needsKey: return Loc.t("Claude için Ayarlar'dan API anahtarı ekle ya da başka bir motor seç.")
         case let .unavailable(reason): return reason
