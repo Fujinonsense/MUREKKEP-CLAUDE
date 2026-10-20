@@ -1,6 +1,8 @@
 param([string[]]$Files)
 # Crude Swift bracket balance check: skips comments, string literals (incl. """ blocks and \( ) interpolation).
 foreach ($f in $Files) {
+    # .NET resolves relative paths against the process folder, not the PowerShell location.
+    $f = (Resolve-Path -LiteralPath $f -ErrorAction Stop).Path
     $s = [IO.File]::ReadAllText($f)
     $stack = New-Object System.Collections.Generic.List[object]
     $i = 0; $line = 1; $n = $s.Length; $err = $null

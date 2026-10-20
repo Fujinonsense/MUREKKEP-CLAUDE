@@ -42,6 +42,7 @@ struct EditorContent: View {
     @State private var showTemplates = false
     @State private var showEngineering = false
     @State private var showAngle = false
+    @State private var showNavigator = false
 
     private var sidePanel: Bool { horizontalSizeClass == .regular }
 
@@ -50,7 +51,8 @@ struct EditorContent: View {
             ZStack(alignment: .top) {
                 CanvasRepresentable(editor: editor, pencilOnly: settings.pencilOnly,
                                     animations: settings.animations, batterySaver: settings.batterySaver,
-                                    pageAngle: settings.pageAngle, pageAngleLocked: settings.pageAngleLocked)
+                                    pageAngle: settings.pageAngle, pageAngleLocked: settings.pageAngleLocked,
+                                    singlePage: editor.singlePage)
                     .overlay {
                         GeometryReader { geo in
                             if let request = editor.palette {
@@ -148,12 +150,22 @@ struct EditorContent: View {
                             Chip(text: "Apple Pencil Pro", symbol: "applepencil", tint: Theme.ink)
                                 .background(.ultraThinMaterial, in: Capsule())
                                 .transition(.scale.combined(with: .opacity))
+                                .allowsHitTesting(false)
                         }
-                        PageBadge(current: editor.currentPage + 1, total: editor.pageCount)
+                        Button {
+                            showNavigator = true
+                        } label: {
+                            PageBadge(current: editor.currentPage + 1, total: editor.pageCount,
+                                      bookmarked: editor.isBookmarked(editor.currentPage))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Loc.t("Sayfaya git"))
+                        .popover(isPresented: $showNavigator, arrowEdge: .bottom) {
+                            PageNavigator(editor: editor) { showNavigator = false }
+                        }
                     }
                     .padding(16)
                 }
-                .allowsHitTesting(false)
 
                 if let error = editor.loadError {
                     Text(error)
@@ -319,6 +331,7 @@ struct CanvasRepresentable: UIViewRepresentable {
     let batterySaver: Bool
     let pageAngle: Double
     let pageAngleLocked: Bool
+    let singlePage: Bool
 
     func makeUIView(context: Context) -> CanvasView {
         CanvasView(model: editor)
@@ -328,21 +341,31 @@ struct CanvasRepresentable: UIViewRepresentable {
         view.applyInputSettings(pencilOnly: pencilOnly)
         view.applyRenderSettings(animations: animations, batterySaver: batterySaver)
         view.applyRotation(degrees: pageAngle, locked: pageAngleLocked)
+        view.applyPageMode(single: singlePage)
     }
 }
 
+/// "12 / 300" in the corner; a tap opens the page navigator.
 struct PageBadge: View {
     let current: Int
     let total: Int
+    var bookmarked = false
 
     var body: some View {
-        Text("\(current) / \(total)")
-            .font(.footnote.monospacedDigit().weight(.semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
-            .allowsHitTesting(false)
+        HStack(spacing: 5) {
+            if bookmarked {
+                Image(systemName: "bookmark.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+            Text("\(current) / \(total)")
+                .font(.footnote.monospacedDigit().weight(.semibold))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+        .contentShape(Capsule())
     }
 }
 

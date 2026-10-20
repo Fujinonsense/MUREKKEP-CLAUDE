@@ -46,6 +46,9 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var eraserPage: Int?
     private var lastEraserPoint: CGPoint?
     private var didInitialLayout = false
+    /// One page at a time (see `applyPageMode`), and the page on screen when a drag began.
+    private var singlePage = false
+    private var dragStartPage = 0
     private var lastViewWidth: CGFloat = 0
     private var lastCanvasSize: CGSize = .zero
     private var lastReportedPage = -1
@@ -290,6 +293,9 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         model.onInkChange = { [weak self] in self?.setNeedsRender() }
         renderer?.onStickerUpdate = { [weak self] in self?.setNeedsRender() }
         model.onLayoutChange = { [weak self] in self?.documentSizeChanged() }
+        model.onScrollRequest = { [weak self] page in self?.scrollToPage(page, animated: true) }
+        singlePage = model.singlePage
+        scrollView.decelerationRate = singlePage ? .fast : .normal
 
         // Window lifecycle is observed per scene in `didMoveToWindow`; these concern the whole device.
         let nc = NotificationCenter.default
@@ -454,6 +460,13 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             didInitialLayout = true
             configureDocumentSize()
             fit(initial: true)
+            // Back where the note was left; in single-page mode, that whole page.
+            let resume = model.resumePage
+            if singlePage {
+                fitWholePage(resume)
+            } else if resume > 0 {
+                scrollToPage(resume)
+            }
         } else if abs(w - lastViewWidth) > 0.5 {
             fit(initial: false)
         } else if abs(pageAngle - lastLayoutAngle) > 0.0001, let centerDoc {
@@ -557,14 +570,116 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         setNeedsRender()
     }
 
-    /// Scrolls so that `page` is at the top.
-    func scrollToPage(_ page: Int) {
+    /// Scrolls so that `page` is at the top (in the middle in single-page mode). Only a nearby page
+    /// slides into view; a far one is jumped to, so the pages in between are not all drawn.
+    func scrollToPage(_ page: Int, animated: Bool = false) {
         guard model.layout.pageRects.indices.contains(page) else { return }
         let rect = model.layout.pageRects[page]
-        var offset = CGPoint(x: scrollView.contentOffset.x, y: (rect.minY - DocumentLayout.gap / 2) * scrollView.zoomScale)
-        clamp(&offset)
-        scrollView.setContentOffset(offset, animated: false)
+        var offset: CGPoint
+        if singlePage {
+            offset = singlePageOffset(page)
+        } else {
+            offset = CGPoint(x: scrollView.contentOffset.x, y: (rect.minY - DocumentLayout.gap / 2) * scrollView.zoomScale)
+            clamp(&offset)
+        }
+        scrollView.setContentOffset(offset, animated: animated && abs(page - model.currentPage) <= 2)
         setNeedsRender()
+    }
+
+    // MARK: - Single page
+
+    /// A drag faster than this (points per millisecond) goes on to the next page.
+    private static let pageFlick: CGFloat = 0.3
+    /// Pulling this far (screen points) past the end of a notebook adds a page.
+    private static let pullToAddPage: CGFloat = 90
+
+    /// One page at a time (see `EditorModel.singlePage`).
+    func applyPageMode(single: Bool) {
+        guard single != singlePage else { return }
+        singlePage = single
+        scrollView.decelerationRate = single ? .fast : .normal
+        guard didInitialLayout else { return }
+        let page = model.currentPage
+        if single {
+            fitWholePage(page)
+        } else {
+            scrollView.zoomScale = fitZoom
+            centerContent()
+            scrollToPage(page)
+        }
+    }
+
+    /// Zooms so the whole page fits on screen (never past the page width) and shows it.
+    private func fitWholePage(_ page: Int) {
+        guard model.layout.pageRects.indices.contains(page) else { return }
+        let rect = model.layout.pageRects[page]
+        let zoom = min(fitZoom, canvasSize.height / (rect.height + DocumentLayout.gap))
+        scrollView.zoomScale = min(max(zoom, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
+        centerContent()
+        scrollView.setContentOffset(singlePageOffset(page), animated: false)
+        setNeedsRender()
+    }
+
+    /// Content offset that shows `page` in the middle of the screen.
+    private func singlePageOffset(_ page: Int) -> CGPoint {
+        let rect = model.layout.pageRects[page]
+        var offset = CGPoint(x: scrollView.contentOffset.x, y: rect.midY * scrollView.zoomScale - scrollView.bounds.height / 2)
+        clamp(&offset)
+        return offset
+    }
+
+    /// The page a drag settles on in single-page mode: a flick goes one page on or back, a slow
+    /// drag settles on the page nearest the middle of the screen. Nil while the page is zoomed
+    /// larger than the screen (it scrolls freely then).
+    private func singlePageTarget(velocity: CGFloat) -> Int? {
+        let rects = model.layout.pageRects
+        guard !rects.isEmpty else { return nil }
+        let zoom = scrollView.zoomScale
+        let start = min(max(dragStartPage, 0), rects.count - 1)
+        guard rects[start].height * zoom <= scrollView.bounds.height + 1 else { return nil }
+        if velocity > Self.pageFlick { return min(start + 1, rects.count - 1) }
+        if velocity < -Self.pageFlick { return max(start - 1, 0) }
+        let centerY = (scrollView.contentOffset.y + scrollView.bounds.height / 2) / zoom
+        return rects.indices.min { abs(rects[$0].midY - centerY) < abs(rects[$1].midY - centerY) }
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        dragStartPage = model.currentPage
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        if !model.isPDF {
+            let inset = scrollView.contentInset
+            let maxY = max(-inset.top, scrollView.contentSize.height - scrollView.bounds.height + inset.bottom)
+            if scrollView.contentOffset.y - maxY > Self.pullToAddPage {
+                pulledPastEnd()
+                return
+            }
+        }
+        guard singlePage, let page = singlePageTarget(velocity: velocity.y) else { return }
+        targetContentOffset.pointee = singlePageOffset(page)
+    }
+
+    /// The notebook was pulled past its end: a new page when the last one is written on,
+    /// otherwise the empty last page is shown.
+    private func pulledPastEnd() {
+        let add = model.pageIsUsed(model.pageCount - 1)
+        // After the finger lifts and the pull springs back.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if add {
+                self.model.addPage()
+                self.playHaptic(.completed, at: nil)
+                self.model.banner = Loc.t("Yeni sayfa eklendi")
+            }
+            let last = self.model.pageCount - 1
+            if self.singlePage {
+                self.fitWholePage(last)
+            } else {
+                self.scrollToPage(last, animated: true)
+            }
+        }
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {

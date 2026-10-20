@@ -159,7 +159,17 @@ final class EditorModel: ObservableObject {
     @Published var eraserSize: Float = 18
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
-    @Published var currentPage = 0
+    @Published var currentPage = 0 {
+        didSet { if oldValue != currentPage { scheduleLastPageSave() } }
+    }
+    /// One page at a time: a drag settles on a page and the zoom shows all of it.
+    @Published var singlePage = false {
+        didSet {
+            guard oldValue != singlePage else { return }
+            meta.pageMode = singlePage ? "single" : nil
+            store.update(meta)
+        }
+    }
     @Published private(set) var pageCount: Int
     @Published private(set) var loadError: String?
 
@@ -171,6 +181,8 @@ final class EditorModel: ObservableObject {
 
     var onInkChange: (() -> Void)?
     var onLayoutChange: (() -> Void)?
+    /// Asks the canvas to show a page (the page navigator, a bookmark, the contents).
+    var onScrollRequest: ((Int) -> Void)?
     /// Plays haptics on the canvas (routed to Apple Pencil Pro when it is the active input).
     var onHaptic: ((CanvasHaptic) -> Void)?
 
@@ -179,6 +191,7 @@ final class EditorModel: ObservableObject {
     private var eraseSnapshot: (page: Int, strokes: [Stroke], stickers: [Sticker])?
     private var dirty = false
     private var saveWork: DispatchWorkItem?
+    private var pageSaveWork: DispatchWorkItem?
     private let saveQueue = DispatchQueue(label: "murekkep.save", qos: .utility)
     private var pdfKitDocumentStorage: PDFDocument?
     private var cgDocumentStorage: CGPDFDocument?
@@ -242,6 +255,7 @@ final class EditorModel: ObservableObject {
         }
         colors = c
         widths = w
+        singlePage = meta.pageMode == "single"
 
         if let data = try? Data(contentsOf: store.stickersURL(for: meta.id)),
            let saved = try? JSONDecoder().decode([[Sticker]].self, from: data) {
@@ -1090,6 +1104,58 @@ final class EditorModel: ObservableObject {
         }
     }
 
+    // MARK: Pages
+
+    /// The page the note was left on, for opening it there again.
+    var resumePage: Int { min(max(meta.lastPage ?? 0, 0), max(pageCount - 1, 0)) }
+
+    func requestScroll(to page: Int) {
+        guard pages.indices.contains(page) else { return }
+        onScrollRequest?(page)
+    }
+
+    var bookmarks: [Int] { (meta.bookmarks ?? []).filter { pages.indices.contains($0) }.sorted() }
+
+    func isBookmarked(_ page: Int) -> Bool {
+        meta.bookmarks?.contains(page) ?? false
+    }
+
+    func toggleBookmark(_ page: Int) {
+        guard pages.indices.contains(page) else { return }
+        var list = meta.bookmarks ?? []
+        if let i = list.firstIndex(of: page) {
+            list.remove(at: i)
+        } else {
+            list.append(page)
+        }
+        meta.bookmarks = list.isEmpty ? nil : list.sorted()
+        store.update(meta)
+        onHaptic?(.selection)
+    }
+
+    /// True when the page has ink or pictures on it.
+    func pageIsUsed(_ page: Int) -> Bool {
+        pages.indices.contains(page) && !(pages[page].strokes.isEmpty && pages[page].stickers.isEmpty)
+    }
+
+    /// Remembers the page on screen a moment after it changes, so the note opens there next time.
+    private func scheduleLastPageSave() {
+        pageSaveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.saveLastPage()
+        }
+        pageSaveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+    }
+
+    private func saveLastPage() {
+        pageSaveWork?.cancel()
+        pageSaveWork = nil
+        guard (meta.lastPage ?? 0) != currentPage else { return }
+        meta.lastPage = currentPage
+        store.update(meta)
+    }
+
     func addPage() {
         guard !isPDF else { return }
         var sizes = layout.pageSizes
@@ -1176,6 +1242,7 @@ final class EditorModel: ObservableObject {
 
     func close() {
         let wasDirty = dirty
+        saveLastPage()
         saveNow()
         if wasDirty || meta.kind == .notebook {
             store.makeThumbnail(for: meta, strokes: pages.first?.strokes ?? [], stickers: pages.first?.stickers ?? [])

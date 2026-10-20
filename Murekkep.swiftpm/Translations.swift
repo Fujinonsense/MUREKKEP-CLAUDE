@@ -958,5 +958,17 @@ enum Translations {
     /// Texts added in 3.0.
     private static let part9: [String: String] = [
         "Eğri": "Curve",
+        "Sayfaya git": "Go to page",
+        "Git": "Go",
+        "Sayfa numarasını yazıp git": "Type a page number to jump there",
+        "Sayfalar": "Pages",
+        "Yer imleri": "Bookmarks",
+        "İçindekiler": "Contents",
+        "Tek sayfa görünümü": "Single-page view",
+        "Bu sayfayı işaretle": "Bookmark this page",
+        "İşareti kaldır": "Remove bookmark",
+        "Henüz yer imi yok. Sağ üstteki kurdeleye dokunarak bu sayfayı işaretle.": "No bookmarks yet. Tap the ribbon at the top right to bookmark this page.",
+        "Bu PDF'te içindekiler bölümü yok.": "This PDF has no table of contents.",
+        "Yeni sayfa eklendi": "New page added",
     ]
 }

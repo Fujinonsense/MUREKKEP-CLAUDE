@@ -178,6 +178,12 @@ struct NoteMeta: Codable, Identifiable, Hashable {
     var sectionID: UUID? = nil
     /// Starred in the library (missing in older indexes = not starred).
     var isFavorite: Bool? = nil
+    /// The page the note was left on (0-based; missing = the first page).
+    var lastPage: Int? = nil
+    /// Bookmarked pages (0-based).
+    var bookmarks: [Int]? = nil
+    /// "single" shows one page at a time; missing = pages scroll on continuously.
+    var pageMode: String? = nil
 
     var starred: Bool { isFavorite ?? false }
 
