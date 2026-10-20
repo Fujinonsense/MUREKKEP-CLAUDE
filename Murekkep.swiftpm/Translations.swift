@@ -988,5 +988,13 @@ enum Translations {
         "Bu soru cihazdaki model için çok uzun.": "This question is too long for the on-device model.",
         "Seçilen sayfalarda okunabilir metin yok (boş ya da çok soluk sayfalar).": "The chosen pages have no readable text (blank or very faint pages).",
         "Sayfalar okunuyor ({0}/{1})…": "Reading pages ({0}/{1})…",
+        "Bölüm {0} · {1}": "Chapter {0} · {1}",
+        "Sırada…": "Queued…",
+        "Bölümler bulunuyor…": "Finding the chapters…",
+        "Bu kitapta bölüm bulunamadı; video tüm kitaptan hazırlanır.": "No chapters were found in this book; the video covers the whole book.",
+        "Tüm kitap (tek video)": "Whole book (one video)",
+        "s. {0}–{1} · {2} alt başlık": "pp. {0}–{1} · {2} sections",
+        "Bölümler · {0} video": "Chapters · {0} videos",
+        "Seçtiğin her bölüm için ayrı bir video hazırlanır; sırayla, biri bitince öbürü.": "Each chapter you choose gets its own video, made one after another.",
     ]
 }

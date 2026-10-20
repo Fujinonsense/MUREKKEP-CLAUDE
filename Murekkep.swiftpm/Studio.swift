@@ -418,6 +418,8 @@ final class StudioStore: ObservableObject {
     @Published private(set) var jobs: [StudioJob] = []
     /// The overview that just got ready (the library shows a banner).
     @Published var justFinished: UUID?
+    /// The last overview job started; the next one waits for it.
+    private var queueTail: Task<Void, Never>?
 
     let root: URL
 
@@ -503,18 +505,28 @@ final class StudioStore: ObservableObject {
     // MARK: Making overviews
 
     /// Starts writing and voicing an overview in the background; its progress shows as a job.
+    /// `chapter`: only that chapter of the (single) source. Overviews are made one at a time: reading,
+    /// writing and voicing several at once would make the iPad stutter.
     @MainActor
     func start(options: OverviewOptions, sources: [NoteMeta], sectionID: UUID?, engine: StudioEngine,
-               library: LibraryStore, settings: AppSettings) {
-        let job = StudioJob(kind: options.kind, sectionID: sectionID,
-                            title: sources.count == 1 ? sources[0].title : (library.sections.first { $0.id == sectionID }?.name ?? Loc.t("Kaynaklar")))
+               library: LibraryStore, settings: AppSettings, chapter: BookChapter? = nil) {
+        let title = chapter.map { Loc.t("Bölüm {0} · {1}", "\($0.number)", $0.title) }
+            ?? (sources.count == 1 ? sources[0].title : (library.sections.first { $0.id == sectionID }?.name ?? Loc.t("Kaynaklar")))
+        let job = StudioJob(kind: options.kind, sectionID: sectionID, title: title)
         jobs.insert(job, at: 0)
+        let previous = queueTail
+        if previous != nil { job.phase = Loc.t("Sırada…") }
         job.task = Task { @MainActor [weak self] in
+            await previous?.value
             guard let self else { return }
+            if Task.isCancelled {
+                self.jobs.removeAll { $0.id == job.id }
+                return
+            }
             do {
                 job.phase = Loc.t("Kaynaklar okunuyor…")
                 job.progress = 0.03
-                let material = await StudioMaterial.gather(sources, library: library) { done, total in
+                let material = await StudioMaterial.gather(sources, library: library, chapter: chapter) { done, total in
                     Task { @MainActor in
                         job.phase = Loc.t("Sayfalar okunuyor ({0}/{1})…", "\(done + 1)", "\(total)")
                         job.progress = 0.03 + 0.05 * Double(done + 1) / Double(max(total, 1))
@@ -559,6 +571,7 @@ final class StudioStore: ObservableObject {
                 job.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
         }
+        queueTail = job.task
     }
 
     /// Makes the audio again with the voices chosen now.

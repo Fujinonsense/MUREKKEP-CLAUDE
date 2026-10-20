@@ -21,14 +21,17 @@ struct StudioMaterial {
     }
 
     var items: [Item]
+    /// The chapter the overview is about (one video per chapter of a long book).
+    var chapter: BookChapter? = nil
 
     var allText: String { items.map(\.text).joined(separator: "\n\n") }
 
     var sample: String { String(allText.prefix(2000)) }
 
-    /// `range`: only these pages (a chapter). Scanned pages are read with OCR (and kept on disk).
-    static func gather(_ notes: [NoteMeta], library: LibraryStore, range: ClosedRange<Int>? = nil,
+    /// `chapter`: only its pages. Scanned pages are read with OCR (and kept on disk).
+    static func gather(_ notes: [NoteMeta], library: LibraryStore, chapter: BookChapter? = nil,
                        progress: (@Sendable (Int, Int) -> Void)? = nil) async -> StudioMaterial {
+        let range = chapter?.pages
         var items: [Item] = []
         for note in notes {
             let pdf: URL? = note.kind == .pdf ? library.pdfURL(for: note.id) : nil
@@ -40,7 +43,7 @@ struct StudioMaterial {
             items.append(Item(noteID: note.id, title: note.title, kind: note.kind, pageCount: note.pageCount, pdfURL: pdf,
                               text: text, claudeFileID: note.claudeFileID, claudeFileUploaded: note.claudeFileUploaded))
         }
-        return StudioMaterial(items: items)
+        return StudioMaterial(items: items, chapter: chapter)
     }
 }
 
@@ -111,7 +114,8 @@ enum StudioWriter {
     }
 
     private static func fallbackTitle(_ material: StudioMaterial) -> String {
-        material.items.count == 1 ? material.items[0].title : material.items.map(\.title).prefix(2).joined(separator: " · ")
+        if let chapter = material.chapter, !chapter.title.isEmpty { return chapter.title }
+        return material.items.count == 1 ? material.items[0].title : material.items.map(\.title).prefix(2).joined(separator: " · ")
     }
 
     // MARK: Claude

@@ -15,6 +15,12 @@ struct StudioCreateSheet: View {
     @State private var selected: Set<UUID>
     @State private var engine: StudioEngine
     @State private var showVoices = false
+    @State private var chapters: [BookChapter] = []
+    /// Chosen chapters (by `BookChapter.id`); none = the whole book in one video.
+    @State private var chosenChapters: Set<Int> = []
+    /// 0…1 while the chapters are being found.
+    @State private var chapterProgress: Double?
+    @State private var chaptersFor: UUID?
 
     private static let lastKey = "studio.lastOptions"
 
@@ -57,6 +63,9 @@ struct StudioCreateSheet: View {
                     .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
                 }
                 sourcesSection
+                if bookSource != nil {
+                    chapterSection
+                }
                 formatSection
                 Section(Loc.t("Ayarlar")) {
                     Picker(Loc.t("Süre"), selection: $options.length) {
@@ -119,6 +128,9 @@ struct StudioCreateSheet: View {
             }
             .sheet(isPresented: $showVoices) {
                 VoiceSettingsView()
+            }
+            .task(id: bookSource?.id) {
+                await loadChapters()
             }
             .onAppear {
                 if selected.isEmpty {
@@ -293,9 +305,111 @@ struct StudioCreateSheet: View {
         if let data = try? JSONEncoder().encode(options) {
             UserDefaults.standard.set(data, forKey: Self.lastKey)
         }
-        studio.start(options: options, sources: chosen, sectionID: request.sectionID, engine: engine,
-                     library: library, settings: settings)
+        let picked = bookSource == nil ? [] : chapters.filter { chosenChapters.contains($0.id) }
+        if picked.isEmpty {
+            studio.start(options: options, sources: chosen, sectionID: request.sectionID, engine: engine,
+                         library: library, settings: settings)
+        } else {
+            // One video per chapter, made one after another.
+            for chapter in picked {
+                studio.start(options: options, sources: chosen, sectionID: request.sectionID, engine: engine,
+                             library: library, settings: settings, chapter: chapter)
+            }
+        }
         dismiss()
+    }
+
+    // MARK: Chapters
+
+    /// The one long PDF chosen: its chapters can become separate videos.
+    private var bookSource: NoteMeta? {
+        let chosen = candidates.filter { selected.contains($0.id) }
+        guard chosen.count == 1, let note = chosen.first, note.kind == .pdf, note.pageCount >= 40 else { return nil }
+        return note
+    }
+
+    private var chapterSection: some View {
+        Section {
+            if let progress = chapterProgress {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(Loc.t("Bölümler bulunuyor…"))
+                        .font(.subheadline)
+                    ProgressView(value: progress)
+                }
+            } else if chapters.isEmpty {
+                Text(Loc.t("Bu kitapta bölüm bulunamadı; video tüm kitaptan hazırlanır."))
+                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    chosenChapters.removeAll()
+                } label: {
+                    chapterRow(title: Loc.t("Tüm kitap (tek video)"), detail: nil, on: chosenChapters.isEmpty)
+                }
+                .buttonStyle(.plain)
+                ForEach(chapters) { chapter in
+                    Button {
+                        if chosenChapters.contains(chapter.id) { chosenChapters.remove(chapter.id) } else { chosenChapters.insert(chapter.id) }
+                    } label: {
+                        chapterRow(title: "\(chapter.number) · \(chapter.title)",
+                                   detail: Loc.t("s. {0}–{1} · {2} alt başlık", "\(chapter.startPage + 1)", "\(chapter.endPage + 1)",
+                                                 "\(chapter.sections.count)"),
+                                   on: chosenChapters.contains(chapter.id))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } header: {
+            Text(chosenChapters.isEmpty ? Loc.t("Bölümler") : Loc.t("Bölümler · {0} video", "\(chosenChapters.count)"))
+        } footer: {
+            Text(Loc.t("Seçtiğin her bölüm için ayrı bir video hazırlanır; sırayla, biri bitince öbürü."))
+        }
+    }
+
+    private func chapterRow(title: String, detail: String?, on: Bool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                .font(.title3)
+                .foregroundStyle(on ? Theme.ink : Color.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// Finds the chosen book's chapters (once per book; kept on disk).
+    private func loadChapters() async {
+        guard let note = bookSource else {
+            chaptersFor = nil
+            chapters = []
+            chosenChapters = []
+            return
+        }
+        guard chaptersFor != note.id else { return }
+        chaptersFor = note.id
+        chapters = []
+        chosenChapters = []
+        if let known = BookIndex.cached(note: note.id) {
+            chapters = known
+            return
+        }
+        chapterProgress = 0
+        let found = await BookIndex.chapters(pdf: library.pdfURL(for: note.id), note: note.id) { done, total in
+            Task { @MainActor in
+                chapterProgress = Double(done + 1) / Double(max(total, 1))
+            }
+        }
+        guard chaptersFor == note.id else { return }
+        chapters = found
+        chapterProgress = nil
     }
 }
 
