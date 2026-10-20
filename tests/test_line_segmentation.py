@@ -93,3 +93,19 @@ def test_i_dot_is_not_a_superscript():
     assert len(groups) == 1
     _, raised = split_raised(strokes, groups[0])
     assert raised == []
+
+
+
+def box(x0, y0, x1, y1):
+    """A stroke that fills a box (its diagonal)."""
+    return [(x0, y0), (x1, y1)]
+
+
+def test_capital_then_descender_is_one_line():
+    # "Bugün hava" in a held-out handwriting font (the boxes measured from it): B, u and a deep g at
+    # the start once tilted the line's band so far that the rest fell onto a line of its own
+    # ("Bug" | "ün hava…").
+    strokes = [box(0.0, -15.9, 8.0, 0.3), box(9.0, -9.4, 16.0, -0.2), box(17.7, -9.5, 23.5, 10.7),
+               box(24.6, -12.6, 32.0, -0.3), box(33.0, -8.6, 40.0, 0.0), box(44.3, -18.9, 50.5, 0.2),
+               box(51.7, -9.3, 58.5, 0.0), box(59.9, -9.3, 65.0, 0.0), box(65.8, -9.0, 72.0, 0.0)]
+    assert len(lines(strokes)) == 1

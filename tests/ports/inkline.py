@@ -14,6 +14,8 @@ RAISED_BOTTOM = 0.3
 RAISED_MIN = 0.25
 OVER_LETTER = 0.1
 GROUP_GAP = 0.5
+RECENT = 12
+MAX_SLOPE = 0.2126  # tan 12°
 
 
 class Box:
@@ -37,17 +39,18 @@ class _Line:
         self.members = []
 
     def band(self, boxes, x):
-        """(top, bottom) of the line's letters at x."""
+        """(top, bottom) of the line's letters at x. The slope is the median of the slopes between
+        the last 12 letters (a capital or a descender among them cannot tilt it), at most 12°."""
         ms = [boxes[i] for i in self.members]
         if len(ms) < 3:
             return min(b.min_y for b in ms), max(b.max_y for b in ms)
         core = statistics.median(b.h for b in ms)
-        n = len(ms)
-        mx = sum(b.cx for b in ms) / n
-        my = sum(b.cy for b in ms) / n
-        sxx = sum((b.cx - mx) ** 2 for b in ms)
-        a = sum((b.cx - mx) * (b.cy - my) for b in ms) / sxx if sxx > 1e-9 else 0.0
-        yc = my + a * (x - mx)
+        recent = ms[-RECENT:]
+        slopes = [(b.cy - a.cy) / (b.cx - a.cx) for i, a in enumerate(recent) for b in recent[i + 1:]
+                  if abs(b.cx - a.cx) > 1e-6]
+        a = statistics.median(slopes) if slopes else 0.0
+        a = max(-MAX_SLOPE, min(MAX_SLOPE, a))
+        yc = statistics.median(b.cy - a * b.cx for b in recent) + a * x
         return yc - core / 2, yc + core / 2
 
 
