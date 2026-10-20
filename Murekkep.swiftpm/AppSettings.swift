@@ -279,6 +279,20 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(Double(w), forKey: "width.\(brush.rawValue)")
     }
 
+    /// Pens picked most recently (newest first); a new user starts with the writing pens.
+    var recentBrushes: [Brush] {
+        let raw = UserDefaults.standard.array(forKey: "recentBrushes") as? [Int] ?? []
+        let list = raw.compactMap { Brush(rawValue: UInt8(clamping: $0)) }
+        return list.isEmpty ? [.pen, .pencil, .fountain, .highlighter] : list
+    }
+
+    func rememberBrush(_ brush: Brush) {
+        var list = recentBrushes.filter { $0 != brush }
+        list.insert(brush, at: 0)
+        UserDefaults.standard.set(list.prefix(6).map { Int($0.rawValue) }, forKey: "recentBrushes")
+        objectWillChange.send()
+    }
+
     /// Recently picked custom colors (newest first).
     var recentColors: [InkColor] {
         guard let arr = UserDefaults.standard.array(forKey: "recentColors") as? [[Double]] else { return [] }

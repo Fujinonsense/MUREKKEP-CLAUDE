@@ -970,5 +970,10 @@ enum Translations {
         "Henüz yer imi yok. Sağ üstteki kurdeleye dokunarak bu sayfayı işaretle.": "No bookmarks yet. Tap the ribbon at the top right to bookmark this page.",
         "Bu PDF'te içindekiler bölümü yok.": "This PDF has no table of contents.",
         "Yeni sayfa eklendi": "New page added",
+        "Boya": "Paint",
+        "Doğa": "Nature",
+        "Işıltı": "Shine",
+        "Son kullanılanlar": "Recent",
+        "Tüm kalemler": "All pens",
     ]
 }

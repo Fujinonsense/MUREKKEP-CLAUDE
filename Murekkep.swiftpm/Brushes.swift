@@ -1,28 +1,20 @@
 import Foundation
 
+/// The sections of the pen panel.
 enum BrushGroup: String, CaseIterable, Identifiable {
     case writing
-    case art
-    case living
-    case premium
+    case paint
+    case nature
+    case shine
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .writing: return Loc.t("Yazı")
-        case .art: return Loc.t("Sanat")
-        case .living: return Loc.t("Canlı")
-        case .premium: return Loc.t("Premium 3B")
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .writing: return "pencil.and.scribble"
-        case .art: return "paintpalette"
-        case .living: return "leaf"
-        case .premium: return "wand.and.stars"
+        case .paint: return Loc.t("Boya")
+        case .nature: return Loc.t("Doğa")
+        case .shine: return Loc.t("Işıltı")
         }
     }
 
@@ -59,24 +51,30 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
 
     var id: UInt8 { rawValue }
 
-    /// Order in the tool palette.
+    /// Order in the pen panel and the toolbar.
     static let paletteOrder: [Brush] = [
-        .pen, .pencil, .calligraphy, .highlighter,
-        .wet, .watercolor, .neon, .rainbow, .glitter,
-        .wave, .sea, .grass,
-        .lava, .fountain, .gold, .chrome, .ice, .jelly, .galaxy, .lightning, .pearl, .impasto,
+        .pen, .pencil, .fountain, .calligraphy, .highlighter,
+        .watercolor, .impasto, .wet, .neon, .rainbow, .glitter,
+        .sea, .wave, .grass, .lava, .ice, .lightning, .galaxy,
+        .gold, .chrome, .pearl, .jelly,
     ]
 
     var group: BrushGroup {
         switch self {
-        case .pen, .pencil, .calligraphy, .highlighter: return .writing
-        case .wet, .watercolor, .neon, .rainbow, .glitter: return .art
-        case .wave, .sea, .grass: return .living
-        case .lava, .fountain, .gold, .chrome, .ice, .jelly, .galaxy, .lightning, .pearl, .impasto: return .premium
+        case .pen, .pencil, .fountain, .calligraphy, .highlighter: return .writing
+        case .watercolor, .impasto, .wet, .neon, .rainbow, .glitter: return .paint
+        case .sea, .wave, .grass, .lava, .ice, .lightning, .galaxy: return .nature
+        case .gold, .chrome, .pearl, .jelly: return .shine
         }
     }
 
-    var isPremium: Bool { group == .premium }
+    /// The 3D inks, marked with a star on the pen's barrel.
+    var isPremium: Bool {
+        switch self {
+        case .lava, .fountain, .gold, .chrome, .ice, .jelly, .galaxy, .lightning, .pearl, .impasto: return true
+        default: return false
+        }
+    }
 
     var title: String {
         switch self {

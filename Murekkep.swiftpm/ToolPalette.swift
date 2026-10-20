@@ -420,7 +420,7 @@ struct FloatingToolPalette: View {
     @State private var showEraserOptions = false
     @State private var showTextPenOptions = false
     @State private var showColors = false
-    @State private var group: BrushGroup = .writing
+    @State private var showPens = false
 
     var body: some View {
         Group {
@@ -434,50 +434,33 @@ struct FloatingToolPalette: View {
         .frame(height: 66)
         .glassCapsule()
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: collapsed)
-        .onAppear {
-            group = editor.activeBrush.group
-        }
-        .onChange(of: editor.tool) { _, tool in
-            if let brush = tool.selectedBrush, brush.group != group {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { group = brush.group }
-            }
-        }
     }
 
-    /// Four small tabs: writing, art, living and premium 3D brushes.
-    private var groupGrid: some View {
-        Grid(horizontalSpacing: 3, verticalSpacing: 3) {
-            GridRow {
-                groupButton(.writing)
-                groupButton(.art)
-            }
-            GridRow {
-                groupButton(.living)
-                groupButton(.premium)
-            }
-        }
+    /// The pens in the strip: the five used last, in the panel's order, so a pen keeps its place
+    /// when it is picked.
+    private var stripBrushes: [Brush] {
+        let recent = Set(settings.recentBrushes.prefix(5))
+        return Brush.paletteOrder.filter { recent.contains($0) }
     }
 
-    private func groupButton(_ g: BrushGroup) -> some View {
-        let selected = group == g
-        let fill: AnyShapeStyle
-        if selected {
-            fill = g == .premium ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(Theme.ink)
-        } else {
-            fill = AnyShapeStyle(Color.primary.opacity(0.07))
-        }
-        return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { group = g }
+    /// Opens the panel with every pen.
+    private var allPensButton: some View {
+        Button {
+            showPens = true
         } label: {
-            Image(systemName: g.symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(selected ? Color.white : Color.secondary)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(fill))
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(showPens ? Color.white : Color.secondary)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(showPens ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.primary.opacity(0.07))))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(g.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityLabel(Loc.t("Tüm kalemler"))
+        .popover(isPresented: $showPens) {
+            PenPanel(editor: editor) { showPens = false }
+                .environmentObject(settings)
+        }
     }
 
     private var compact: some View {
@@ -516,10 +499,10 @@ struct FloatingToolPalette: View {
         HStack(spacing: 8) {
             undoRedo
             Divider().frame(height: 34)
-            groupGrid
+            allPensButton
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .bottom, spacing: 6) {
-                    ForEach(group.brushes) { brush in
+                    ForEach(stripBrushes) { brush in
                         penButton(brush)
                     }
                     textPenButton

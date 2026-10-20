@@ -86,7 +86,10 @@ final class EditorModel: ObservableObject {
             if shapeEdit != nil { finishShapeEdit() }
             if placingSticker != nil { finishPlacing() }
             previousTool = oldValue
-            if case let .brush(b) = tool { lastBrush = b }
+            if case let .brush(b) = tool {
+                lastBrush = b
+                settings.rememberBrush(b)
+            }
             if tool != .eraser { eraserReturn = nil }
             // Leaving the text pen sets what was written (a quick erase in between does not).
             if oldValue == .textPen && tool != .eraser { convertTextBatch() }
