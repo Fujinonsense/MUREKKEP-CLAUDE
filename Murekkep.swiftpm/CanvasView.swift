@@ -882,7 +882,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
                                         points: b.preview(predicted: predicted(touch, event, origin: origin)),
                                         startTime: strokeStart)
             holdAnchor = nil
-            if snap == nil && gestureTool != .textPen {
+            if snap == nil {
                 trackHold(touch.location(in: self))
             }
             updateSnapLabel(docPoint)
@@ -944,7 +944,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
                                      text: "\(title) · %\(Int((adjustment.scale * 100).rounded())) · \(adjustment.degrees)°")
                 overlayChanged()
             }
-            if snap == nil && gestureTool != .textPen {
+            if snap == nil {
                 trackHold(touch.location(in: self))
             }
             if snap != nil {
@@ -992,9 +992,14 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
                                     birth: now, seed: active.seed, points: points,
                                     duration: max(0, now - active.startTime))
                 model.addStroke(stroke, toPage: active.page)
-                if gestureTool == .textPen {
+                // A held text-pen stroke that became a shape or a picture stays a drawing.
+                let isSymbol = b.editable != nil || pendingSketch != nil || snappedTitle != nil || straight
+                if gestureTool == .textPen && !isSymbol {
                     model.queueTextStroke(stroke.id, page: active.page)
+                } else if gestureTool == .textPen && b.editable == nil {
+                    model.resumeTextBatch()
                 } else if let shape = b.editable {
+                    if gestureTool == .textPen { model.resumeTextBatch() }
                     // The shape keeps handles on its corners until the next touch elsewhere.
                     model.startShapeEdit(page: active.page, strokeID: stroke.id, shape: shape)
                 }
@@ -1534,8 +1539,13 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             self?.holdFired()
         }
         holdWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: work)
+        // The text pen waits a little longer: a pen resting while thinking mid-word is not a request.
+        DispatchQueue.main.asyncAfter(deadline: .now() + (gestureTool == .textPen ? 0.75 : 0.55), execute: work)
     }
+
+    /// With the text pen only drawings larger than handwriting (a heart, a circle round a word)
+    /// become shapes or pictures; letters stay letters.
+    private static let textPenSymbolSize: CGFloat = 28
 
     private func cancelHold() {
         holdWork?.cancel()
@@ -1544,10 +1554,14 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     }
 
     /// The pencil rested: a heart or a face gets picture suggestions when the pencil lifts; anything
-    /// else that looks like a line, circle, ellipse, parabola, arc, rectangle or polygon becomes one.
+    /// else that looks like a line, circle, ellipse, curve, rectangle or polygon becomes one.
     private func holdFired() {
         guard inkGesture.isTracking, var b = builder, var active = activeStroke else { return }
         let path = b.drawnPath
+        if gestureTool == .textPen {
+            let box = Geo.bounds(path)
+            guard max(box.width, box.height) >= Self.textPenSymbolSize else { return }
+        }
         if model.settings.sketchSuggestions, let sketch = recognizeSketch(path, page: active.page) {
             pendingSketch = sketch
             playHaptic(.alignment, at: holdAnchor)

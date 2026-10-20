@@ -782,6 +782,16 @@ final class EditorModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + settings.textPenDelay, execute: work)
     }
 
+    /// The text pen drew a shape or a picture instead of letters: the words before it still turn
+    /// into text after the pause (touching the page had stopped the wait).
+    func resumeTextBatch() {
+        guard textBatch != nil else { return }
+        textWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.convertTextBatch() }
+        textWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + settings.textPenDelay, execute: work)
+    }
+
     /// Reads the waiting handwriting and replaces it with text on the lines (one undo step).
     func convertTextBatch() {
         textWork?.cancel()
