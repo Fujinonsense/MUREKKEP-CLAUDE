@@ -5,7 +5,7 @@ enum Translations {
     static let english: [String: String] = {
         var all: [String: String] = [:]
         all.reserveCapacity(920)
-        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9] {
+        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10] {
             all.merge(part) { first, _ in first }
         }
         return all
@@ -979,5 +979,12 @@ enum Translations {
         "Küçük": "Small",
         "Büyük": "Large",
         "Çok büyük": "Extra large",
+    ]
+
+    // Batch 3: on-device AI, OCR, chapter videos, embedded voices.
+    private static let part10: [String: String] = [
+        "Soru {0}/{1} çözülüyor…": "Solving question {0} of {1}…",
+        "Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Apple Intelligence (iPadOS 26) ya da bilgisayarındaki yerel sunucu (Ollama, LM Studio) gerekir.": "The offline core cannot really solve questions; it only points out clues on the page. Solving needs Apple Intelligence (iPadOS 26) or a local server on your computer (Ollama, LM Studio).",
+        "Bu soru cihazdaki model için çok uzun.": "This question is too long for the on-device model.",
     ]
 }

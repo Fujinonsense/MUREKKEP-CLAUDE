@@ -17,6 +17,7 @@
 - The AI answers in the language of the question (item 8, `AnswerLanguage.forAnswer`, unchanged).
 - Every new UI string through `Loc.t` with an English entry in `Translations.swift` (part 9).
 - `InkShaders.swift` is not touched.
+- Never at the cost of quality, and nothing may stutter (the user, 21 Oct): OCR, speech synthesis, model calls, chapter finding and illustration run off the main thread (detached tasks or a serial background queue, `.utility`/`.userInitiated`), report progress, are cancellable, and cache their results on disk; speech uses 2 CPU threads so drawing stays smooth.
 - CI: `runs-on: macos-26`, Xcode `/Applications/Xcode_26.6.app`, sherpa-onnx tag `v1.13.8`, onnxruntime static xcframework `1.28.2`, model package `sherpa-onnx-supertonic-3-tts-int8-2026-05-11`.
 - Zips only through `tools/make-zip.ps1`; no file in the zip over 25 MB (the user uploads through GitHub's web page). Models are fetched by CI, never committed.
 - No Swift compiler here: `tools/balance.ps1` on every changed Swift file; Apple API names are checked against Apple's documentation JSON (`developer.apple.com/tutorials/data/documentation/...`) before use.

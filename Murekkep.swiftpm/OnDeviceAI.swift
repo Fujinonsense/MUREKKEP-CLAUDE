@@ -3,6 +3,12 @@ import Foundation
 import FoundationModels
 #endif
 
+/// A question solved by a model: the chosen option (or a short answer) and why.
+struct SolvedQuestion {
+    var answer: String
+    var reasoning: String
+}
+
 /// Apple's on-device language model (Foundation Models framework, iPadOS 26+).
 /// Runs entirely on the iPad: free, private, works offline. Web search is offered to the
 /// model as a tool that uses the keyless `WebSearch`.
@@ -29,6 +35,17 @@ enum OnDeviceAI {
         if #available(iOS 26.0, *) {
             return try await AppleModelBridge.respond(instructions: instructions, prompt: prompt,
                                                       useWeb: useWeb, collector: collector)
+        }
+        #endif
+        throw LocalAIError(unavailableReason ?? Loc.t("Cihaz üstü model kullanılamıyor."))
+    }
+
+    /// One question of a page, solved on its own (the small model is far more accurate this way than
+    /// with a whole page of questions at once).
+    static func solve(_ question: PageQuestion, language: AnswerLanguage) async throws -> SolvedQuestion {
+        #if canImport(FoundationModels) && !MUREKKEP_PLAIN
+        if #available(iOS 26.0, *) {
+            return try await AppleModelBridge.solve(question, language: language)
         }
         #endif
         throw LocalAIError(unavailableReason ?? Loc.t("Cihaz üstü model kullanılamıyor."))
@@ -93,6 +110,35 @@ enum AppleModelBridge {
         let response = try await session.respond(to: prompt, options: options)
         return response.content
     }
+
+    /// The reasoning is generated before the answer (property order), so the model thinks first.
+    static func solve(_ question: PageQuestion, language: AnswerLanguage) async throws -> SolvedQuestion {
+        let instructions = "Sen dikkatli bir sınav öğretmenisin. Soruyu ve varsa parçayı oku, şıkları tek tek değerlendir, sonra doğru şıkkı seç. Parçada olmayan bilgiyi uydurma; matematikte işlemleri adım adım yap. "
+            + language.directive
+        let options = GenerationOptions(temperature: 0.2, maximumResponseTokens: 400)
+        var text = question.promptText
+        for attempt in 0..<2 {
+            do {
+                let session = LanguageModelSession(instructions: instructions)
+                let response = try await session.respond(to: text, generating: SolvedQuestionDraft.self, options: options)
+                return SolvedQuestion(answer: response.content.answer, reasoning: response.content.reasoning)
+            } catch let error where attempt == 0 && OnDeviceAI.isContextOverflow(error) {
+                var shorter = question
+                shorter.passage = question.passage.map { String($0.prefix(3_000)) }
+                text = shorter.promptText
+            }
+        }
+        throw LocalAIError(Loc.t("Bu soru cihazdaki model için çok uzun."))
+    }
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct SolvedQuestionDraft {
+    @Guide(description: "Kısa gerekçe: en fazla 3 cümle, adım adım")
+    var reasoning: String
+    @Guide(description: "Yalnızca doğru şıkkın harfi (A, B, C, D ya da E); şık yoksa kısa cevap")
+    var answer: String
 }
 
 @available(iOS 26.0, *)

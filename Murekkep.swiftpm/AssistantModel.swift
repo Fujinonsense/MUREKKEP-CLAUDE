@@ -281,6 +281,23 @@ final class AssistantModel: ObservableObject {
             let language = Self.answerLanguage(question: question, action: action, pages: pages)
             // Exact results of the math engine, so a language model never gets the arithmetic wrong.
             let facts = AnswerLanguage.$bound.withValue(language) { OfflineBrain.mathFacts(pages, current: editor.currentPage) }
+            // A page of questions: the small models are far more accurate one question at a time.
+            if Self.wantsSolving(question: question, action: action) {
+                let here = pages.filter { $0.page == editor.currentPage }
+                let questions = QuestionSplitter.split((here.isEmpty ? pages : here).map(\.text).joined(separator: "\n"))
+                if questions.count >= 2 {
+                    switch resolved {
+                    case .onDevice:
+                        try await solveOnDevice(questions, language: language)
+                        return
+                    case let .localServer(base, model):
+                        try await solveWithServer(questions, base: base, model: model, language: language)
+                        return
+                    case .offline, .claude:
+                        appendToAnswer("_" + Loc.t("Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Apple Intelligence (iPadOS 26) ya da bilgisayarındaki yerel sunucu (Ollama, LM Studio) gerekir.") + "_\n\n")
+                    }
+                }
+            }
             switch resolved {
             case .onDevice:
                 try await answerOnDevice(question: question, pages: pages, facts: facts, wantsWeb: wantsWeb, editor: editor,
@@ -458,6 +475,65 @@ final class AssistantModel: ObservableObject {
                 throw error
             }
         }
+    }
+
+    /// "Solve the questions" (the button, or a short request like "bu soruları çöz").
+    static func wantsSolving(question: String, action: QuickAction?) -> Bool {
+        if action == .solve { return true }
+        guard action == nil, AnswerLanguage.isPageCommand(question) else { return false }
+        let q = question.lowercased()
+        return ["çöz", "solve", "cevap", "yanıt", "answer"].contains { q.contains($0) }
+    }
+
+    @MainActor
+    private func solveOnDevice(_ questions: [PageQuestion], language: AnswerLanguage) async throws {
+        for (i, q) in questions.enumerated() {
+            try Task.checkCancellation()
+            status = Loc.t("Soru {0}/{1} çözülüyor…", "\(i + 1)", "\(questions.count)")
+            do {
+                let solved = try await OnDeviceAI.solve(q, language: language)
+                appendToAnswer(QuestionSolving.line(q, answer: solved.answer, reasoning: solved.reasoning))
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                appendToAnswer("**\(q.number))** ⚠️ " + (OnDeviceAI.friendly(error) ?? error.localizedDescription) + "\n\n")
+            }
+        }
+        status = nil
+    }
+
+    @MainActor
+    private func solveWithServer(_ questions: [PageQuestion], base: URL, model: String, language: AnswerLanguage) async throws {
+        guard !model.isEmpty else {
+            throw LocalAIError(Loc.t("Sunucuda yüklü model bulunamadı. Bilgisayarda örneğin \"ollama pull llama3.2\" çalıştır, sonra Ayarlar'dan modeli seç."))
+        }
+        let system = QuestionSolving.instructions(language: language)
+        for (i, q) in questions.enumerated() {
+            try Task.checkCancellation()
+            status = Loc.t("Soru {0}/{1} çözülüyor…", "\(i + 1)", "\(questions.count)")
+            let chat: [[String: Any]] = [["role": "system", "content": system], ["role": "user", "content": q.promptText]]
+            let request = try LocalServerClient.chatRequest(base: base, model: model, messages: chat, temperature: 0.2)
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard code == 200 else {
+                throw await LocalServerClient.readError(bytes, status: code)
+            }
+            appendToAnswer("**\(q.number))** ")
+            streamLoop: for try await line in bytes.lines {
+                switch LocalServerClient.parse(line: line) {
+                case let .delta(text):
+                    appendToAnswer(text)
+                case .done:
+                    break streamLoop
+                case let .error(message):
+                    throw LocalAIError(message)
+                case .ignored:
+                    break
+                }
+            }
+            appendToAnswer("\n\n")
+        }
+        status = nil
     }
 
     @MainActor
