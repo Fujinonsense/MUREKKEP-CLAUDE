@@ -565,12 +565,12 @@ final class StudioStore: ObservableObject {
                 }
                 job.phase = Loc.t("Seslendiriliyor…")
                 job.progress = 0.6
-                guard VoiceSettings.shared.engine != nil else {
-                    // Without a voice key the script is kept, to be voiced once a key is added.
+                guard EmbeddedVoices.isAvailable else {
+                    // A build without the embedded voices: the script is kept, silent.
                     await OverviewThumbnail.make(for: overview, folder: folder, library: library)
                     self.save(overview)
                     job.phase = Loc.t("Sessiz kaydedildi")
-                    job.error = SpeechError.noKey.errorDescription
+                    job.error = SpeechError.unavailable.errorDescription
                     return
                 }
                 overview = try await StudioVoicer.voice(overview, folder: folder) { fraction in

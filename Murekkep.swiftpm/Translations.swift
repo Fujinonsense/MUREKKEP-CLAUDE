@@ -1001,5 +1001,14 @@ enum Translations {
         "Limit ve Yaklaşım": "Limits and Approach",
         "Sıfıra bölmeyi aşmak": "Getting past division by zero",
         "Çizimler hazırlanıyor…": "Drawing the illustrations…",
+        "Anlatıcı": "Narrator",
+        "Bu derlemede gömülü sesler yok.": "This build has no embedded voices.",
+        "Bu derlemede gömülü sesler yok. Sesli derleme GitHub'daki iş akışıyla yapılır.": "This build has no embedded voices. The build with voices comes from the GitHub workflow.",
+        "Bu derlemede gömülü sesler yok. Özet sessiz kaydedildi; sesli derlemede menüden \"Yeniden seslendir\"i seç.": "This build has no embedded voices. The overview was saved silent; in a build with voices choose \"Voice again\" from the menu.",
+        "Erkek sesi": "Male voice",
+        "Gömülü ses · iPad'de, internetsiz": "Embedded voice · on the iPad, offline",
+        "Hız: {0}": "Speed: {0}",
+        "Kadın sesi": "Female voice",
+        "Sesler uygulamanın içinde, iPad'de üretilir: internet ve anahtar gerekmez. Her ses Türkçe ve İngilizce konuşur; sesli sohbette ikinci sunucu öbür cinsiyetteki seçili sesle konuşur.": "The voices are made inside the app, on the iPad: no internet and no key. Every voice speaks Turkish and English; in a podcast the second host speaks with the chosen voice of the other gender.",
     ]
 }

@@ -245,7 +245,7 @@ struct StudioCreateSheet: View {
     private var voiceSection: some View {
         Section {
             HStack(spacing: 12) {
-                Image(systemName: voices.engine == nil ? "speaker.slash.fill" : "person.wave.2.fill")
+                Image(systemName: EmbeddedVoices.isAvailable ? "person.wave.2.fill" : "speaker.slash.fill")
                     .foregroundStyle(Theme.ai)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
@@ -272,11 +272,7 @@ struct StudioCreateSheet: View {
     }
 
     private var voiceHint: String {
-        switch voices.engine {
-        case .eleven: return "ElevenLabs · Multilingual v2"
-        case .openAI: return "OpenAI"
-        case nil: return Loc.t("Seslendirme için Ayarla'dan ElevenLabs anahtarını ekle.")
-        }
+        EmbeddedVoices.isAvailable ? Loc.t("Gömülü ses · iPad'de, internetsiz") : Loc.t("Bu derlemede gömülü sesler yok.")
     }
 
     private var engineSection: some View {
