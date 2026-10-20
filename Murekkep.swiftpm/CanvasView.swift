@@ -97,6 +97,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     /// Length of the lasso loop on screen so far, and when the pencil last ticked along it.
     private var lassoTravel: CGFloat = 0
     private var lastLassoTick: CFTimeInterval = 0
+    /// The Aa tool's box on the page, where it was opened, and the font size it was last set to.
+    private var textBox: UITextView?
+    private var textBoxRequest: TextRequest?
+    private var textBoxFontSize: CGFloat = 0
     private enum SelectionDrag {
         case move(start: CGPoint)
         case scale(anchor: CGPoint, startDistance: CGFloat)
@@ -302,6 +306,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         nc.addObserver(self, selector: #selector(memoryWarning), name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
         nc.addObserver(self, selector: #selector(powerConditionsChanged), name: .NSProcessInfoPowerStateDidChange, object: nil)
         nc.addObserver(self, selector: #selector(powerConditionsChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
+        nc.addObserver(self, selector: #selector(keyboardWillShow(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: CanvasView, _: UITraitCollection) in
             view.updateClearColor()
@@ -364,6 +369,11 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         observeScene(window?.windowScene)
         if window == nil {
             stopLoop()
+            // Leaving the note with the text box open keeps what was typed.
+            if textBox != nil {
+                finishTextBox()
+                model.saveNow()
+            }
         } else {
             // Back on screen (after a sheet, another window, the app switcher): double tap and
             // squeeze must reach this page again.
@@ -807,6 +817,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private func updateOverlay(origin: CGPoint, zoom: CGFloat) {
         overlay.origin = origin
         overlay.zoom = zoom
+        layoutTextBox()
         overlay.instrument = model.instrument
         if let sel = model.displayedSelection, model.tool == .lasso || model.placingSticker != nil {
             overlay.selection = sel.bounds.offsetBy(dx: pageOrigin(sel.page).x, dy: pageOrigin(sel.page).y)
@@ -924,6 +935,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             model.suggestion = nil
         }
         pendingSketch = nil
+        // Writing or drawing with another tool sets the open text box on the page first.
+        if textBox != nil && model.tool != .text {
+            finishTextBox()
+        }
         let docPoint = touch.preciseLocation(in: zoomContainer)
         let zoom = docTransform.zoom
         // A finger on the ruler moves the ruler; it never draws.
@@ -1152,7 +1167,12 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             if let tap = tapStart {
                 let v = touch.location(in: self)
                 if hypot(v.x - tap.view.x, v.y - tap.view.y) < 12 {
-                    model.textRequest = TextRequest(page: tap.page, point: tap.point)
+                    // A tap outside the open box writes it; the next tap opens a new one.
+                    if textBox != nil {
+                        finishTextBox()
+                    } else {
+                        openTextBox(TextRequest(page: tap.page, point: tap.point))
+                    }
                 }
             }
         }
@@ -1656,6 +1676,145 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         }
         model.selectStrokes(page: page, lasso: polygon)
     }
+    // MARK: - Text box
+
+    /// Symbols one tap away above the keyboard.
+    private static let textSymbols = ["×", "÷", "±", "√", "π", "≈", "≠", "≤", "≥", "∞", "°", "²", "³", "→", "∫", "Δ", "Σ",
+                                      "α", "β", "θ", "λ", "μ", "σ", "ω", "ρ", "τ", "φ", "ε", "Ω"]
+    private static let accentColor = UIColor(red: 0.10, green: 0.33, blue: 0.80, alpha: 1)
+
+    /// Opens a box where the Aa tool tapped. It sits on the lines the text will be written on and
+    /// follows scrolling, zooming and the page angle.
+    private func openTextBox(_ request: TextRequest) {
+        finishTextBox()
+        let box = UITextView()
+        box.backgroundColor = Self.accentColor.withAlphaComponent(0.06)
+        box.layer.cornerRadius = 4
+        box.textContainerInset = .zero
+        box.textContainer.lineFragmentPadding = 0
+        box.isScrollEnabled = false
+        box.tintColor = Self.accentColor
+        box.delegate = self
+        box.inputAccessoryView = textBoxBar()
+        textBox = box
+        textBoxRequest = request
+        textBoxFontSize = 0
+        rotationHost.addSubview(box)
+        layoutTextBox()
+        box.becomeFirstResponder()
+    }
+
+    /// Writes what was typed onto the page and closes the box.
+    private func finishTextBox() {
+        guard let box = textBox, let request = textBoxRequest else { return }
+        textBox = nil
+        textBoxRequest = nil
+        let text = box.text ?? ""
+        box.delegate = nil
+        box.resignFirstResponder()
+        box.removeFromSuperview()
+        model.insertText(text, request: request)
+    }
+
+    /// Keeps the box on its lines at the current zoom, its capitals as tall as the written ones.
+    private func layoutTextBox() {
+        guard let box = textBox, let request = textBoxRequest,
+              let lines = model.typedLayout(page: request.page, at: request.point) else { return }
+        let (origin, zoom) = docTransform
+        let o = pageOrigin(request.page)
+        // San Francisco's capitals are about 0.7 of its point size.
+        let size = max(lines.cap * zoom / 0.7, 4)
+        let lineHeight = lines.spacing * zoom
+        let font = UIFont.systemFont(ofSize: size)
+        if abs(size - textBoxFontSize) > 0.05 {
+            textBoxFontSize = size
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.minimumLineHeight = lineHeight
+            paragraph.maximumLineHeight = lineHeight
+            let ink = model.typedColor
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .paragraphStyle: paragraph,
+                .foregroundColor: UIColor(red: CGFloat(ink.r), green: CGFloat(ink.g), blue: CGFloat(ink.b), alpha: 1),
+            ]
+            box.typingAttributes = attributes
+            box.textStorage.setAttributes(attributes, range: NSRange(location: 0, length: box.textStorage.length))
+        }
+        let width = max((lines.right - lines.left) * zoom, 40)
+        // TextKit puts a line's extra height above the letters: the baseline sits one descender
+        // above the bottom of the line.
+        let firstBaseline = origin.y + (o.y + lines.baseline) * zoom
+        let top = firstBaseline - (lineHeight + font.descender)
+        let fit = box.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        let frame = CGRect(x: origin.x + (o.x + lines.left) * zoom, y: top, width: width, height: max(fit.height, lineHeight))
+        if box.frame != frame {
+            box.frame = frame
+        }
+    }
+
+    /// Symbols and the ✓ that writes the text, above the keyboard.
+    private func textBoxBar() -> UIView {
+        let bar = UIInputView(frame: CGRect(x: 0, y: 0, width: 320, height: 50), inputViewStyle: .keyboard)
+        bar.autoresizingMask = .flexibleWidth
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 4
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        for symbol in Self.textSymbols {
+            let button = UIButton(type: .system)
+            button.setTitle(symbol, for: .normal)
+            button.titleLabel?.font = .preferredFont(forTextStyle: .title3)
+            button.tintColor = .label
+            button.addAction(UIAction { [weak self] _ in self?.textBox?.insertText(symbol) }, for: .touchUpInside)
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 36).isActive = true
+            stack.addArrangedSubview(button)
+        }
+        let scroll = UIScrollView()
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(stack)
+        let done = UIButton(type: .system)
+        done.setImage(UIImage(systemName: "checkmark.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 26)),
+                      for: .normal)
+        done.tintColor = Self.accentColor
+        done.accessibilityLabel = Loc.t("Sayfaya yaz")
+        done.addAction(UIAction { [weak self] _ in self?.finishTextBox() }, for: .touchUpInside)
+        done.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(scroll)
+        bar.addSubview(done)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 8),
+            scroll.topAnchor.constraint(equalTo: bar.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+            scroll.trailingAnchor.constraint(equalTo: done.leadingAnchor, constant: -8),
+            done.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -12),
+            done.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            done.widthAnchor.constraint(equalToConstant: 44),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
+        ])
+        return bar
+    }
+
+    /// Moves the page up when the keyboard would cover the text box.
+    @objc private func keyboardWillShow(_ note: Notification) {
+        guard let box = textBox, let window = box.window, let screen = window.windowScene?.screen,
+              let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        let keyboard = window.convert(end, from: screen.coordinateSpace)
+        let boxBottom = box.convert(CGPoint(x: box.bounds.midX, y: box.bounds.maxY), to: window).y
+        let overlap = boxBottom + 24 - keyboard.minY
+        guard overlap > 0 else { return }
+        // "Up" on screen in the scrolling directions of the turned page.
+        var offset = scrollView.contentOffset
+        offset.x += overlap * sin(pageAngle)
+        offset.y += overlap * cos(pageAngle)
+        clamp(&offset)
+        scrollView.setContentOffset(offset, animated: true)
+    }
+
     // MARK: - Hold to straighten
 
     private func trackHold(_ viewPoint: CGPoint) {
@@ -1829,6 +1988,11 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     /// A finger tap anywhere but on a corner handle (or the sticker box's corner and turn handles)
     /// settles the shape or the sticker.
     @objc private func fingerTapped(_ g: UITapGestureRecognizer) {
+        // In pencil-only mode a finger tap on the page is how the text box is closed.
+        if g.state == .ended, textBox != nil, pencilOnly {
+            finishTextBox()
+            return
+        }
         guard g.state == .ended, model.shapeEdit != nil || model.placingSticker != nil else { return }
         let p = g.location(in: zoomContainer)
         let zoom = docTransform.zoom
@@ -2140,5 +2304,19 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         let visible = model.layout.pages(intersecting: visibleDocRect(origin: origin, zoom: zoom))
         renderer?.pdfTextures?.purge(keeping: visible)
         setNeedsRender()
+    }
+}
+
+extension CanvasView: UITextViewDelegate {
+    func textViewDidChange(_ textView: UITextView) {
+        layoutTextBox()
+    }
+
+    /// The keyboard went away some other way (hidden, another field took it): what was typed is
+    /// written all the same.
+    func textViewDidEndEditing(_ textView: UITextView) {
+        if textView === textBox {
+            finishTextBox()
+        }
     }
 }

@@ -180,18 +180,13 @@ enum HandwritingConverter {
     /// Typed text placed at `point`: on the next writing line when the page has them.
     static func typed(_ text: String, at point: CGPoint, paper: PaperStyle, pageSize: CGSize, style: StrokeText.Style,
                       flowerLevel: Int) -> [Stroke] {
-        let ruling = paper.ruling(pageSize: pageSize)
-        let cap = ruling?.capHeight ?? 15
+        let lines = typedLayout(at: point, paper: paper, pageSize: pageSize)
+        let cap = lines.cap
         let unit = cap / 10
-        let left = ruling.map { max($0.left, min(point.x, $0.right - 40)) } ?? point.x
-        let right = ruling?.right ?? (pageSize.width - 24)
-        let spacing = ruling?.spacing ?? cap * 1.8
-        var baseline: CGFloat
-        if let r = ruling {
-            baseline = r.baseline(r.index(atOrBelow: point.y + cap * 0.3))
-        } else {
-            baseline = point.y + cap
-        }
+        let left = lines.left
+        let right = lines.right
+        let spacing = lines.spacing
+        var baseline = lines.baseline
         let birth = Date().timeIntervalSinceReferenceDate
         var out: [Stroke] = []
         let thin = StrokeText.Style(brush: style.brush, color: style.color, width: textWidth(style.width, brush: style.brush, capHeight: cap))
@@ -214,6 +209,31 @@ enum HandwritingConverter {
             baseline += spacing
         }
         return out
+    }
+
+    /// Where typed text goes on a page (page-local): its left and right edges, the first baseline,
+    /// the letter height and the line spacing, on the template's lines when it has them.
+    struct TypedLayout {
+        var left: CGFloat
+        var right: CGFloat
+        var baseline: CGFloat
+        var cap: CGFloat
+        var spacing: CGFloat
+    }
+
+    static func typedLayout(at point: CGPoint, paper: PaperStyle, pageSize: CGSize) -> TypedLayout {
+        let ruling = paper.ruling(pageSize: pageSize)
+        let cap = ruling?.capHeight ?? 15
+        let left = ruling.map { max($0.left, min(point.x, $0.right - 40)) } ?? point.x
+        let right = ruling?.right ?? (pageSize.width - 24)
+        let spacing = ruling?.spacing ?? cap * 1.8
+        let baseline: CGFloat
+        if let r = ruling {
+            baseline = r.baseline(r.index(atOrBelow: point.y + cap * 0.3))
+        } else {
+            baseline = point.y + cap
+        }
+        return TypedLayout(left: left, right: right, baseline: baseline, cap: cap, spacing: spacing)
     }
 
     /// Letter spacing in font units: the font's own, plus room for the line width of thick inks.

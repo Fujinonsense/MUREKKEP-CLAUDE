@@ -275,9 +275,6 @@ struct EditorContent: View {
             EngineeringPanel(editor: editor)
                 .environmentObject(settings)
         }
-        .sheet(item: $editor.textRequest) { request in
-            TextEntrySheet(editor: editor, request: request)
-        }
         .alert(Loc.t("Dışa aktarılamadı"), isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
             Button(Loc.t("Tamam"), role: .cancel) { exportError = nil }
         } message: {

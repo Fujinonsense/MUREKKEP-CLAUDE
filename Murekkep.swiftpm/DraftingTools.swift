@@ -350,66 +350,6 @@ struct PaperSoundCornerButton: View {
     }
 }
 
-// MARK: - Text entry
-
-/// Typed text, written onto the page in the single-line font with the current ink.
-struct TextEntrySheet: View {
-    @ObservedObject var editor: EditorModel
-    let request: TextRequest
-    @Environment(\.dismiss) private var dismiss
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    private let symbols = ["×", "÷", "±", "√", "π", "≈", "≠", "≤", "≥", "∞", "°", "²", "³", "→", "∫", "Δ", "Σ",
-                           "α", "β", "θ", "λ", "μ", "σ", "ω", "ρ", "τ", "φ", "ε", "Ω"]
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 12) {
-                TextEditor(text: $text)
-                    .focused($focused)
-                    .font(.title3)
-                    .frame(minHeight: 140)
-                    .padding(8)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(symbols, id: \.self) { s in
-                            Button(s) { text += s }
-                                .font(.title3)
-                                .frame(minWidth: 36, minHeight: 36)
-                                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                .buttonStyle(.plain)
-                        }
-                    }
-                }
-                Label(Loc.t("Yazı, son seçtiğin kalemin mürekkebi ve rengiyle, şablonun çizgilerine oturtularak yazılır."),
-                      systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding()
-            .navigationTitle(Loc.t("Metin yaz"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(Loc.t("Vazgeç")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(Loc.t("Sayfaya yaz")) {
-                        editor.insertText(text, request: request)
-                        dismiss()
-                    }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .onAppear { focused = true }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
 // MARK: - Banner
 
 /// A short confirmation over the canvas that hides itself.

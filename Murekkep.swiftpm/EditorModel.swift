@@ -121,7 +121,6 @@ final class EditorModel: ObservableObject {
     private(set) var liveSelection: InkSelection?
     /// What the canvas draws and hit-tests.
     var displayedSelection: InkSelection? { liveSelection ?? selection }
-    @Published var textRequest: TextRequest?
     /// Short confirmation shown over the canvas ("3 satır yazıya çevrildi").
     @Published var banner: String?
     @Published private(set) var isConverting = false
@@ -932,6 +931,16 @@ final class EditorModel: ObservableObject {
                                              flowerLevel: settings.flowerLevel)
         addStrokes(new, toPage: request.page)
     }
+
+    /// The lines typed text at `point` will sit on (for the Aa text box).
+    func typedLayout(page: Int, at point: CGPoint) -> HandwritingConverter.TypedLayout? {
+        guard layout.pageSizes.indices.contains(page) else { return nil }
+        return HandwritingConverter.typedLayout(at: point, paper: isPDF ? .plain : meta.paper,
+                                                pageSize: layout.pageSizes[page])
+    }
+
+    /// Color of the typed text (the brush it is written with).
+    var typedColor: InkColor { color(for: activeBrush) }
 
     /// Writes `text` where the user is looking (calculator results, formulas, constants).
     func writeAtViewCenter(_ text: String) {
