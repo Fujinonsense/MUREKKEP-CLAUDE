@@ -156,6 +156,19 @@ def compose(rng, source, text):
             r = rng.uniform(0.3, 0.6)
             mid = (seg[:, :2] + seg[:, 2:]) / 2
             seg = seg[np.hypot(mid[:, 0] - c[0], mid[:, 1] - c[1]) > r]
+    # The whole line turned a little: real baselines drift, and the app levels a line only to within a
+    # few degrees before reading it.
+    if len(seg) and rng.random() < 0.85:
+        a = math.radians(rng.uniform(-8, 8))
+        c, s = math.cos(a), math.sin(a)
+        mx = float(seg[:, [0, 2]].mean())
+        my = float(seg[:, [1, 3]].mean())
+        turned = seg.copy()
+        for i in (0, 2):
+            x, y = seg[:, i] - mx, seg[:, i + 1] - my
+            turned[:, i] = mx + c * x - s * y
+            turned[:, i + 1] = my + s * x + c * y
+        seg = turned
     # Units to page points (cap height 10–22 pt), y down.
     pt = rng.uniform(1.0, 2.2)
     seg = seg * pt

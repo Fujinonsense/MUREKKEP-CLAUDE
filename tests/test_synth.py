@@ -87,3 +87,20 @@ def test_heldout_fonts_disjoint():
     train, val = synth.split_fonts()
     assert set(train).isdisjoint(val)
     assert len(val) == math.ceil((len(train) + len(val)) / 9)
+
+
+def _baseline_angle(seg):
+    """Angle (degrees) of the least-squares line through the segment midpoints."""
+    mid = (seg[:, :2] + seg[:, 2:]) / 2
+    x, y = mid[:, 0] - mid[:, 0].mean(), mid[:, 1] - mid[:, 1].mean()
+    return math.degrees(math.atan2((x * y).sum(), (x * x).sum()))
+
+
+def test_lines_are_written_at_an_angle_sometimes():
+    # Real lines drift: the model must see baselines turned by several degrees, both ways, not
+    # only level ones (a 6° turn broke most readings of the first model).
+    rng = np.random.default_rng(5)
+    source = synth.GlyphSource(None)
+    angles = [_baseline_angle(synth.compose(rng, source, "Bugün hava çok güzel ve sıcak.")) for _ in range(60)]
+    assert max(angles) > 4 and min(angles) < -4
+    assert all(abs(a) < 11 for a in angles)
