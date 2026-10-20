@@ -1,0 +1,179 @@
+name: Murekkep IPA Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Projeyi Indir
+        uses: actions/checkout@v4
+
+      - name: Klasor Yapisini Hazirla
+        run: |
+          which xcodegen || brew install xcodegen
+          rm -rf AppSource
+          mkdir -p AppSource
+          if [ -d "Murekkep.swiftpm" ]; then
+            cp -R Murekkep.swiftpm/* AppSource/
+          else
+            find . -maxdepth 1 -not -name "." -not -name ".git" -not -name ".github" -not -name "AppSource" -exec cp -R {} AppSource/ \;
+          fi
+          find . -maxdepth 1 -name "*.swift" -not -name "*_2.swift" -exec cp -f {} AppSource/ \;
+
+          python3 - << 'PYEOF'
+          import pathlib, shutil
+
+          app_dir = pathlib.Path("AppSource")
+
+          # GitHub'a ayni adla tekrar yuklenen dosyalar "_2" ekiyle gelir: yenisi eskisinin yerine gecer.
+          for search_dir in [pathlib.Path("."), pathlib.Path("Murekkep.swiftpm"), app_dir]:
+              if not search_dir.exists():
+                  continue
+              for f in list(search_dir.glob("*_2.swift")):
+                  if f.name == "InkShaders_2.swift":
+                      main_shader = app_dir / "InkShaders.swift"
+                      if main_shader.exists() and "shadeSculptedWave" in main_shader.read_text(encoding="utf-8"):
+                          continue
+                  clean_name = f.name[:-8] + ".swift"
+                  target = app_dir / clean_name
+                  if f.resolve() != target.resolve():
+                      shutil.copy2(f, target)
+
+          for pattern in ["*_2.swift", "* (1)*", "Package*.swift", "AppInfo*.plist", "*.jpg", "Contents*.json"]:
+              for f in list(app_dir.glob(pattern)):
+                  if f.is_file():
+                      f.unlink(missing_ok=True)
+          PYEOF
+
+          echo "Derlenecek Swift dosyalari: $(ls AppSource/*.swift | wc -l)"
+
+      - name: Info.plist ve Xcode Projesi Olustur
+        run: |
+          cat << 'EOF' > AppSource/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>tr</string>
+              <key>CFBundleDisplayName</key>
+              <string>Mürekkep</string>
+              <key>CFBundleExecutable</key>
+              <string>$(EXECUTABLE_NAME)</string>
+              <key>CFBundleIdentifier</key>
+              <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>$(PRODUCT_NAME)</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>$(MARKETING_VERSION)</string>
+              <key>CFBundleVersion</key>
+              <string>$(CURRENT_PROJECT_VERSION)</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>ITSAppUsesNonExemptEncryption</key>
+              <false/>
+              <key>UIBackgroundModes</key>
+              <array>
+                  <string>audio</string>
+              </array>
+              <key>NSPhotoLibraryAddUsageDescription</key>
+              <string>Video özetlerini Fotoğraflar'a kaydetmek için.</string>
+              <key>UIApplicationSceneManifest</key>
+              <dict>
+                  <key>UIApplicationSupportsMultipleScenes</key>
+                  <true/>
+              </dict>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+              <key>UISupportedInterfaceOrientations~ipad</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+                  <string>UIInterfaceOrientationPortraitUpsideDown</string>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+
+          # Not: XcodeGen'in "info:" anahtari Info.plist'i her seferinde bastan uretip ustteki ayarlari
+          # silerdi (UILaunchScreen gidince uygulama dusuk cozunurlukte acilir). Bu yuzden dosya
+          # INFOPLIST_FILE ile oldugu gibi kullaniliyor.
+          cat << 'EOF' > project.yml
+          name: Murekkep
+          options:
+            bundleIdPrefix: com.murekkep
+            deploymentTarget:
+              iOS: "17.0"
+          targets:
+            Murekkep:
+              type: application
+              platform: iOS
+              sources:
+                - path: AppSource
+                  excludes:
+                    - "Info.plist"
+                    - "AppInfo*.plist"
+                    - "Package*.swift"
+                    - "*_2.swift"
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
+                  PRODUCT_NAME: Murekkep
+                  INFOPLIST_FILE: AppSource/Info.plist
+                  GENERATE_INFOPLIST_FILE: NO
+                  MARKETING_VERSION: "2.9"
+                  CURRENT_PROJECT_VERSION: "12"
+                  SWIFT_VERSION: "5.0"
+                  TARGETED_DEVICE_FAMILY: "1,2"
+                  ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                  CODE_SIGN_IDENTITY: ""
+                  CODE_SIGNING_REQUIRED: NO
+                  CODE_SIGNING_ALLOWED: NO
+                  ENABLE_USER_SCRIPT_SANDBOXING: NO
+          EOF
+
+          xcodegen generate
+
+      - name: IPA Derle ve Paketle
+        run: |
+          set -o pipefail
+          xcodebuild -project Murekkep.xcodeproj \
+            -scheme Murekkep \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
+
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Murekkep.app Payload/
+          zip -qry Murekkep.ipa Payload
+
+      - name: Derleme Hatalarini Goster
+        if: failure()
+        run: |
+          if [ -f build.log ]; then
+            grep -E "error:|warning: .*(will be an error|unable to type-check)" build.log | sort -u | head -80 || true
+          fi
+
+      - name: IPA Dosyasini Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murekkep-IPA
+          path: Murekkep.ipa

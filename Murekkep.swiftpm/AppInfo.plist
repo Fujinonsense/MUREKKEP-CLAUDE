@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Without a launch screen iOS runs the app in compatibility mode: at an old, lower resolution,
+         scaled up to the display, so everything looks soft. This key gives the app the full native
+         resolution of every iPad and iPhone. -->
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <true/>
+    </dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <!-- Video and audio overviews keep talking when the screen locks. -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
+    <!-- "Save Video" in the share sheet. -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Video özetlerini Fotoğraflar'a kaydetmek için.</string>
+</dict>
+</plist>

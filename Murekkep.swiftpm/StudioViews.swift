@@ -1,0 +1,700 @@
+import SwiftUI
+import UIKit
+
+// MARK: - Create
+
+/// Choices for a new overview (like NotebookLM's customise sheet, with more knobs).
+struct StudioCreateSheet: View {
+    @EnvironmentObject private var library: LibraryStore
+    @EnvironmentObject private var studio: StudioStore
+    @EnvironmentObject private var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var voices = VoiceSettings.shared
+    let request: StudioRequest
+    @State private var options: OverviewOptions
+    @State private var selected: Set<UUID>
+    @State private var engine: StudioEngine
+    @State private var showVoices = false
+
+    private static let lastKey = "studio.lastOptions"
+
+    init(request: StudioRequest, engine: StudioEngine) {
+        self.request = request
+        var o = OverviewOptions()
+        if let data = UserDefaults.standard.data(forKey: Self.lastKey),
+           let saved = try? JSONDecoder().decode(OverviewOptions.self, from: data) {
+            o = saved
+            o.focus = ""
+        }
+        o.kind = request.kind
+        if !OverviewFormat.options(for: o.kind).contains(o.format) { o.format = .explainer }
+        _options = State(initialValue: o)
+        _selected = State(initialValue: Set(request.preselected))
+        _engine = State(initialValue: engine)
+    }
+
+    private var candidates: [NoteMeta] {
+        let notes = request.sectionID.map { id in library.notes.filter { $0.sectionID == id } } ?? library.notes
+        return notes.sorted { a, b in
+            if a.kind != b.kind { return a.kind == .pdf }
+            return a.modified > b.modified
+        }
+    }
+
+    private var courseName: String? {
+        library.sections.first { $0.id == request.sectionID }?.name
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack(spacing: 12) {
+                        ForEach(OverviewKind.allCases) { kind in
+                            kindCard(kind)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                }
+                sourcesSection
+                formatSection
+                Section(Loc.t("Ayarlar")) {
+                    Picker(Loc.t("Süre"), selection: $options.length) {
+                        ForEach(OverviewLength.allCases) { l in
+                            Text(Loc.t("{0} · ~{1} dk", "\(l.title)", "\(l.minutes)")).tag(l)
+                        }
+                    }
+                    Picker(Loc.t("Seviye"), selection: $options.level) {
+                        ForEach(OverviewLevel.allCases) { l in
+                            Text(l.title).tag(l)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Picker(Loc.t("Dil"), selection: $options.language) {
+                        ForEach(OverviewLanguage.allCases) { l in
+                            Text(l.title).tag(l)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                if options.kind == .video {
+                    Section(Loc.t("Görünüm")) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 14) {
+                                ForEach(SlideTheme.allCases) { theme in
+                                    Button {
+                                        options.theme = theme
+                                    } label: {
+                                        ThemePreview(theme: theme, selected: options.theme == theme)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 6)
+                        }
+                    }
+                }
+                Section {
+                    TextField(Loc.t("ör. sınavda çıkabilecek mekanizmalar, klinik önemi, 3. hafta konuları…"), text: $options.focus, axis: .vertical)
+                        .lineLimit(2...5)
+                } header: {
+                    Text(Loc.t("Odak (isteğe bağlı)"))
+                } footer: {
+                    Text(Loc.t("Neye ağırlık verilsin, kime göre anlatılsın, neyi atlasın; serbestçe yaz."))
+                }
+                voiceSection
+                engineSection
+            }
+            .navigationTitle(courseName.map { "\(options.kind.title) · \($0)" } ?? options.kind.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(Loc.t("Vazgeç")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(Loc.t("Oluştur")) { create() }
+                        .fontWeight(.bold)
+                        .disabled(selected.isEmpty || !engine.isAvailable(settings: settings))
+                }
+            }
+            .sheet(isPresented: $showVoices) {
+                VoiceSettingsView()
+            }
+            .onAppear {
+                if selected.isEmpty {
+                    let pdfs = candidates.filter { $0.kind == .pdf }
+                    let pick = pdfs.isEmpty ? Array(candidates.prefix(3)) : Array(pdfs.prefix(request.sectionID == nil ? 1 : 6))
+                    selected = Set(pick.map(\.id))
+                }
+            }
+        }
+    }
+
+    private func kindCard(_ kind: OverviewKind) -> some View {
+        let on = options.kind == kind
+        return Button {
+            options.kind = kind
+            if !OverviewFormat.options(for: kind).contains(options.format) { options.format = .explainer }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: kind.symbol)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(on ? .white : Theme.aiStart)
+                    .frame(width: 46, height: 46)
+                    .background(on ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(Theme.aiStart.opacity(0.12)),
+                                in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                Text(kind.title)
+                    .font(.headline)
+                Text(kind.blurb)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Theme.aiStart.opacity(0.08) : Color.clear))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(on ? Theme.aiStart : Color.primary.opacity(0.1), lineWidth: on ? 2 : 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sourcesSection: some View {
+        Section {
+            if candidates.isEmpty {
+                Text(request.sectionID == nil ? Loc.t("Kütüphanede kaynak yok. Önce bir PDF ekle.") : Loc.t("Bu derste kaynak yok. Önce derse PDF ekle."))
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(candidates) { note in
+                Button {
+                    if selected.contains(note.id) { selected.remove(note.id) } else if selected.count < 10 { selected.insert(note.id) }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: selected.contains(note.id) ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(selected.contains(note.id) ? Theme.ink : Color.secondary)
+                        Image(systemName: note.kind == .pdf ? "doc.richtext" : "book.closed")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(note.title)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Text(note.kind == .pdf ? Loc.t("PDF · {0} sayfa", "\(note.pageCount)") : Loc.t("El yazısı defter · {0} sayfa", "\(note.pageCount)"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        } header: {
+            Text(Loc.t("Kaynaklar · {0} seçili", "\(selected.count)"))
+        } footer: {
+            Text(Loc.t("En fazla 10 kaynak. El yazısı defterler cihazda okunup metin olarak eklenir."))
+        }
+    }
+
+    private var formatSection: some View {
+        Section(Loc.t("Biçim")) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(OverviewFormat.options(for: options.kind)) { format in
+                    let on = options.format == format
+                    Button {
+                        options.format = format
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: format.symbol)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(on ? Theme.ink : Color.secondary)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(format.title(for: options.kind))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text(format.detail(for: options.kind))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? Theme.ink.opacity(0.1) : Color.primary.opacity(0.04)))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(on ? Theme.ink : Color.clear, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var voiceSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: voices.engine == nil ? "speaker.slash.fill" : "person.wave.2.fill")
+                    .foregroundStyle(Theme.ai)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(voiceSummary)
+                        .font(.subheadline.weight(.semibold))
+                    Text(voiceHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(Loc.t("Ayarla")) { showVoices = true }
+                    .buttonStyle(.bordered)
+            }
+        } header: {
+            Text(Loc.t("Seslendirme"))
+        }
+        .id(voices.revision)
+    }
+
+    private var voiceSummary: String {
+        let first = voices.gender(host: 0).title
+        if options.kind == .audio { return first + " & " + voices.gender(host: 1).title }
+        return first
+    }
+
+    private var voiceHint: String {
+        switch voices.engine {
+        case .eleven: return "ElevenLabs · Multilingual v2"
+        case .openAI: return "OpenAI"
+        case nil: return Loc.t("Seslendirme için Ayarla'dan ElevenLabs anahtarını ekle.")
+        }
+    }
+
+    private var engineSection: some View {
+        Section {
+            Picker(Loc.t("Senaryoyu yazan"), selection: $engine) {
+                ForEach(StudioEngine.allCases) { e in
+                    Label(e.title + (e.isAvailable(settings: settings) ? "" : Loc.t(" (kullanılamıyor)")), systemImage: e.symbol).tag(e)
+                }
+            }
+        } header: {
+            Text(Loc.t("Yapay zekâ"))
+        } footer: {
+            if engine == .claude && !settings.hasAPIKey {
+                Text(Loc.t("Claude için Ayarlar › İsteğe bağlı bulut bölümünden API anahtarı ekle."))
+            } else if engine == .onDevice && !OnDeviceAI.isAvailable {
+                Text(OnDeviceAI.unavailableReason ?? "")
+            } else {
+                Text(engine.detail + (engine == .claude ? Loc.t(" Model: {0}.", "\(settings.model.title)") : ""))
+            }
+        }
+    }
+
+    private func create() {
+        let chosen = candidates.filter { selected.contains($0.id) }
+        guard !chosen.isEmpty else { return }
+        if let data = try? JSONEncoder().encode(options) {
+            UserDefaults.standard.set(data, forKey: Self.lastKey)
+        }
+        studio.start(options: options, sources: chosen, sectionID: request.sectionID, engine: engine,
+                     library: library, settings: settings)
+        dismiss()
+    }
+}
+
+/// A small title slide in each look.
+struct ThemePreview: View {
+    let theme: SlideTheme
+    let selected: Bool
+    @State private var image: UIImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.secondary.opacity(0.1))
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                }
+            }
+            .frame(width: 176, height: 99)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(selected ? Theme.ink : Color.primary.opacity(0.1), lineWidth: selected ? 3 : 1))
+            Text(theme.title)
+                .font(.caption.weight(.semibold))
+            Text(theme.detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .task {
+            image = await Self.render(theme)
+        }
+    }
+
+    private static let cache = NSCache<NSString, UIImage>()
+
+    static func render(_ theme: SlideTheme) async -> UIImage {
+        if let cached = cache.object(forKey: theme.rawValue as NSString) { return cached }
+        let image = await Task.detached(priority: .userInitiated) { () -> UIImage in
+            var options = OverviewOptions()
+            options.theme = theme
+            let scene = OverviewScene(layout: .title, title: Loc.t("Kalbin İletim Sistemi"), subtitle: Loc.t("Video özeti"),
+                                      narration: Loc.t("Örnek"), art: "art:heart")
+            let sample = Overview(title: Loc.t("Örnek"), sectionID: nil, sourceIDs: [], sourceTitles: [Loc.t("Kardiyoloji")], options: options,
+                                  language: .turkish, hosts: OverviewLanguage.turkish.hostNames, scenes: [scene])
+            let size = CGSize(width: 352, height: 198)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 2
+            return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+                SlideRenderer.poster(sample, size: size, in: ctx.cgContext)
+            }
+        }.value
+        cache.setObject(image, forKey: theme.rawValue as NSString)
+        return image
+    }
+}
+
+// MARK: - Progress and results
+
+struct JobRow: View {
+    @ObservedObject var job: StudioJob
+    @EnvironmentObject private var studio: StudioStore
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 4)
+                Circle()
+                    .trim(from: 0, to: CGFloat(max(0.02, job.progress)))
+                    .stroke(Theme.ai, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.3), value: job.progress)
+                Image(systemName: job.error == nil ? job.kind.symbol : "exclamationmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(job.error == nil ? Theme.aiStart : Color.red)
+            }
+            .frame(width: 46, height: 46)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(job.kind.title) · \(job.title)")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(job.error ?? job.phase)
+                    .font(.caption)
+                    .foregroundStyle(job.error == nil ? Color.secondary : Color.red)
+                    .lineLimit(3)
+            }
+            Spacer(minLength: 8)
+            if job.error == nil {
+                Text("%\(Int(job.progress * 100))")
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Button {
+                studio.dismiss(job)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(job.error == nil ? Loc.t("İptal et") : Loc.t("Kapat"))
+        }
+        .padding(14)
+        .glassCard(radius: 18)
+    }
+}
+
+struct OverviewCard: View {
+    let overview: Overview
+    @EnvironmentObject private var studio: StudioStore
+    @State private var image: UIImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.ai)
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                }
+                Image(systemName: "play.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 52, height: 52)
+                    .background(.black.opacity(0.45), in: Circle())
+            }
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(alignment: .bottomLeading) {
+                HStack(spacing: 5) {
+                    Image(systemName: overview.kind.symbol)
+                    Text(OverviewFormatting.duration(overview.timeline.total))
+                }
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.55), in: Capsule())
+                .padding(8)
+            }
+            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
+            Text(overview.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text("\(overview.options.format.title(for: overview.kind)) · \(overview.created.formatted(date: .abbreviated, time: .omitted))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .contentShape(Rectangle())
+        .task(id: overview.voiceSignature + overview.id.uuidString) {
+            image = await LibraryStore.loadImage(at: studio.thumbnailURL(for: overview.id))
+        }
+    }
+}
+
+struct OverviewGrid: View {
+    @EnvironmentObject private var studio: StudioStore
+    @EnvironmentObject private var library: LibraryStore
+    let overviews: [Overview]
+    let actions: LibraryActions
+    @State private var renaming: Overview?
+    @State private var renameText = ""
+    @State private var deleting: Overview?
+
+    private let columns = [GridItem(.adaptive(minimum: 240, maximum: 330), spacing: 20)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
+            ForEach(overviews) { overview in
+                Button {
+                    actions.play(overview)
+                } label: {
+                    OverviewCard(overview: overview)
+                }
+                .buttonStyle(PressableStyle())
+                .contextMenu {
+                    Button {
+                        actions.play(overview)
+                    } label: {
+                        Label(Loc.t("Oynat"), systemImage: "play.fill")
+                    }
+                    Button {
+                        renameText = overview.title
+                        renaming = overview
+                    } label: {
+                        Label(Loc.t("Yeniden adlandır"), systemImage: "pencil")
+                    }
+                    Button {
+                        studio.revoice(overview, library: library)
+                    } label: {
+                        Label(Loc.t("Seçili seslerle yeniden seslendir"), systemImage: "person.wave.2")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        deleting = overview
+                    } label: {
+                        Label(Loc.t("Sil"), systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .alert(Loc.t("Yeniden adlandır"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(Loc.t("Ad"), text: $renameText)
+            Button(Loc.t("Kaydet")) {
+                if let o = renaming { studio.rename(o.id, to: renameText) }
+                renaming = nil
+            }
+            Button(Loc.t("Vazgeç"), role: .cancel) { renaming = nil }
+        }
+        .confirmationDialog(Loc.t("Bu özet silinsin mi?"), isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button(Loc.t("Sil"), role: .destructive) {
+                if let o = deleting { studio.delete(o.id) }
+                deleting = nil
+            }
+            Button(Loc.t("Vazgeç"), role: .cancel) { deleting = nil }
+        }
+    }
+}
+
+/// The two big "make" cards.
+struct StudioCreateCards: View {
+    let sectionID: UUID?
+    let actions: LibraryActions
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ForEach(OverviewKind.allCases) { kind in
+                Button {
+                    actions.makeOverview(sectionID, kind, [])
+                } label: {
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: kind.symbol)
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 54, height: 54)
+                            .background(Theme.ai, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(kind.title)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text(kind.blurb)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(Theme.aiStart)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
+                    .glassCard(radius: 20)
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+}
+
+/// A banner for an empty studio.
+struct StudioPromo: View {
+    let actions: LibraryActions
+    let sectionID: UUID?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(Loc.t("STÜDYO"), systemImage: "sparkles")
+                    .font(.caption.weight(.heavy))
+                    .foregroundStyle(.white.opacity(0.85))
+                Text(Loc.t("PDF'lerinden video ve sesli özet"))
+                    .font(.title2.weight(.bold))
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.white)
+                Text(Loc.t("Slaytlar, kaynaktaki şekiller, Türkçe ya da İngilizce doğal anlatım, altyazı ve ara sorular. Dinlerken durdurup soru da sorabilirsin."))
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    ForEach(OverviewKind.allCases) { kind in
+                        Button {
+                            actions.makeOverview(sectionID, kind, [])
+                        } label: {
+                            Label(kind.title, systemImage: kind.symbol)
+                                .font(.subheadline.weight(.bold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(.white, in: Capsule())
+                                .foregroundStyle(Theme.aiStart)
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+                .padding(.top, 4)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(.system(size: 96, weight: .bold))
+                .foregroundStyle(.white.opacity(0.22))
+        }
+        .padding(24)
+        .background(Theme.ai, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .shadow(color: Theme.aiStart.opacity(0.35), radius: 16, y: 8)
+    }
+}
+
+/// The studio part of a course.
+struct StudioSection: View {
+    @EnvironmentObject private var studio: StudioStore
+    let sectionID: UUID
+    let tint: Color
+    let actions: LibraryActions
+
+    var body: some View {
+        let overviews = studio.overviews(in: sectionID)
+        let jobs = studio.jobs(in: sectionID)
+        VStack(alignment: .leading, spacing: 20) {
+            StudioCreateCards(sectionID: sectionID, actions: actions)
+            ForEach(jobs) { job in
+                JobRow(job: job)
+            }
+            if overviews.isEmpty && jobs.isEmpty {
+                Text(Loc.t("Bu dersin kaynaklarından ilk özetini oluştur. Hazır olunca burada ve Stüdyo'da görünür."))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if !overviews.isEmpty {
+                SectionTitle(title: Loc.t("Özetler"))
+                OverviewGrid(overviews: overviews, actions: actions)
+            }
+        }
+    }
+}
+
+/// Every overview, by course.
+struct StudioPane: View {
+    @EnvironmentObject private var studio: StudioStore
+    @EnvironmentObject private var library: LibraryStore
+    let actions: LibraryActions
+    let showToggle: Bool
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                PaneHeader(title: Loc.t("Stüdyo"), subtitle: Loc.t("Kaynaklarından video ve sesli özetler"), showToggle: showToggle, actions: actions) {
+                    NewMenu(actions: actions, section: nil)
+                }
+                StudioCreateCards(sectionID: nil, actions: actions)
+                ForEach(studio.jobs) { job in
+                    JobRow(job: job)
+                }
+                if studio.overviews.isEmpty && studio.jobs.isEmpty {
+                    StudioPromo(actions: actions, sectionID: nil)
+                }
+                ForEach(groups, id: \.key) { group in
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack(spacing: 10) {
+                            if let section = group.section {
+                                Image(systemName: section.symbol)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(section.color.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                            SectionTitle(title: group.section?.name ?? Loc.t("Ders dışı"))
+                        }
+                        OverviewGrid(overviews: group.overviews, actions: actions)
+                    }
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 40)
+        }
+    }
+
+    private struct CourseGroup {
+        let key: String
+        let section: NoteSection?
+        let overviews: [Overview]
+    }
+
+    private var groups: [CourseGroup] {
+        var out: [CourseGroup] = []
+        for section in library.sections {
+            let list = studio.overviews(in: section.id)
+            if !list.isEmpty { out.append(CourseGroup(key: section.id.uuidString, section: section, overviews: list)) }
+        }
+        let known = Set(library.sections.map(\.id))
+        let loose = studio.overviews.filter { o in o.sectionID.map { !known.contains($0) } ?? true }
+        if !loose.isEmpty { out.append(CourseGroup(key: "loose", section: nil, overviews: loose)) }
+        return out
+    }
+}

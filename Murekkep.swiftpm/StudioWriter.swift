@@ -1,0 +1,651 @@
+import Foundation
+import NaturalLanguage
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+// MARK: - Sources
+
+/// The text of the chosen sources (PDF text layer, handwriting read on the device).
+struct StudioMaterial {
+    struct Item {
+        var noteID: UUID
+        var title: String
+        var kind: NoteKind
+        var pageCount: Int
+        var pdfURL: URL?
+        /// Text with page marks ("[s. 3]").
+        var text: String
+        var claudeFileID: String?
+        var claudeFileUploaded: Date?
+    }
+
+    var items: [Item]
+
+    var allText: String { items.map(\.text).joined(separator: "\n\n") }
+
+    var sample: String { String(allText.prefix(2000)) }
+
+    static func gather(_ notes: [NoteMeta], library: LibraryStore) async -> StudioMaterial {
+        var items: [Item] = []
+        for note in notes {
+            let pdf: URL? = note.kind == .pdf ? library.pdfURL(for: note.id) : nil
+            let pages = await SectionReader.pages(pdf: pdf, ink: library.inkURL(for: note.id), maxPages: 120)
+            let text = pages.map { page in
+                "[s. \(page.page + 1)\(page.fromOCR ? ", el yazısı" : "")]\n" + page.text
+            }.joined(separator: "\n\n")
+            items.append(Item(noteID: note.id, title: note.title, kind: note.kind, pageCount: note.pageCount, pdfURL: pdf,
+                              text: text, claudeFileID: note.claudeFileID, claudeFileUploaded: note.claudeFileUploaded))
+        }
+        return StudioMaterial(items: items)
+    }
+}
+
+enum StudioWriterError: LocalizedError {
+    case noText
+    case unreadableScript
+    case needsKey
+    case unavailable(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .noText: return Loc.t("Seçilen kaynaklarda okunabilir metin bulunamadı. Taranmış PDF'ler için Claude'u seç.")
+        case .unreadableScript: return Loc.t("Senaryo okunamadı. Bir kez daha dene; olmazsa süreyi kısalt.")
+        case .needsKey: return Loc.t("Claude için Ayarlar'dan API anahtarı ekle ya da başka bir motor seç.")
+        case let .unavailable(reason): return reason
+        }
+    }
+}
+
+// MARK: - Writer
+
+enum StudioWriter {
+    typealias WriteProgress = @MainActor (Double, String?) -> Void
+
+    @MainActor
+    static func write(options: OverviewOptions, material: StudioMaterial, engine: StudioEngine,
+                      library: LibraryStore, settings: AppSettings, progress: @escaping WriteProgress) async throws -> Overview {
+        let language = resolveLanguage(options, material: material)
+        switch engine {
+        case .claude:
+            return try await claude(options: options, material: material, language: language,
+                                    library: library, settings: settings, progress: progress)
+        case .onDevice:
+            do {
+                return try await onDevice(options: options, material: material, language: language, progress: progress)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // The small model can refuse or not speak the language: the simple writer still works.
+                progress(0.9, Loc.t("Cihazdaki model olmadı, çevrimdışı yazılıyor…"))
+                return try offline(options: options, material: material, language: language)
+            }
+        case .offline:
+            return try offline(options: options, material: material, language: language)
+        }
+    }
+
+    static func resolveLanguage(_ options: OverviewOptions, material: StudioMaterial) -> OverviewLanguage {
+        switch options.language {
+        case .turkish, .english:
+            return options.language
+        case .auto:
+            let focus = options.focus.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detected = focus.count >= 12 ? AnswerLanguage.detect(focus, context: material.sample) : AnswerLanguage.detect(material.sample)
+            return detected == .english ? .english : .turkish
+        }
+    }
+
+    static func directive(_ language: OverviewLanguage) -> String {
+        (language.isEnglish ? AnswerLanguage.english : AnswerLanguage.turkish).directive
+    }
+
+    private static func newOverview(_ options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
+                                    title: String, engine: String) -> Overview {
+        Overview(title: title, sectionID: nil, sourceIDs: material.items.map(\.noteID),
+                 sourceTitles: material.items.map(\.title), options: options, language: language,
+                 hosts: language.hostNames, engine: engine)
+    }
+
+    private static func fallbackTitle(_ material: StudioMaterial) -> String {
+        material.items.count == 1 ? material.items[0].title : material.items.map(\.title).prefix(2).joined(separator: " · ")
+    }
+
+    // MARK: Claude
+
+    @MainActor
+    private static func claude(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
+                               library: LibraryStore, settings: AppSettings, progress: @escaping WriteProgress) async throws -> Overview {
+        guard let key = settings.apiKey else { throw StudioWriterError.needsKey }
+        var forceUpload = false
+        for attempt in 0..<2 {
+            let sources = try await claudeSources(material, library: library, apiKey: key, textOnly: settings.textOnlyPDF,
+                                                  forceUpload: forceUpload, progress: progress)
+            let prompt = options.kind == .video
+                ? StudioPrompts.video(options, language: language, sources: material.items.map(\.title))
+                : StudioPrompts.audio(options, language: language, sources: material.items.map(\.title))
+            let request = ClaudeRequest(model: settings.model.rawValue, effort: settings.effort.rawValue, maxTokens: 32_000,
+                                        system: StudioPrompts.system + "\n" + directive(language),
+                                        context: .sources(sources),
+                                        contextNote: "Kaynaklar: " + material.items.enumerated().map { "\($0.offset + 1). \($0.element.title)" }.joined(separator: "; "),
+                                        turns: [ClaudeTurn(role: .user, text: prompt, imageJPEG: nil)])
+            let words = options.length.minutes * language.wordsPerMinute
+            let expected = Double(max(2000, words * 10))
+            progress(0.3, Loc.t("Claude senaryoyu yazıyor…"))
+            do {
+                let reply = try await ClaudeClient.collect(request, apiKey: key) { chars in
+                    progress(min(0.98, 0.3 + 0.68 * Double(chars) / expected), nil)
+                }
+                var overview = try StudioScriptParser.overview(from: reply, options: options, language: language,
+                                                               material: material, engine: "Claude · \(settings.model.title)")
+                if overview.title.isEmpty { overview.title = fallbackTitle(material) }
+                return overview
+            } catch let error as ClaudeAPIError where error.isMissingFile && attempt == 0 {
+                // An upload expired: send the PDFs again.
+                forceUpload = true
+                continue
+            }
+        }
+        throw StudioWriterError.unreadableScript
+    }
+
+    @MainActor
+    private static func claudeSources(_ material: StudioMaterial, library: LibraryStore, apiKey: String, textOnly: Bool,
+                                      forceUpload: Bool, progress: @escaping WriteProgress) async throws -> [ClaudeSource] {
+        var out: [ClaudeSource] = []
+        // Claude reads up to about 100 PDF pages with their pictures in one request; the rest go as text.
+        var visualPages = 0
+        for (i, item) in material.items.enumerated() {
+            progress(0.25 * Double(i) / Double(max(material.items.count, 1)), Loc.t("Kaynaklar Claude'a gönderiliyor…"))
+            if let url = item.pdfURL, !textOnly, visualPages + item.pageCount <= 100 {
+                var id = item.claudeFileID
+                let fresh = item.claudeFileUploaded.map { Date().timeIntervalSince($0) < 25 * 24 * 3600 } ?? false
+                if id == nil || !fresh || forceUpload {
+                    let data = try await Task.detached(priority: .userInitiated) { try Data(contentsOf: url) }.value
+                    let uploaded = try await ClaudeClient.uploadPDF(data, filename: item.title, apiKey: apiKey)
+                    library.setClaudeFile(item.noteID, id: uploaded)
+                    id = uploaded
+                }
+                visualPages += item.pageCount
+                out.append(ClaudeSource(title: item.title, fileID: id))
+            } else {
+                let text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { continue }
+                out.append(ClaudeSource(title: item.title, fileID: nil, text: String(text.prefix(180_000))))
+            }
+        }
+        if out.isEmpty { throw StudioWriterError.noText }
+        return out
+    }
+
+    // MARK: On the device
+
+    @MainActor
+    private static func onDevice(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
+                                 progress: @escaping WriteProgress) async throws -> Overview {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            let chunks = TextChunks.pick(material.allText, count: max(3, options.length.scenes.lowerBound - 2), size: 1600)
+            guard !chunks.isEmpty else { throw StudioWriterError.noText }
+            var overview = newOverview(options, material: material, language: language, title: fallbackTitle(material),
+                                       engine: Loc.t("Cihazda · Apple Intelligence"))
+            let instructions = "Sen bir ders anlatıcısısın. Yalnızca verilen metne dayan, uydurma. " + directive(language)
+            var titles: [String] = []
+            for (i, chunk) in chunks.enumerated() {
+                try Task.checkCancellation()
+                progress(Double(i) / Double(chunks.count), Loc.t("Cihazdaki model yazıyor ({0}/{1})…", "\(i + 1)", "\(chunks.count)"))
+                if options.kind == .video {
+                    let prompt = "\(options.format.prompt(for: .video)) \(options.level.prompt) \(focusLine(options))\nAşağıdaki ders metninden bir video slaytı hazırla. Anlatım seslendirilecek: doğal konuşma dili, sembolleri okunuşuyla yaz, markdown kullanma.\n\nMetin:\n\(chunk)"
+                    let draft = try await AppleStudioBridge.scene(instructions: instructions, prompt: prompt)
+                    let scene = OverviewScene(layout: .bullets, title: draft.title, bullets: Array(draft.bullets.prefix(4)),
+                                              narration: draft.narration)
+                    titles.append(draft.title)
+                    overview.scenes.append(scene)
+                } else {
+                    let prompt = "\(options.format.prompt(for: .audio)) \(options.level.prompt) \(focusLine(options))\nİki sunucu (\(language.hostNames[0]) = 0, \(language.hostNames[1]) = 1) aşağıdaki metni doğal bir sohbetle anlatsın. Seslendirilecek: markdown yok, sembolleri okunuşuyla yaz.\n\nMetin:\n\(chunk)"
+                    let draft = try await AppleStudioBridge.dialogue(instructions: instructions, prompt: prompt)
+                    var first = true
+                    for line in draft.lines where !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        let chapter = first ? TextChunks.heading(in: chunk) ?? (language.isEnglish ? "Part \(i + 1)" : "Bölüm \(i + 1)") : nil
+                        overview.lines.append(DialogueLine(host: min(max(line.host, 0), 1), text: line.text, chapter: chapter))
+                        first = false
+                    }
+                }
+            }
+            frame(&overview, titles: titles, language: language)
+            guard !overview.segmentTexts.isEmpty else { throw StudioWriterError.unreadableScript }
+            return overview
+        }
+        #endif
+        throw StudioWriterError.unavailable(OnDeviceAI.unavailableReason ?? Loc.t("Cihazdaki model kullanılamıyor."))
+    }
+
+    private static func focusLine(_ options: OverviewOptions) -> String {
+        let f = options.focus.trimmingCharacters(in: .whitespacesAndNewlines)
+        return f.isEmpty ? "" : "Odak: \(f)."
+    }
+
+    /// Opening and closing for the scripts written piece by piece.
+    private static func frame(_ overview: inout Overview, titles: [String], language: OverviewLanguage) {
+        let en = language.isEnglish
+        let topics = titles.prefix(4).joined(separator: ", ")
+        if overview.kind == .video {
+            let intro = OverviewScene(layout: .title, title: overview.title,
+                                      subtitle: en ? "Video overview" : "Video özeti",
+                                      narration: en ? "In this overview we walk through \(topics). Let's begin."
+                                                    : "Bu özette \(topics) konularının üzerinden geçeceğiz. Hadi başlayalım.",
+                                      art: "sf:sparkles")
+            let outro = OverviewScene(layout: .summary, title: en ? "Summary" : "Özet", bullets: Array(titles.prefix(6)),
+                                      narration: en ? "To sum up, we covered \(topics). Go back to any part you want to repeat."
+                                                    : "Özetle \(topics) konularını gördük. Tekrar etmek istediğin bölüme dönebilirsin.")
+            overview.scenes.insert(intro, at: 0)
+            overview.scenes.append(outro)
+        } else {
+            let a = en ? "Today we're looking at \(overview.title). There's a lot in here, so let's get into it."
+                       : "Bugün \(overview.title) üzerine konuşacağız. Konuşacak çok şey var, hemen başlayalım."
+            overview.lines.insert(DialogueLine(host: 0, text: a, chapter: en ? "Intro" : "Giriş"), at: 0)
+            let z = en ? "That's a good place to stop. Think about which part you'd explain to a friend first."
+                       : "Burada toparlayalım. Bir arkadaşına anlatsan ilk hangi kısmı anlatırdın, bir düşün."
+            overview.lines.append(DialogueLine(host: 1, text: z, chapter: en ? "Wrap-up" : "Kapanış"))
+        }
+    }
+
+    // MARK: Offline
+
+    private static func offline(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage) throws -> Overview {
+        let text = material.allText
+        let chunks = TextChunks.pick(text, count: max(3, options.length.scenes.lowerBound - 2), size: 1400)
+        guard !chunks.isEmpty else { throw StudioWriterError.noText }
+        let weights = TextChunks.wordWeights(text)
+        var overview = newOverview(options, material: material, language: language, title: fallbackTitle(material),
+                                   engine: Loc.t("Çevrimdışı"))
+        var titles: [String] = []
+        let en = language.isEnglish
+        for (i, chunk) in chunks.enumerated() {
+            let best = TextChunks.keySentences(chunk, weights: weights, count: 3)
+            guard !best.isEmpty else { continue }
+            let title = TextChunks.heading(in: chunk) ?? TextChunks.shorten(best[0], words: 6)
+            titles.append(title)
+            if options.kind == .video {
+                overview.scenes.append(OverviewScene(layout: .bullets, title: title,
+                                                     bullets: best.map { TextChunks.shorten($0, words: 13) },
+                                                     narration: best.joined(separator: " ")))
+            } else {
+                overview.lines.append(DialogueLine(host: 0, text: en ? "Let's look at \(title)." : "\(title) konusuna bakalım.",
+                                                   chapter: title))
+                for (k, sentence) in best.enumerated() {
+                    overview.lines.append(DialogueLine(host: (k + 1) % 2, text: sentence, chapter: nil))
+                }
+            }
+            if i > 40 { break }
+        }
+        frame(&overview, titles: titles, language: language)
+        guard !overview.segmentTexts.isEmpty else { throw StudioWriterError.noText }
+        return overview
+    }
+}
+
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+@Generable
+struct StudioSceneDraft {
+    @Guide(description: "Slayt başlığı, en fazla 7 kelime")
+    var title: String
+    @Guide(description: "Slayttaki 3 kısa madde, her biri en fazla 12 kelime")
+    var bullets: [String]
+    @Guide(description: "Bu slaytın sesli anlatımı: 3-5 cümle, sıcak ve doğal konuşma dili")
+    var narration: String
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct StudioLineDraft {
+    @Guide(description: "Konuşan sunucu: 0 ya da 1")
+    var host: Int
+    @Guide(description: "Sunucunun söylediği 1-3 cümle")
+    var text: String
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct StudioDialogueDraft {
+    @Guide(description: "Sırayla konuşan iki sunucunun 4-8 satırı")
+    var lines: [StudioLineDraft]
+}
+
+@available(iOS 26.0, *)
+enum AppleStudioBridge {
+    static func scene(instructions: String, prompt: String) async throws -> StudioSceneDraft {
+        let session = LanguageModelSession(instructions: instructions)
+        let response = try await session.respond(to: prompt, generating: StudioSceneDraft.self)
+        return response.content
+    }
+
+    static func dialogue(instructions: String, prompt: String) async throws -> StudioDialogueDraft {
+        let session = LanguageModelSession(instructions: instructions)
+        let response = try await session.respond(to: prompt, generating: StudioDialogueDraft.self)
+        return response.content
+    }
+}
+#endif
+
+// MARK: - Prompts
+
+enum StudioPrompts {
+    static let system = """
+    Sen "Mürekkep" not uygulamasının stüdyosunda çalışan ödüllü bir eğitim içeriği yazarı ve ders anlatıcısısın. Öğrencinin kendi kaynaklarından (ders PDF'leri, el yazısı notlar) sürükleyici, doğru ve akılda kalıcı video ve sesli özetler yazarsın.
+    - Bilgiyi kaynaklara dayandır, uydurma. Kaynakta olmayan genel bilgiyi kısa tut.
+    - İyi bir hoca gibi anlat: merak uyandır, örnek ve benzetme kullan, önemli yerleri vurgula, sonunda toparla.
+    - Yalnızca istenen JSON'u yaz; öncesinde ya da sonrasında hiçbir şey yazma.
+    """
+
+    private static func common(_ options: OverviewOptions, language: OverviewLanguage, sources: [String]) -> String {
+        let words = options.length.minutes * language.wordsPerMinute
+        let focus = options.focus.trimmingCharacters(in: .whitespacesAndNewlines)
+        return """
+        Ayarlar:
+        - Biçim: \(options.format.prompt(for: options.kind))
+        - Süre: yaklaşık \(options.length.minutes) dakika; toplam seslendirme yaklaşık \(words) kelime.
+        - Seviye: \(options.level.prompt)
+        - Odak: \(focus.isEmpty ? "kaynakların en önemli konuları" : focus)
+        - Dil: \(language.isEnglish ? "İngilizce (English)" : "Türkçe")
+        - Kaynaklar: \(sources.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "; "))
+
+        Seslendirme kuralları (narration ve text alanları sesli okunacak):
+        - Doğal, sıcak, akıcı konuşma dili; kısa ve orta uzunlukta cümleler.
+        - Markdown, emoji, madde işareti, parantez içi kaynak etiketi kullanma.
+        - Sembol ve formülleri okunuşuyla yaz ("x kare", "delta G", "yüzde kırk", "integral"); kısaltmaları ilk geçtiği yerde aç.
+        """
+    }
+
+    static func video(_ options: OverviewOptions, language: OverviewLanguage, sources: [String]) -> String {
+        let r = options.length.scenes
+        return """
+        GÖREV: Yukarıdaki kaynaklardan bir VİDEO ÖZETİ senaryosu yaz. Uygulama her sahneyi bir slayta ve seslendirmeye çevirecek.
+
+        \(common(options, language: language, sources: sources))
+
+        Sahne kuralları:
+        - \(r.lowerBound)–\(r.upperBound) sahne. İlk sahne "title" düzeninde, dikkat çekici bir açılışla; son sahne "summary" düzeninde 4-6 maddelik toparlama.
+        - Her sahnenin narration'ı slaytı okumaz, slaytı tamamlar ve açıklar (sahne başına 40-120 kelime).
+        - Slayt metinleri kısa: başlık en fazla 7 kelime, madde en fazla 12 kelime, en fazla 5 madde. Slaytlarda sembol ve formül kullanabilirsin (ΔG, x², →).
+        - Düzenleri çeşitlendir; aynı düzeni art arda üçten fazla kullanma.
+        - Kaynaklardaki önemli şekil, tablo, grafik ve çizimleri "figure" düzeniyle göster. Kaynak ve sayfa numarası doğru olmalı; emin değilsen figure kullanma.
+
+        Düzenler (layout) ve alanları:
+        - "title": title, subtitle
+        - "bullets": title, bullets (3-5)
+        - "figure": title, figure {"source": kaynak no (1'den), "page": sayfa no (1'den), "box": [x, y, genişlik, yükseklik] sayfanın 0-1 oranları, sol üst köşeden; şeklin yerini bilmiyorsan box yazma}, bullets (0-2 kısa not)
+        - "definition": term, definition (1-2 cümle)
+        - "compare": title, left {"title": "...", "items": [...]}, right {"title": "...", "items": [...]}
+        - "steps": title, bullets (3-5 adım, sırayla)
+        - "quote": title (kısa etiket), subtitle (vurgulanacak tek cümle)
+        - "quiz": title, subtitle (soru), choices (4 şık), answer (doğru şıkkın 0'dan başlayan indeksi). narration'da soruyu sor, "Bir düşün…" de, sonra cevabı ve nedenini açıkla.
+        - "summary": title, bullets (4-6)
+        İsteğe bağlı "art": slayta uygun bir çizim adı: heart, lungs, kidney, spleen, liver, stomach, brain, atom, flask, bulb, star, check, warning, question; ya da bir SF Symbols adı "sf:" önekiyle (ör. "sf:waveform.path.ecg").
+
+        ÇIKTI (yalnızca geçerli JSON):
+        {"title": "videonun başlığı", "scenes": [{"layout": "title", "title": "...", "subtitle": "...", "narration": "...", "art": "..."}, ...]}
+        """
+    }
+
+    static func audio(_ options: OverviewOptions, language: OverviewLanguage, sources: [String]) -> String {
+        let a = language.hostNames[0]
+        let b = language.hostNames[1]
+        return """
+        GÖREV: Yukarıdaki kaynaklardan iki sunuculu bir SESLİ ÖZET (podcast) metni yaz.
+
+        \(common(options, language: language, sources: sources))
+
+        Sunucular: \(a) (host 0) sohbeti yönlendirir ve konuyu iyi bilir; \(b) (host 1) zeki ve meraklı: soru sorar, örnek verir, gerektiğinde itiraz eder.
+        Sohbet kuralları:
+        - Gerçek bir sohbet gibi: kısa tepkiler ("Evet, kesinlikle.", "Dur bir saniye…", "Bu çok ilginç.") ama abartmadan. Bir satır en fazla 3-4 cümle; monolog yok.
+        - Kendinizi ya da programı tanıtmayın; doğrudan merak uyandıran bir girişle başlayın.
+        - Konuyu bölümlere ayırın; bir bölümün ilk satırına kısa bir "chapter" başlığı koyun.
+        - Kapanışta kısa bir toparlama ve dinleyiciye bir düşünme sorusu.
+
+        ÇIKTI (yalnızca geçerli JSON):
+        {"title": "bölümün başlığı", "lines": [{"host": 0, "text": "...", "chapter": "Giriş"}, {"host": 1, "text": "..."}, ...]}
+        """
+    }
+
+    /// For questions asked in the middle of an overview.
+    static func question(_ question: String, overview: Overview, position: Int) -> String {
+        let segments = overview.segmentTexts
+        let lo = max(0, position - 2)
+        let hi = min(segments.count, position + 2)
+        let near = lo < hi ? segments[lo..<hi].joined(separator: "\n") : ""
+        return """
+        Kullanıcı "\(overview.title)" özetini dinlerken durdu ve bir soru sordu. Kısa (3-6 cümle), sohbet havasında ve seslendirmeye uygun cevap ver; markdown kullanma, sembolleri okunuşuyla yaz. Cevabın sonunda özetin kaldığı yere bağla.
+
+        Özetin şu an çalan kısmı:
+        \(near)
+
+        Soru: \(question)
+        """
+    }
+}
+
+// MARK: - Parsing
+
+enum StudioScriptParser {
+    static func overview(from reply: String, options: OverviewOptions, language: OverviewLanguage,
+                         material: StudioMaterial, engine: String) throws -> Overview {
+        guard let obj = json(from: reply) else { throw StudioWriterError.unreadableScript }
+        var overview = Overview(title: str(obj["title"]) ?? "", sectionID: nil, sourceIDs: material.items.map(\.noteID),
+                                sourceTitles: material.items.map(\.title), options: options, language: language,
+                                hosts: language.hostNames, engine: engine)
+        if options.kind == .video {
+            overview.scenes = scenes(obj["scenes"], sourceCount: material.items.count)
+        } else {
+            overview.lines = lines(obj["lines"], hosts: language.hostNames)
+        }
+        guard !overview.segmentTexts.isEmpty else { throw StudioWriterError.unreadableScript }
+        return overview
+    }
+
+    static func json(from text: String) -> [String: Any]? {
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end else { return nil }
+        if let obj = parse(String(text[start...end])) { return obj }
+        // A reply cut off at the length limit: close it after the last complete scene or line.
+        let body = text[start...]
+        var limit = body.endIndex
+        for _ in 0..<60 {
+            guard let close = body[..<limit].lastIndex(of: "}") else { break }
+            if let obj = parse(String(body[...close]) + "]}") { return obj }
+            limit = close
+        }
+        return nil
+    }
+
+    private static func parse(_ s: String) -> [String: Any]? {
+        guard let data = s.data(using: .utf8) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    static func str(_ v: Any?) -> String? {
+        if let s = v as? String {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        if let n = v as? NSNumber { return n.stringValue }
+        return nil
+    }
+
+    static func strs(_ v: Any?) -> [String] {
+        (v as? [Any])?.compactMap { str($0) } ?? []
+    }
+
+    static func int(_ v: Any?) -> Int? {
+        if let n = v as? NSNumber { return n.intValue }
+        if let s = v as? String { return Int(s.trimmingCharacters(in: .whitespaces)) }
+        return nil
+    }
+
+    static func double(_ v: Any?) -> Double? {
+        if let n = v as? NSNumber { return n.doubleValue }
+        if let s = v as? String { return Double(s.trimmingCharacters(in: .whitespaces)) }
+        return nil
+    }
+
+    private static func column(_ v: Any?) -> SceneColumn? {
+        guard let o = v as? [String: Any] else { return nil }
+        let items = strs(o["items"])
+        guard let title = str(o["title"]), !items.isEmpty else { return nil }
+        return SceneColumn(title: title, items: Array(items.prefix(5)))
+    }
+
+    static func art(_ v: Any?) -> String? {
+        guard var name = str(v) else { return nil }
+        if name.hasPrefix("art:") { name = String(name.dropFirst(4)) }
+        if name.hasPrefix("sf:") { return name }
+        if StickerArt.library[name] != nil { return "art:" + name }
+        if name.contains(".") || name.allSatisfy({ $0.isLetter || $0.isNumber }) { return "sf:" + name }
+        return nil
+    }
+
+    static func scenes(_ v: Any?, sourceCount: Int) -> [OverviewScene] {
+        guard let list = v as? [Any] else { return [] }
+        var out: [OverviewScene] = []
+        for item in list {
+            guard let o = item as? [String: Any], let narration = str(o["narration"]) else { continue }
+            var layout = SceneLayout(rawValue: (str(o["layout"]) ?? "").lowercased()) ?? .bullets
+            let title = str(o["title"]) ?? ""
+            var scene = OverviewScene(layout: layout, title: title, subtitle: str(o["subtitle"]),
+                                      bullets: Array(strs(o["bullets"]).prefix(6)), narration: narration,
+                                      term: str(o["term"]), definition: str(o["definition"]),
+                                      left: column(o["left"]), right: column(o["right"]),
+                                      choices: Array(strs(o["choices"]).prefix(4)), answer: int(o["answer"]),
+                                      figure: nil, art: art(o["art"]))
+            if let f = o["figure"] as? [String: Any], let source = int(f["source"]), let page = int(f["page"]),
+               source >= 1, source <= sourceCount, page >= 1 {
+                var box: [Double]?
+                if let raw = f["box"] as? [Any] {
+                    let values = raw.compactMap { double($0) }
+                    if values.count == 4, values.allSatisfy({ $0 >= 0 && $0 <= 1.0001 }), values[2] > 0.05, values[3] > 0.05 {
+                        box = values
+                    }
+                }
+                scene.figure = FigureRef(source: source - 1, page: page - 1, box: box)
+            }
+            // A layout without what it needs falls back to a plain list.
+            switch layout {
+            case .figure where scene.figure == nil,
+                 .compare where scene.left == nil || scene.right == nil,
+                 .quiz where scene.choices.count < 2,
+                 .definition where scene.term == nil || scene.definition == nil:
+                layout = scene.bullets.isEmpty ? .title : .bullets
+            case .quote where scene.subtitle == nil:
+                layout = .title
+            default:
+                break
+            }
+            if layout == .quiz {
+                if let a = scene.answer {
+                    scene.answer = min(max(a, 0), scene.choices.count - 1)
+                } else {
+                    // Without the right answer the choices are only a list.
+                    layout = .bullets
+                    if scene.bullets.isEmpty { scene.bullets = scene.choices }
+                    if let q = scene.subtitle, scene.title.isEmpty { scene.title = q }
+                }
+            }
+            scene.layout = layout
+            if scene.title.isEmpty { scene.title = scene.term ?? "" }
+            out.append(scene)
+        }
+        return out
+    }
+
+    static func lines(_ v: Any?, hosts: [String]) -> [DialogueLine] {
+        guard let list = v as? [Any] else { return [] }
+        var out: [DialogueLine] = []
+        for item in list {
+            guard let o = item as? [String: Any], let text = str(o["text"]) else { continue }
+            var host = int(o["host"]) ?? 0
+            if let s = str(o["host"] ?? o["speaker"]), Int(s) == nil {
+                // "Ekin", "B", "host1"…
+                let lower = s.lowercased()
+                let second = hosts.count > 1 ? hosts[1].lowercased() : "b"
+                host = (lower == second || lower == "b" || lower.hasSuffix("1")) ? 1 : 0
+            }
+            out.append(DialogueLine(host: min(max(host, 0), 1), text: text, chapter: str(o["chapter"])))
+        }
+        return out
+    }
+}
+
+// MARK: - Plain text helpers (on-device and offline writers)
+
+enum TextChunks {
+    /// `count` pieces of about `size` characters, spread evenly over the text.
+    static func pick(_ text: String, count: Int, size: Int) -> [String] {
+        let paragraphs = text.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count > 30 }
+        var pieces: [String] = []
+        var current = ""
+        for p in paragraphs {
+            if current.count + p.count > size, !current.isEmpty {
+                pieces.append(current)
+                current = ""
+            }
+            current += (current.isEmpty ? "" : "\n\n") + String(p.prefix(size * 2))
+        }
+        if current.count > 60 { pieces.append(current) }
+        guard pieces.count > count else { return pieces }
+        let step = Double(pieces.count) / Double(count)
+        return (0..<count).map { pieces[min(pieces.count - 1, Int(Double($0) * step))] }
+    }
+
+    /// A short line that looks like a heading ("2.3 Kalbin iletim sistemi").
+    static func heading(in chunk: String) -> String? {
+        for raw in chunk.components(separatedBy: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("[s.") { continue }
+            guard line.count >= 4, line.count <= 70, let last = line.last, !".,;:".contains(last),
+                  line.split(separator: " ").count <= 9, line.contains(where: \.isLetter) else { continue }
+            return line
+        }
+        return nil
+    }
+
+    static func wordWeights(_ text: String) -> [String: Double] {
+        var counts: [String: Double] = [:]
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = text
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let w = text[range].lowercased()
+            if w.count > 3 { counts[w, default: 0] += 1 }
+            return true
+        }
+        return counts
+    }
+
+    /// The most informative sentences of a chunk, in reading order.
+    static func keySentences(_ chunk: String, weights: [String: Double], count: Int) -> [String] {
+        let clean = chunk.replacingOccurrences(of: "\\[s\\.[^\\]]*\\]", with: " ", options: .regularExpression)
+        var sentences: [(index: Int, text: String, score: Double)] = []
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = clean
+        var i = 0
+        tokenizer.enumerateTokens(in: clean.startIndex..<clean.endIndex) { range, _ in
+            let s = clean[range].replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            if s.count >= 40, s.count <= 280 {
+                let words = s.lowercased().split { !$0.isLetter }.map(String.init).filter { $0.count > 3 }
+                let score = words.reduce(0.0) { $0 + log(1 + (weights[$1] ?? 0)) } / Double(max(words.count, 1)).squareRoot()
+                sentences.append((index: i, text: s, score: score))
+            }
+            i += 1
+            return true
+        }
+        let best = sentences.sorted { $0.score > $1.score }.prefix(count)
+        return best.sorted { $0.index < $1.index }.map { $0.text }
+    }
+
+    static func shorten(_ s: String, words: Int) -> String {
+        let parts = s.split(separator: " ")
+        guard parts.count > words else { return s.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+        return parts.prefix(words).joined(separator: " ") + "…"
+    }
+}

@@ -1,0 +1,19 @@
+# Only the app and its build setup go to GitHub; everything else in this folder
+# (IPA extracts, old zips, test pages) stays local.
+/*
+!/Murekkep.swiftpm/
+!/.github/
+!/.gitignore
+!/README.md
+
+# Xcode and macOS leftovers inside the package.
+.DS_Store
+xcuserdata/
+*.xcuserstate
+.build/
+.swiftpm/xcode/
+DerivedData/
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json
