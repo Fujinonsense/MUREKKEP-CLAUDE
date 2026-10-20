@@ -143,20 +143,27 @@ extension InkLine {
         return hs.isEmpty ? max(boxes.map(\.h).max() ?? 1, 1) : median(hs)
     }
 
-    /// Top and bottom of a line's letters at `x`.
+    /// The slope comes from the line's last 12 letters, at most 12° (tan 12° ≈ 0.2126).
+    private static let recentLetters = 12
+    private static let maxSlope: CGFloat = 0.2126
+
+    /// Top and bottom of a line's letters at `x`. The slope is the median of the slopes between the
+    /// last letters, so a capital or a descender among them cannot tilt the band.
     private static func band(_ members: [Int], _ boxes: [Box], at x: CGFloat) -> (top: CGFloat, bottom: CGFloat) {
         let ms = members.map { boxes[$0] }
         guard ms.count >= 3 else {
             return (ms.map(\.minY).min() ?? 0, ms.map(\.maxY).max() ?? 0)
         }
         let core = median(ms.map(\.h))
-        let n = CGFloat(ms.count)
-        let mx = ms.reduce(0) { $0 + $1.cx } / n
-        let my = ms.reduce(0) { $0 + $1.cy } / n
-        let sxx = ms.reduce(0) { $0 + ($1.cx - mx) * ($1.cx - mx) }
-        let sxy = ms.reduce(0) { $0 + ($1.cx - mx) * ($1.cy - my) }
-        let a = sxx > 1e-9 ? sxy / sxx : 0
-        let yc = my + a * (x - mx)
+        let recent = Array(ms.suffix(recentLetters))
+        var slopes: [CGFloat] = []
+        for i in recent.indices {
+            for j in (i + 1)..<recent.count where abs(recent[j].cx - recent[i].cx) > 1e-6 {
+                slopes.append((recent[j].cy - recent[i].cy) / (recent[j].cx - recent[i].cx))
+            }
+        }
+        let a = min(max(slopes.isEmpty ? 0 : median(slopes), -maxSlope), maxSlope)
+        let yc = median(recent.map { $0.cy - a * $0.cx }) + a * x
         return (yc - core / 2, yc + core / 2)
     }
 

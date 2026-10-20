@@ -204,7 +204,33 @@ enum HandwritingConverter {
     /// The batch read line by line with Mürekkep's own model. Vision's readings of the same line
     /// compete, scored by the model, and the dictionary settles near-ties; exponents are read on
     /// their own and put back raised.
-    private static func readWithModel(_ source: [Stroke], model: HandwritingModel) async -> ([OCRLine], [[Stroke]]) {
+    private static func readWithModel(_ ink: [Stroke], model: HandwritingModel) async -> ([OCRLine], [[Stroke]]) {
+        // A turned page (or a slanted hand) leaves the writing at an angle to the page; it is read
+        // levelled (the line splitter and the model need level lines), and the boxes go back.
+        let paths = ink.map { s in s.points.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) } }
+        let degrees = InkDeskew.angle(paths)
+        let pivot = InkDeskew.centre(paths)
+        var original: [Int: Stroke] = [:]
+        var source = ink
+        if degrees != 0 {
+            source = ink.map { s in
+                let turned = s.withPoints(s.points.map { p in
+                    let q = InkDeskew.level(CGPoint(x: CGFloat(p.x), y: CGFloat(p.y)), degrees: degrees, centre: pivot)
+                    var r = p
+                    r.x = Float(q.x)
+                    r.y = Float(q.y)
+                    return r
+                })
+                original[turned.id] = s
+                return turned
+            }
+        }
+        /// A levelled box placed back on the page, anchored where the writing starts (its lower left).
+        func onPage(_ box: CGRect) -> CGRect {
+            guard degrees != 0 else { return box }
+            let start = InkDeskew.unlevel(CGPoint(x: box.minX, y: box.maxY), degrees: degrees, centre: pivot)
+            return CGRect(x: start.x, y: start.y - box.height, width: box.width, height: box.height)
+        }
         var vision: [OCRLine] = []
         if let raster = InkRaster.render(source) {
             vision = await PageOCR.lines(in: raster)
@@ -252,8 +278,9 @@ enum HandwritingConverter {
                 text = Reading.insertSuperscripts(text, charX: xs, raised: groups)
                 xs = characterPositions(text, lp: nil, image: image, charset: model.charset, box: box)
             }
-            lines.append(OCRLine(text: text, box: box, words: words(of: text, at: xs, box: box)))
-            members.append(line)
+            let placed = words(of: text, at: xs, box: box).map { OCRWord(text: $0.text, box: onPage($0.box)) }
+            lines.append(OCRLine(text: text, box: onPage(box), words: placed))
+            members.append(line.map { original[$0.id] ?? $0 })
         }
         return (lines, members)
     }
