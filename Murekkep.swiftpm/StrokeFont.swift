@@ -212,6 +212,14 @@ enum StrokeFont {
         "ʷ": "w", "ˣ": "x", "ʸ": "y", "ᶻ": "z", "ᵅ": "α", "ᵝ": "β", "ᶿ": "θ",
     ]
 
+    /// The raised (exponent) form of a character, when the font has one ("2" → "²").
+    static func raised(_ base: Character) -> Character? {
+        raisedForms[base]
+    }
+
+    private static let raisedForms: [Character: Character] =
+        Dictionary(superscripts.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+
     /// Lowered small characters (indices, the lower limit of a sum or an integral).
     private static let subscripts: [Character: Character] = [
         "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9",

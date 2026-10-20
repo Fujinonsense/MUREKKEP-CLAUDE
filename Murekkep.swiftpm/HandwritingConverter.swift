@@ -96,6 +96,11 @@ enum HandwritingConverter {
             }
         }
 
+        if lines.isEmpty, let model = HandwritingModel.shared {
+            (lines, members) = await readWithModel(source, model: model)
+            guard !lines.isEmpty else { return nil }
+        }
+
         if lines.isEmpty {
             guard let raster = InkRaster.render(source) else { return nil }
             var raw = await PageOCR.lines(in: raster)
@@ -179,6 +184,111 @@ enum HandwritingConverter {
         }
         guard !added.isEmpty else { return nil }
         return ConversionResult(removed: removed, added: added, lineCount: texts.count, text: texts.joined(separator: "\n"), end: end)
+    }
+
+    /// The batch read line by line with Mürekkep's own model. Vision's readings of the same line
+    /// compete, scored by the model, and the dictionary settles near-ties; exponents are read on
+    /// their own and put back raised.
+    private static func readWithModel(_ source: [Stroke], model: HandwritingModel) async -> ([OCRLine], [[Stroke]]) {
+        var vision: [OCRLine] = []
+        if let raster = InkRaster.render(source) {
+            vision = await PageOCR.lines(in: raster)
+        }
+        let tr = Locale(identifier: "tr_TR")
+        var lines: [OCRLine] = []
+        var members: [[Stroke]] = []
+        for line in InkLine.lines(source) {
+            let (base, raised) = InkLine.splitRaised(line)
+            guard let image = InkLine.render(base) else { continue }
+            let lp = model.logProbs(image)
+            let beam = CTC.beam(lp, charset: model.charset)
+            guard let first = beam.first else { continue }
+            let box = inkBounds(line)
+            var seen = Set(beam.map(\.text))
+            var visionTexts: [String] = []
+            for v in vision where verticalOverlap(v.box, box) >= 0.5 {
+                for text in [v.text] + v.alternatives.map(\.text) where seen.insert(text).inserted {
+                    visionTexts.append(text)
+                }
+            }
+            // Vision drops Turkish letters (ş → s); the dictionary repair brings them back.
+            let read = visionTexts
+            let repaired = await MainActor.run { read.map { Spelling.repair($0) } }
+            for text in repaired where seen.insert(text).inserted {
+                visionTexts.append(text)
+            }
+            let candidates = beam.map(\.text) + visionTexts
+            let known = await MainActor.run {
+                Dictionary(candidates.map { ($0, Spelling.score($0.lowercased(with: tr))) }, uniquingKeysWith: { a, _ in a })
+            }
+            let isMath = PageOCR.mathScore(first.text) >= 2 || first.text.contains("=")
+            var text = Reading.choose(model: beam,
+                                      vision: visionTexts.map { (text: $0, score: CTC.score($0, lp, charset: model.charset)) },
+                                      length: first.text.count, isMath: isMath, dictionary: known)
+            var xs = characterPositions(text, lp: lp, image: image, charset: model.charset, box: box)
+            var groups: [(text: String, x: CGFloat)] = []
+            for group in raised {
+                if let img = InkLine.render(group.strokes),
+                   let best = CTC.beam(model.logProbs(img), charset: model.charset, width: 4).first {
+                    groups.append((text: best.text.trimmingCharacters(in: .whitespaces), x: group.x))
+                }
+            }
+            if !groups.isEmpty {
+                text = Reading.insertSuperscripts(text, charX: xs, raised: groups)
+                xs = characterPositions(text, lp: nil, image: image, charset: model.charset, box: box)
+            }
+            lines.append(OCRLine(text: text, box: box, words: words(of: text, at: xs, box: box)))
+            members.append(line)
+        }
+        return (lines, members)
+    }
+
+    private static func inkBounds(_ strokes: [Stroke]) -> CGRect {
+        strokes.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
+    }
+
+    private static func verticalOverlap(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let overlap = min(a.maxY, b.maxY) - max(a.minY, b.minY)
+        return max(0, overlap) / max(min(a.height, b.height), 1)
+    }
+
+    /// Page x of each character: where the model's best path writes it when that path spells the
+    /// text, otherwise spread evenly over the line.
+    private static func characterPositions(_ text: String, lp: [[Float]]?, image: InkLineImage,
+                                           charset: [Character], box: CGRect) -> [CGFloat] {
+        let chars = Array(text)
+        if let lp {
+            let frames = CTC.alignment(lp)
+            let greedy = frames.map { t -> Character in
+                let k = lp[t].indices.max { lp[t][$0] < lp[t][$1] } ?? 1
+                return charset[max(k, 1) - 1]
+            }
+            if greedy == chars {
+                return frames.map { (CGFloat($0 * 4 + 2) - image.origin.x) / image.scale }
+            }
+        }
+        guard chars.count > 1 else { return chars.isEmpty ? [] : [box.midX] }
+        return chars.indices.map { box.minX + box.width * (CGFloat($0) + 0.5) / CGFloat(chars.count) }
+    }
+
+    /// Word boxes from the characters' positions (for the style each typed word takes).
+    private static func words(of text: String, at xs: [CGFloat], box: CGRect) -> [OCRWord] {
+        let chars = Array(text)
+        guard chars.count == xs.count, !chars.isEmpty else { return [OCRWord(text: text, box: box)] }
+        let step = chars.count > 1 ? (xs[xs.count - 1] - xs[0]) / CGFloat(chars.count - 1) : box.width
+        var out: [OCRWord] = []
+        var start: Int?
+        for i in 0...chars.count {
+            let isSpace = i == chars.count || chars[i] == " "
+            if !isSpace && start == nil { start = i }
+            if isSpace, let s = start {
+                let minX = xs[s] - step / 2
+                let maxX = xs[i - 1] + step / 2
+                out.append(OCRWord(text: String(chars[s..<i]), box: CGRect(x: minX, y: box.minY, width: max(maxX - minX, 1), height: box.height)))
+                start = nil
+            }
+        }
+        return out.isEmpty ? [OCRWord(text: text, box: box)] : out
     }
 
     /// Typed text placed at `point`: on the next writing line when the page has them.
