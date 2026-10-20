@@ -44,7 +44,9 @@ def _fragment(rng, lang):
     n = int(rng.integers(1, 9))
     start = int(rng.integers(0, max(1, len(words) - n + 1)))
     text = " ".join(words[start:start + n])
-    if rng.random() < 0.05:
+    # All-caps lines: the line image hides letter size, so the model needs many of them to tell
+    # "WE" from "we" by shape and context.
+    if rng.random() < 0.12:
         text = tr_upper(text) if lang == "tr" else text.upper()
     return text
 

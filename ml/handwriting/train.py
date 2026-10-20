@@ -116,6 +116,8 @@ def main():
     ap.add_argument("--workers", type=int, default=20)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--eval-every", type=int, default=2000)
+    ap.add_argument("--resume", type=str, default=None, help="checkpoint whose weights to start from")
+    ap.add_argument("--warmup", type=int, default=1000)
     ap.add_argument("--out", type=str, default=str(RUNS / datetime.datetime.now().strftime("%Y%m%d-%H%M")))
     args = ap.parse_args()
     out = Path(args.out)
@@ -136,8 +138,11 @@ def main():
     say(f"fonts {len(train_fonts)} train / {len(val_fonts)} held out; {sum(len(b[4]) for b in val)} validation lines")
 
     model = CRNN(NUM_CLASSES).to(device)
+    if args.resume:
+        model.load_state_dict(torch.load(args.resume, map_location=device)["model"])
+        say(f"weights from {args.resume}")
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    warm = 1000
+    warm = args.warmup
 
     def lr_at(step):
         if step < warm:

@@ -96,11 +96,12 @@ def _accent(kind, base):
     if kind == "breve":
         return segments([(cx + 1.3 * math.cos(math.radians(a)), top + 2.4 + 1.3 * math.sin(math.radians(a)))
                          for a in range(200, 341, 10)])
+    # Dots as a hand makes them: short dabs, big enough to survive a thin pen.
     if kind == "dots":
-        return np.concatenate([segments([(cx - 1.1, top + 1.2), (cx - 0.9, top + 1.45)]),
-                               segments([(cx + 0.9, top + 1.2), (cx + 1.1, top + 1.45)])])
+        return np.concatenate([segments([(cx - 1.2, top + 1.15), (cx - 0.8, top + 1.6)]),
+                               segments([(cx + 0.8, top + 1.15), (cx + 1.2, top + 1.6)])])
     if kind == "dot":
-        return segments([(cx, top + 1.3), (cx + 0.2, top + 1.55)])
+        return segments([(cx - 0.15, top + 1.25), (cx + 0.25, top + 1.7)])
     raise ValueError(kind)
 
 
