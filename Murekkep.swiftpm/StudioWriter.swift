@@ -28,6 +28,24 @@ struct StudioMaterial {
 
     var sample: String { String(allText.prefix(2000)) }
 
+    /// The text of these pages (0-based) of every source, from the "[s. N]" marks; pages are kept
+    /// apart by a blank line.
+    func text(pages: ClosedRange<Int>) -> String {
+        var out: [String] = []
+        for item in items {
+            var current = -1
+            for line in item.text.components(separatedBy: "\n") {
+                if line.hasPrefix("[s. "), let n = Int(line.dropFirst(4).prefix(while: { $0.isNumber })) {
+                    current = n - 1
+                    if !out.isEmpty && pages.contains(current) { out.append("") }
+                    continue
+                }
+                if pages.contains(current) { out.append(line) }
+            }
+        }
+        return out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// `chapter`: only its pages. Scanned pages are read with OCR (and kept on disk).
     static func gather(_ notes: [NoteMeta], library: LibraryStore, chapter: BookChapter? = nil,
                        progress: (@Sendable (Int, Int) -> Void)? = nil) async -> StudioMaterial {
@@ -192,34 +210,27 @@ enum StudioWriter {
                                  progress: @escaping WriteProgress) async throws -> Overview {
         #if canImport(FoundationModels) && !MUREKKEP_PLAIN
         if #available(iOS 26.0, *) {
+            if options.kind == .video {
+                return try await onDeviceVideo(options: options, material: material, language: language, progress: progress)
+            }
             let chunks = TextChunks.pick(material.allText, count: max(3, options.length.scenes.lowerBound - 2), size: 1600)
             guard !chunks.isEmpty else { throw StudioWriterError.noText }
             var overview = newOverview(options, material: material, language: language, title: fallbackTitle(material),
                                        engine: Loc.t("Cihazda · Apple Intelligence"))
             let instructions = "Sen bir ders anlatıcısısın. Yalnızca verilen metne dayan, uydurma. " + directive(language)
-            var titles: [String] = []
             for (i, chunk) in chunks.enumerated() {
                 try Task.checkCancellation()
                 progress(Double(i) / Double(chunks.count), Loc.t("Cihazdaki model yazıyor ({0}/{1})…", "\(i + 1)", "\(chunks.count)"))
-                if options.kind == .video {
-                    let prompt = "\(options.format.prompt(for: .video)) \(options.level.prompt) \(focusLine(options))\nAşağıdaki ders metninden bir video slaytı hazırla. Anlatım seslendirilecek: doğal konuşma dili, sembolleri okunuşuyla yaz, markdown kullanma.\n\nMetin:\n\(chunk)"
-                    let draft = try await AppleStudioBridge.scene(instructions: instructions, prompt: prompt)
-                    let scene = OverviewScene(layout: .bullets, title: draft.title, bullets: Array(draft.bullets.prefix(4)),
-                                              narration: draft.narration)
-                    titles.append(draft.title)
-                    overview.scenes.append(scene)
-                } else {
-                    let prompt = "\(options.format.prompt(for: .audio)) \(options.level.prompt) \(focusLine(options))\nİki sunucu (\(language.hostNames[0]) = 0, \(language.hostNames[1]) = 1) aşağıdaki metni doğal bir sohbetle anlatsın. Seslendirilecek: markdown yok, sembolleri okunuşuyla yaz.\n\nMetin:\n\(chunk)"
-                    let draft = try await AppleStudioBridge.dialogue(instructions: instructions, prompt: prompt)
-                    var first = true
-                    for line in draft.lines where !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                        let chapter = first ? TextChunks.heading(in: chunk) ?? (language.isEnglish ? "Part \(i + 1)" : "Bölüm \(i + 1)") : nil
-                        overview.lines.append(DialogueLine(host: min(max(line.host, 0), 1), text: line.text, chapter: chapter))
-                        first = false
-                    }
+                let prompt = "\(options.format.prompt(for: .audio)) \(options.level.prompt) \(focusLine(options))\nİki sunucu (\(language.hostNames[0]) = 0, \(language.hostNames[1]) = 1) aşağıdaki metni doğal bir sohbetle anlatsın. Seslendirilecek: markdown yok, sembolleri okunuşuyla yaz.\n\nMetin:\n\(chunk)"
+                let draft = try await AppleStudioBridge.dialogue(instructions: instructions, prompt: prompt)
+                var first = true
+                for line in draft.lines where !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    let chapter = first ? TextChunks.heading(in: chunk) ?? (language.isEnglish ? "Part \(i + 1)" : "Bölüm \(i + 1)") : nil
+                    overview.lines.append(DialogueLine(host: min(max(line.host, 0), 1), text: line.text, chapter: chapter))
+                    first = false
                 }
             }
-            frame(&overview, titles: titles, language: language)
+            frame(&overview, language: language)
             guard !overview.segmentTexts.isEmpty else { throw StudioWriterError.unreadableScript }
             return overview
         }
@@ -227,68 +238,190 @@ enum StudioWriter {
         throw StudioWriterError.unavailable(OnDeviceAI.unavailableReason ?? Loc.t("Cihazdaki model kullanılamıyor."))
     }
 
+    #if canImport(FoundationModels) && !MUREKKEP_PLAIN
+    /// A video like NotebookLM's: the model plans the hook, the section names and the closing question,
+    /// then writes each section's scenes from that section's own pages.
+    @available(iOS 26.0, *)
+    @MainActor
+    private static func onDeviceVideo(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
+                                      progress: @escaping WriteProgress) async throws -> Overview {
+        let plan = StudioPlan.parts(material)
+        guard !plan.isEmpty else { throw StudioWriterError.noText }
+        let topic = fallbackTitle(material)
+        let instructions = "Sen ödüllü bir ders anlatıcısısın: merak uyandırır, somut örneklerle ve sıcak bir dille anlatırsın. Yalnızca verilen metne dayan, uydurma. "
+            + directive(language)
+        progress(0.03, Loc.t("Cihazdaki model videoyu planlıyor…"))
+        let planPrompt = """
+        \(options.level.prompt) \(focusLine(options))
+        Konu: \(topic)
+        Bölümler (bu sırayla): \(plan.map(\.title).joined(separator: " | "))
+        Metinden örnek:
+        \(String(material.allText.prefix(1800)))
+
+        Bu konu için bir video özeti planla: kısa bir başlık, merak uyandıran bir kanca sorusu ve onu somut bir örnekle açan anlatım, her bölüm için kısa bir başlık (aynı sırayla) ve izleyiciyi düşündüren bir kapanış sorusu. Sorularda en önemli 1-3 kelimeyi ** ** içine al. Anlatım seslendirilecek: sembolleri okunuşuyla yaz.
+        """
+        let outline = try await AppleStudioBridge.plan(instructions: instructions, prompt: planPrompt)
+        let counts = StudioPlan.sceneCounts(options, parts: plan.count)
+        let total = counts.reduce(0, +)
+        var done = 0
+        var sections: [OutlineSection] = []
+        for (i, part) in plan.enumerated() {
+            var scenes: [OverviewScene] = []
+            for chunk in TextChunks.pick(part.text, count: counts[i], size: 1600) {
+                try Task.checkCancellation()
+                progress(0.08 + 0.9 * Double(done) / Double(max(total, 1)),
+                         Loc.t("Cihazdaki model yazıyor ({0}/{1})…", "\(done + 1)", "\(total)"))
+                let prompt = "\(options.format.prompt(for: .video)) \(options.level.prompt) \(focusLine(options))\nBölüm: \(part.title)\nAşağıdaki ders metninden bu bölüm için bir video slaytı hazırla. Bir tanım varsa definition, adım adım bir süreç varsa steps düzenini seç. Anlatım seslendirilecek: doğal konuşma dili, somut bir örnek, sembolleri okunuşuyla yaz, markdown kullanma.\n\nMetin:\n\(chunk)"
+                if let draft = try? await AppleStudioBridge.scene(instructions: instructions, prompt: prompt) {
+                    scenes.append(scene(from: draft))
+                }
+                done += 1
+            }
+            let short = i < outline.sectionTitles.count ? outline.sectionTitles[i].trimmingCharacters(in: .whitespaces) : ""
+            let title = short.isEmpty ? part.title : short
+            sections.append(OutlineSection(title: title, subtitle: title == part.title ? part.subtitle : part.title, scenes: scenes))
+        }
+        guard sections.contains(where: { !$0.scenes.isEmpty }) else { throw StudioWriterError.unreadableScript }
+        let name = outline.title.trimmingCharacters(in: .whitespaces)
+        var overview = newOverview(options, material: material, language: language,
+                                   title: material.chapter != nil || name.isEmpty ? topic : name,
+                                   engine: Loc.t("Cihazda · Apple Intelligence"))
+        overview.scenes = VideoOutline.assemble(title: overview.title, hook: outline.hook, hookNarration: outline.hookNarration,
+                                                sections: sections.filter { !$0.scenes.isEmpty }, closing: outline.closing,
+                                                language: language)
+        return overview
+    }
+
+    @available(iOS 26.0, *)
+    private static func scene(from draft: StudioSceneDraft) -> OverviewScene {
+        let bullets = Array(draft.bullets.prefix(5))
+        let term = draft.term.trimmingCharacters(in: .whitespaces)
+        let definition = draft.definition.trimmingCharacters(in: .whitespaces)
+        switch draft.layout {
+        case "definition" where !term.isEmpty && !definition.isEmpty:
+            return OverviewScene(layout: .definition, title: draft.title, narration: draft.narration, term: term, definition: definition)
+        case "steps" where bullets.count >= 2:
+            return OverviewScene(layout: .steps, title: draft.title, bullets: bullets, narration: draft.narration)
+        default:
+            return OverviewScene(layout: .bullets, title: draft.title, bullets: bullets, narration: draft.narration)
+        }
+    }
+    #endif
+
     private static func focusLine(_ options: OverviewOptions) -> String {
         let f = options.focus.trimmingCharacters(in: .whitespacesAndNewlines)
         return f.isEmpty ? "" : "Odak: \(f)."
     }
 
-    /// Opening and closing for the scripts written piece by piece.
-    private static func frame(_ overview: inout Overview, titles: [String], language: OverviewLanguage) {
+    /// Opening and closing of a podcast written piece by piece.
+    private static func frame(_ overview: inout Overview, language: OverviewLanguage) {
         let en = language.isEnglish
-        let topics = titles.prefix(4).joined(separator: ", ")
-        if overview.kind == .video {
-            let intro = OverviewScene(layout: .title, title: overview.title,
-                                      subtitle: en ? "Video overview" : "Video özeti",
-                                      narration: en ? "In this overview we walk through \(topics). Let's begin."
-                                                    : "Bu özette \(topics) konularının üzerinden geçeceğiz. Hadi başlayalım.",
-                                      art: "sf:sparkles")
-            let outro = OverviewScene(layout: .summary, title: en ? "Summary" : "Özet", bullets: Array(titles.prefix(6)),
-                                      narration: en ? "To sum up, we covered \(topics). Go back to any part you want to repeat."
-                                                    : "Özetle \(topics) konularını gördük. Tekrar etmek istediğin bölüme dönebilirsin.")
-            overview.scenes.insert(intro, at: 0)
-            overview.scenes.append(outro)
-        } else {
-            let a = en ? "Today we're looking at \(overview.title). There's a lot in here, so let's get into it."
-                       : "Bugün \(overview.title) üzerine konuşacağız. Konuşacak çok şey var, hemen başlayalım."
-            overview.lines.insert(DialogueLine(host: 0, text: a, chapter: en ? "Intro" : "Giriş"), at: 0)
-            let z = en ? "That's a good place to stop. Think about which part you'd explain to a friend first."
-                       : "Burada toparlayalım. Bir arkadaşına anlatsan ilk hangi kısmı anlatırdın, bir düşün."
-            overview.lines.append(DialogueLine(host: 1, text: z, chapter: en ? "Wrap-up" : "Kapanış"))
-        }
+        let a = en ? "Today we're looking at \(overview.title). There's a lot in here, so let's get into it."
+                   : "Bugün \(overview.title) üzerine konuşacağız. Konuşacak çok şey var, hemen başlayalım."
+        overview.lines.insert(DialogueLine(host: 0, text: a, chapter: en ? "Intro" : "Giriş"), at: 0)
+        let z = en ? "That's a good place to stop. Think about which part you'd explain to a friend first."
+                   : "Burada toparlayalım. Bir arkadaşına anlatsan ilk hangi kısmı anlatırdın, bir düşün."
+        overview.lines.append(DialogueLine(host: 1, text: z, chapter: en ? "Wrap-up" : "Kapanış"))
     }
 
     // MARK: Offline
 
     private static func offline(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage) throws -> Overview {
+        if options.kind == .video { return try offlineVideo(options: options, material: material, language: language) }
         let text = material.allText
         let chunks = TextChunks.pick(text, count: max(3, options.length.scenes.lowerBound - 2), size: 1400)
         guard !chunks.isEmpty else { throw StudioWriterError.noText }
         let weights = TextChunks.wordWeights(text)
         var overview = newOverview(options, material: material, language: language, title: fallbackTitle(material),
                                    engine: Loc.t("Çevrimdışı"))
-        var titles: [String] = []
         let en = language.isEnglish
         for (i, chunk) in chunks.enumerated() {
             let best = TextChunks.keySentences(chunk, weights: weights, count: 3)
             guard !best.isEmpty else { continue }
             let title = TextChunks.heading(in: chunk) ?? TextChunks.shorten(best[0], words: 6)
-            titles.append(title)
-            if options.kind == .video {
-                overview.scenes.append(OverviewScene(layout: .bullets, title: title,
-                                                     bullets: best.map { TextChunks.shorten($0, words: 13) },
-                                                     narration: best.joined(separator: " ")))
-            } else {
-                overview.lines.append(DialogueLine(host: 0, text: en ? "Let's look at \(title)." : "\(title) konusuna bakalım.",
-                                                   chapter: title))
-                for (k, sentence) in best.enumerated() {
-                    overview.lines.append(DialogueLine(host: (k + 1) % 2, text: sentence, chapter: nil))
-                }
+            overview.lines.append(DialogueLine(host: 0, text: en ? "Let's look at \(title)." : "\(title) konusuna bakalım.",
+                                               chapter: title))
+            for (k, sentence) in best.enumerated() {
+                overview.lines.append(DialogueLine(host: (k + 1) % 2, text: sentence, chapter: nil))
             }
             if i > 40 { break }
         }
-        frame(&overview, titles: titles, language: language)
+        frame(&overview, language: language)
         guard !overview.segmentTexts.isEmpty else { throw StudioWriterError.noText }
         return overview
+    }
+
+    /// The same shape as the on-device video, from the text's key sentences.
+    private static func offlineVideo(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage) throws -> Overview {
+        let plan = StudioPlan.parts(material)
+        guard !plan.isEmpty else { throw StudioWriterError.noText }
+        let weights = TextChunks.wordWeights(material.allText)
+        let counts = StudioPlan.sceneCounts(options, parts: plan.count)
+        var sections: [OutlineSection] = []
+        for (i, part) in plan.enumerated() {
+            var scenes: [OverviewScene] = []
+            for chunk in TextChunks.pick(part.text, count: counts[i], size: 1400) {
+                let best = TextChunks.keySentences(chunk, weights: weights, count: 3)
+                guard !best.isEmpty else { continue }
+                let title = TextChunks.heading(in: chunk) ?? TextChunks.shorten(best[0], words: 6)
+                scenes.append(OverviewScene(layout: .bullets, title: title, bullets: best.map { TextChunks.shorten($0, words: 13) },
+                                            narration: best.joined(separator: " ")))
+            }
+            if !scenes.isEmpty { sections.append(OutlineSection(title: part.title, subtitle: part.subtitle, scenes: scenes)) }
+        }
+        guard !sections.isEmpty else { throw StudioWriterError.noText }
+        let topic = fallbackTitle(material)
+        let en = language.isEnglish
+        let opening = TextChunks.keySentences(TextChunks.pick(material.allText, count: 1, size: 2000).first ?? "", weights: weights, count: 1)
+            .first ?? ""
+        var overview = newOverview(options, material: material, language: language, title: topic, engine: Loc.t("Çevrimdışı"))
+        overview.scenes = VideoOutline.assemble(
+            title: topic,
+            hook: en ? "What is **\(topic)**, and why does it matter?" : "**\(topic)** nedir, neden önemlidir?",
+            hookNarration: opening + (en ? " In this video we'll see it step by step." : " Bu videoda bunu adım adım göreceğiz."),
+            sections: sections,
+            closing: en ? "So where do you see **\(topic)** in everyday life?" : "Peki **\(topic)** konusunu günlük hayatta nerede görüyorsun?",
+            language: language)
+        return overview
+    }
+}
+
+/// How a video's material is divided into sections: a chapter's own sections when it has at least
+/// two with text, otherwise even pieces of the text named by their headings.
+enum StudioPlan {
+    struct Part {
+        var title: String
+        var subtitle: String
+        var text: String
+    }
+
+    static func parts(_ material: StudioMaterial) -> [Part] {
+        if let chapter = material.chapter, chapter.sections.count >= 2 {
+            var out: [Part] = []
+            for (k, s) in chapter.sections.enumerated() {
+                let end = k + 1 < chapter.sections.count ? max(s.page, chapter.sections[k + 1].page - 1) : max(s.page, chapter.endPage)
+                let text = material.text(pages: s.page...end)
+                if text.count > 200 { out.append(Part(title: s.title, subtitle: s.number, text: text)) }
+            }
+            if out.count >= 2 { return out }
+        }
+        let all = material.allText
+        guard all.count > 200 else { return [] }
+        let weights = TextChunks.wordWeights(all)
+        let pieces = TextChunks.pick(all, count: 4, size: max(1500, all.count / 4))
+        return pieces.map { piece in
+            let title = TextChunks.heading(in: piece)
+                ?? TextChunks.shorten(TextChunks.keySentences(piece, weights: weights, count: 1).first ?? "", words: 5)
+            return Part(title: title, subtitle: "", text: piece)
+        }.filter { !$0.title.isEmpty }
+    }
+
+    /// Content scenes per part: about the length's scene count minus the frame scenes, spread evenly,
+    /// at least one per part.
+    static func sceneCounts(_ options: OverviewOptions, parts: Int) -> [Int] {
+        guard parts > 0 else { return [] }
+        let total = max(parts, options.length.scenes.lowerBound - 4)
+        return (0..<parts).map { i in total / parts + (i < total % parts ? 1 : 0) }
     }
 }
 
@@ -298,10 +431,32 @@ enum StudioWriter {
 struct StudioSceneDraft {
     @Guide(description: "Slayt başlığı, en fazla 7 kelime")
     var title: String
-    @Guide(description: "Slayttaki 3 kısa madde, her biri en fazla 12 kelime")
+    @Guide(description: "Slayt düzeni: bullets (maddeler), steps (sıralı adımlar) ya da definition (bir terimin tanımı)",
+           .anyOf(["bullets", "steps", "definition"]))
+    var layout: String
+    @Guide(description: "Slayttaki 3 kısa madde ya da adım, her biri en fazla 12 kelime")
     var bullets: [String]
-    @Guide(description: "Bu slaytın sesli anlatımı: 3-5 cümle, sıcak ve doğal konuşma dili")
+    @Guide(description: "definition düzeninde tanımlanan terim; başka düzende boş bırak")
+    var term: String
+    @Guide(description: "definition düzeninde terimin 1-2 cümlelik tanımı; başka düzende boş bırak")
+    var definition: String
+    @Guide(description: "Bu slaytın sesli anlatımı: 4-6 cümle, somut bir örnekle, sıcak ve doğal konuşma dili")
     var narration: String
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct VideoPlanDraft {
+    @Guide(description: "Videonun kısa başlığı, en fazla 6 kelime")
+    var title: String
+    @Guide(description: "Merak uyandıran tek bir soru, en fazla 12 kelime; en önemli 1-3 kelime ** işaretleri arasında")
+    var hook: String
+    @Guide(description: "Soruyu somut bir örnekle açan 3-4 cümlelik sesli anlatım")
+    var hookNarration: String
+    @Guide(description: "Verilen her bölüm için en fazla 5 kelimelik kısa başlık, aynı sırayla")
+    var sectionTitles: [String]
+    @Guide(description: "İzleyiciyi düşündüren kapanış sorusu; en önemli 1-3 kelime ** işaretleri arasında")
+    var closing: String
 }
 
 @available(iOS 26.0, *)
@@ -325,6 +480,12 @@ enum AppleStudioBridge {
     static func scene(instructions: String, prompt: String) async throws -> StudioSceneDraft {
         let session = LanguageModelSession(instructions: instructions)
         let response = try await session.respond(to: prompt, generating: StudioSceneDraft.self)
+        return response.content
+    }
+
+    static func plan(instructions: String, prompt: String) async throws -> VideoPlanDraft {
+        let session = LanguageModelSession(instructions: instructions)
+        let response = try await session.respond(to: prompt, generating: VideoPlanDraft.self)
         return response.content
     }
 
@@ -372,8 +533,16 @@ enum StudioPrompts {
 
         \(common(options, language: language, sources: sources))
 
+        Yapı (sırayla):
+        1. "title": selamlama ve konu (narration 20-35 kelime).
+        2. "question": merak uyandıran tek bir kanca sorusu (title; en önemli 1-3 kelimeyi ** ** içine al); narration soruyu somut bir örnek ya da hikâyeyle açar (60-90 kelime).
+        3. "agenda": yol haritası; bullets = bölüm başlıkları (3-6, her biri en fazla 5 kelime); narration "İşte yol haritamız. Birincisi, … Ve son olarak, …".
+        4. Her bölüm için önce "section" sahnesi (number = 1'den başlayan bölüm no, title = bölüm başlığı, subtitle = 3-6 kelimelik alt başlık; narration tek kısa cümle: "Birinci bölümümüz: …"), sonra o bölümün 1-3 içerik sahnesi.
+        5. "summary": 3-6 maddelik toparlama.
+        6. "question": izleyiciyi düşündüren kapanış sorusu (** ile vurgulu) ve kanca sorusuna geri dönen kısa narration.
+
         Sahne kuralları:
-        - \(r.lowerBound)–\(r.upperBound) sahne. İlk sahne "title" düzeninde, dikkat çekici bir açılışla; son sahne "summary" düzeninde 4-6 maddelik toparlama.
+        - Toplam yaklaşık \(r.lowerBound + 4)–\(r.upperBound + 6) sahne.
         - Her sahnenin narration'ı slaytı okumaz, slaytı tamamlar ve açıklar (sahne başına 40-120 kelime).
         - Slayt metinleri kısa: başlık en fazla 7 kelime, madde en fazla 12 kelime, en fazla 5 madde. Slaytlarda sembol ve formül kullanabilirsin (ΔG, x², →).
         - Düzenleri çeşitlendir; aynı düzeni art arda üçten fazla kullanma.
@@ -389,6 +558,9 @@ enum StudioPrompts {
         - "quote": title (kısa etiket), subtitle (vurgulanacak tek cümle)
         - "quiz": title, subtitle (soru), choices (4 şık), answer (doğru şıkkın 0'dan başlayan indeksi). narration'da soruyu sor, "Bir düşün…" de, sonra cevabı ve nedenini açıkla.
         - "summary": title, bullets (4-6)
+        - "question": title (soru, ** ile vurgulu kelimeler)
+        - "agenda": title, bullets (bölüm başlıkları)
+        - "section": number, title, subtitle
         İsteğe bağlı "art": slayta uygun bir çizim adı: heart, lungs, kidney, spleen, liver, stomach, brain, atom, flask, bulb, star, check, warning, question; ya da bir SF Symbols adı "sf:" önekiyle (ör. "sf:waveform.path.ecg").
 
         ÇIKTI (yalnızca geçerli JSON):
@@ -524,6 +696,7 @@ enum StudioScriptParser {
                                       left: column(o["left"]), right: column(o["right"]),
                                       choices: Array(strs(o["choices"]).prefix(4)), answer: int(o["answer"]),
                                       figure: nil, art: art(o["art"]))
+            scene.number = int(o["number"])
             if let f = o["figure"] as? [String: Any], let source = int(f["source"]), let page = int(f["page"]),
                source >= 1, source <= sourceCount, page >= 1 {
                 var box: [Double]?
@@ -543,6 +716,8 @@ enum StudioScriptParser {
                  .definition where scene.term == nil || scene.definition == nil:
                 layout = scene.bullets.isEmpty ? .title : .bullets
             case .quote where scene.subtitle == nil:
+                layout = .title
+            case .agenda where scene.bullets.isEmpty:
                 layout = .title
             default:
                 break

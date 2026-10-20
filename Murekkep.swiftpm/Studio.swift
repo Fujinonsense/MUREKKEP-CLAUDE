@@ -225,6 +225,12 @@ enum SceneLayout: String, Codable, CaseIterable {
     case quote
     case quiz
     case summary
+    /// A big question with highlighted words (the hook and the closing question).
+    case question
+    /// The roadmap: the sections as numbered tiles.
+    case agenda
+    /// A section card with a big number.
+    case section
 }
 
 struct SceneColumn: Codable, Hashable {
@@ -256,8 +262,11 @@ struct OverviewScene: Codable, Hashable, Identifiable {
     var choices: [String]
     var answer: Int?
     var figure: FigureRef?
-    /// "art:heart" (the app's drawings) or "sf:waveform.path.ecg" (a system symbol).
+    /// "art:heart" (the app's drawings), "sf:waveform.path.ecg" (a system symbol) or "file:art-….png"
+    /// (an illustration in the overview's folder).
     var art: String?
+    /// The section's number on a section card.
+    var number: Int?
 
     init(layout: SceneLayout, title: String, subtitle: String? = nil, bullets: [String] = [], narration: String,
          term: String? = nil, definition: String? = nil, left: SceneColumn? = nil, right: SceneColumn? = nil,

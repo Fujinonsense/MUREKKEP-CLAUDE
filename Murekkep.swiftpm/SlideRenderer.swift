@@ -393,6 +393,12 @@ enum SlideRenderer {
             drawQuote(scene, enter: enter, p: p, theme: theme, in: ctx)
         case .quiz:
             drawQuiz(scene, t: t, duration: duration, p: p, theme: theme, en: en, in: ctx)
+        case .question, .section:
+            drawTitleScene(scene, enter: enter, p: p, theme: theme, overview: overview, in: ctx)
+        case .agenda:
+            drawHeading(scene.title, enter: enter, p: p, theme: theme, in: ctx)
+            drawList(scene.bullets, style: .number, area: CGRect(x: 140, y: 290, width: 1640, height: 610),
+                     t: t, duration: duration, p: p, theme: theme, in: ctx)
         }
     }
 
