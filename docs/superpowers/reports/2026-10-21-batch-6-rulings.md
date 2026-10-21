@@ -192,3 +192,48 @@ Not covered by this:
 
 - No build since 15 has been compiled by CI. The calls into MLX, Vision and UIKit are checked only by reading their sources and docs.
 - The text pen has not been tried with a real hand on the iPad. Both readers were measured on synthetic writing only.
+
+## Build 24: the text pen measured on the user's own handwriting
+
+Build 23 on the iPad read the user's writing badly. With the text pen:
+- `"Aga naber?"` became `...Asanaber?`
+- `Kardeşimin tableti kırıldı` became `Kardeş^TiminFablesikınıdı`
+
+Every measurement so far had been on synthetic writing. The user then exported a page of 16 known sentences as a PDF. The app writes each stroke into the PDF as vector segments, in the order the strokes were written, so the real pen data came out exactly (`tests/fixtures/real_hand_user.json`).
+
+**What was wrong, measured on those 16 lines** (`C:/Users/orsyu/mrk-ml/textpen/real`):
+
+| Stage | Problem | Fix |
+|---|---|---|
+| Text pen batches | It turned writing into text after every 1.3 s pause, so a line written slowly was read a word at a time: "Aga" alone read "Asa", and the pieces were typeset without spaces. The same ink read at once was right. | When new writing goes on the line just read (same line, within 15 s), the whole line is read again together (`TextPenBatch`). |
+| Exponents | 14 groups in lines without any exponent: dots and ticks beside letters, apostrophes, ğ's breve, typeset as `^D`, `⁽`, `¹`, `ⁱ`. | An exponent group needs a stroke drawn with at least 1.1 letter heights of pen. |
+| Lines | 5 of 16 one-line writings were split, by a slope fitted from letter pieces and carried across wide word gaps, and by an "Ö" whose dots made its own band. | The slope is not carried past a letter beyond the recent letters; lines whose letters' middles are within half a letter are joined; a letter with its accents joins the line it ends in. 16/16 now, in Python and in the app's Swift. |
+| Picture reader | CER 26.8 % on the user's hand (synthetic validation 3.1 %). | Fine-tuned on 11 of the lines (copies turned, sheared, bent), 25 % of each batch (`runs/user1`, step 1,500). |
+| Pen-motion reader | CER 44.7 %; together with the fine-tuned picture reader it made things worse. | Fine-tuned on the same lines in their real stroke order (`runs/online-user1`). |
+
+**Held-out lines** (4 PDF lines never trained on: "Kardeşimin tableti kırıldı.", '"Aga naber?" dedi, güldü.', "Yarın saat 9:30'da sınav var!", "Pack my box…"):
+
+| Reader | Before | After |
+|---|---|---|
+| Picture reader | 17.6 % (6 held-out lines with the 2 screenshot lines) | 5.0 % |
+| Pen-motion reader | 34.7 % | 12.4 % |
+| Both (weight 0.5) | 7.4 % with the old pen reader | 4.1 % |
+
+The app's dictionary repair (`Spelling.repair`: kardesimin → kardeşimin) is not in these numbers.
+
+**Synthetic cases**, in the app's own Swift (`tools/textpencheck`, 531 held-out-font writings):
+
+| | Build 23 | Build 24 |
+|---|---|---|
+| Picture reader alone, exact | 376 | 393 |
+| Both readers, exact | 376 | 401 |
+| Right line count | 515 | 518 |
+
+The pen-motion reader matches Python on all 580 lines, and every parity check passed. On the 16 real lines (11 of them trained on, so optimistic), 11 now read exactly, against 0 before.
+
+### Rulings
+
+- **The readers are tuned to this user's hand.** Synthetic font cases read slightly worse with the tuned picture reader (401 → 391 exact before the pen reader joins). The app has one user, and on their writing the error fell by more than two thirds. Cost if wrong: another person's handwriting reads a little worse than with build 23's model.
+- **Step 1,500 over step 3,750.** It is better on the held-out real lines (5.0 % against 6.3 %); the later one was better on synthetic fonts (395 against 391). Cost if wrong: one character in 160 either way; the held-out set is small.
+- **Six held-out lines are few.** More pages from the user (a PDF export is enough) would make the measurement and the tuning stronger. Cost if wrong: the 4.1 % may not hold for words the lines do not contain.
+- **Merging "a letter with its accents" costs one case in 165 of two lines stacked at 1.1 line heights** (142 against 143). Lines that close are nearly touching. Cost if wrong: such tight lines merge a little more often.
