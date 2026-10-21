@@ -27,8 +27,17 @@ def step_with(job, text):
 
 
 def test_runs_on_macos_26(job):
-    assert job["runs-on"] == "macos-26"
+    assert job["runs-on"] == "${{ inputs.runner || 'macos-26' }}"
     assert "sudo xcode-select -s /Applications/Xcode_26.6.app" in runs(job)
+
+
+def test_intel_mac_can_be_chosen_when_the_arm_queue_is_full():
+    # GitHub cancels a job no arm64 Mac picked up; macos-26-intel has the same Xcode 26.6 path.
+    triggers = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))[True]  # YAML reads "on" as true
+    runner = triggers["workflow_dispatch"]["inputs"]["runner"]
+    assert runner["default"] == "macos-26"
+    assert runner["options"] == ["macos-26", "macos-26-intel"]
+    assert triggers["push"]["branches"] == ["main", "master"]
 
 
 def test_sherpa_built_and_cached(job):
