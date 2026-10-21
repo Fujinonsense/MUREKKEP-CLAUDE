@@ -86,6 +86,36 @@ def test_superscript_detected():
     assert 2 not in base_idx
 
 
+def test_the_users_dots_ticks_and_breves_are_not_superscripts():
+    # The user's own handwriting (tests/fixtures/real_hand_user.json): dots of i and ü drawn as
+    # ticks beside the letter, apostrophes and the breve of ğ were taken for exponents and typeset
+    # as "^D", "⁽", "¹", "ⁱ" in the middle of words. None of these lines has an exponent.
+    import json
+    from pathlib import Path
+    data = json.loads((Path(__file__).parent / "fixtures" / "real_hand_user.json").read_text(encoding="utf-8"))
+    for line in data["lines"]:
+        if "²" in line["text"]:
+            continue
+        strokes = [[tuple(p) for p in s] for s in line["strokes"]]
+        _, raised = split_raised(strokes, list(range(len(strokes))))
+        assert raised == [], (line["text"], [g for g, _ in raised])
+
+
+def test_each_of_the_users_lines_is_one_line():
+    # The user writes with wide word gaps and small letters; a slope fitted from pieces of letters
+    # walked the band below "silgi", which then started a line of its own beside the first
+    # ("Kalem, defter" | "silgi ve cetvel aldım."), and accents over a line became a line.
+    import json
+    from pathlib import Path
+    data = json.loads((Path(__file__).parent / "fixtures" / "real_hand_user.json").read_text(encoding="utf-8"))
+    split = []
+    for line in data["lines"]:
+        strokes = [[tuple(p) for p in s] for s in line["strokes"]]
+        if len(lines(strokes)) != 1:
+            split.append(line["text"])
+    assert split == []
+
+
 def test_i_dot_is_not_a_superscript():
     base = 200.0
     strokes = word(100, base, 2) + [stem(120, base), dot(120, base - X - 3)] + word(125, base, 2)

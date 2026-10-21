@@ -119,6 +119,9 @@ extension InkLine {
     private static let raisedMin: CGFloat = 0.25
     private static let overLetter: CGFloat = 0.1
     private static let groupGap: CGFloat = 0.5
+    /// An exponent has a stroke at least this many letter heights long; dots, ticks, apostrophes
+    /// and breves (written beside their letter) are shorter.
+    private static let raisedPath: CGFloat = 1.1
     /// Ascenders and descenders reach this many band heights above and below the band.
     private static let reach: CGFloat = 1.2
     /// Share of a stroke's height inside that reach for it to belong to the line.
@@ -130,6 +133,10 @@ extension InkLine {
     private static let fragmentCount = 3
     private static let fragmentWidth: CGFloat = 2.5
     private static let fragmentReach: CGFloat = 1.6
+    /// Lines whose letters' middles are closer than this many letters are one line.
+    private static let sameMiddle: CGFloat = 0.5
+    /// A "line" of at most this many strokes may be a letter of another with its accents.
+    private static let accented = 6
 
     private struct Box {
         let minX: CGFloat
@@ -203,7 +210,11 @@ extension InkLine {
             }
         }
         let a = min(max(slopes.isEmpty ? 0 : median(slopes), -maxSlope), maxSlope)
-        let yc = median(recent.map { $0.cy - a * $0.cx }) + a * x
+        // The slope is not carried past the recent letters by more than a letter: across a wide word
+        // gap a slope fitted from pieces of letters walked the band off the line.
+        let lo = (recent.map(\.cx).min() ?? x) - core
+        let hi = (recent.map(\.cx).max() ?? x) + core
+        let yc = median(recent.map { $0.cy - a * $0.cx }) + a * min(max(x, lo), hi)
         return (yc - core / 2, yc + core / 2)
     }
 
@@ -239,6 +250,21 @@ extension InkLine {
     /// Whether the line `small` is part of the line `big` (see the type's description).
     private static func sameLine(_ small: [Int], _ big: [Int], _ boxes: [Box]) -> Bool {
         let ms = small.map { boxes[$0] }
+        // Letters whose middles are within half a letter of the line's are on it, whatever slope was
+        // fitted from pieces of letters (a wide word gap then started a "line" beside the first).
+        let letter = median(ms.map(\.h) + big.map { boxes[$0].h })
+        if abs(median(ms.map(\.cy)) - median(big.map { boxes[$0].cy })) < sameMiddle * letter { return true }
+        // A letter of the line with its accents ("Ö" and its dots, a "!" whose dot came apart,
+        // apostrophes written high): the tallest stroke ends in the line's band, and the rest lie at
+        // most 1.5 band heights above it and one band height below the band.
+        if ms.count <= accented, let tall = ms.max(by: { $0.h < $1.h }) {
+            let (t, b) = band(big, boxes, at: tall.cx)
+            let core = b - t
+            if tall.maxY >= t - 0.25 * core, tall.maxY <= b + 0.5 * core,
+               ms.allSatisfy({ $0.minY >= tall.minY - 1.5 * core && $0.maxY <= b + core }) {
+                return true
+            }
+        }
         let cx = median(ms.map(\.cx))
         let (top, bottom) = band(big, boxes, at: cx)
         var core = bottom - top
@@ -350,8 +376,16 @@ extension InkLine {
         return ordered.map { $0.map { strokes[$0] } }
     }
 
+    /// The length of a stroke's pen path.
+    private static func path(_ s: Stroke) -> CGFloat {
+        zip(s.points, s.points.dropFirst()).reduce(CGFloat(0)) { sum, pair in
+            sum + CGFloat(hypot(pair.1.x - pair.0.x, pair.1.y - pair.0.y))
+        }
+    }
+
     /// A line without its exponents, and the exponents (small, high, after a letter, not a dot or
-    /// accent over one) grouped left to right with where each group starts.
+    /// accent over one, drawn with a character's length of pen) grouped left to right with where
+    /// each group starts.
     static func splitRaised(_ line: [Stroke]) -> (base: [Stroke], raised: [(strokes: [Stroke], x: CGFloat)]) {
         let boxes = line.map { Box($0) }
         let letter = letterHeight(boxes)
@@ -380,7 +414,9 @@ extension InkLine {
                 groups.append([i])
             }
         }
-        let raisedSet = Set(raised)
+        // A group without one stroke as long as a character's stays in the line.
+        groups = groups.filter { g in g.map { path(line[$0]) }.max() ?? 0 >= raisedPath * core }
+        let raisedSet = Set(groups.joined())
         let base = line.indices.filter { !raisedSet.contains($0) }.map { line[$0] }
         let exponents = groups.map { g -> (strokes: [Stroke], x: CGFloat) in
             (strokes: g.map { line[$0] }, x: g.map { boxes[$0].minX }.min() ?? 0)
