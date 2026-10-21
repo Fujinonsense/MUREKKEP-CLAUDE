@@ -61,3 +61,37 @@ The Metal toolchain is installed first when missing.
 - Nothing in this batch has been compiled yet.
   - If the MLX packages fail in CI, the workflow falls back to the build without MLX. The IPA then has the old brains, and Settings says MLX is missing from that build.
   - The new look can only be judged on the iPad.
+
+## Build 22: the text pen checked end to end
+
+**What was wrong.** The line finder treated any letter-size stroke outside a line's middle band as the start of a new line. Letters drawn in several strokes made spurious lines:
+- a y's tail drawn on its own
+- the top bowl of a B
+- a piece of an ascender
+
+On held-out handwriting fonts written as real pen strokes (`tools/textpencheck/gen_cases.py`, 531 writings, level and turned pages, one and two lines), the right number of lines came out in 217. This is the "Neler" + "l" + "oyor?" failure the user saw.
+
+**Fix** (Python twin first, with failing tests, then `InkLine.swift`):
+- A stroke above or below every band joins the line it stands beside, within 1.2 band heights.
+- Lines split while reading are joined again.
+- The slope is capped at 5°, because the ink is levelled first.
+- Boxes come from the points, not from the pen's radius.
+
+**Result:**
+- Right line count: 515/531.
+- Exact readings: 361/531 (was 156).
+- Two stacked lines kept apart better than before at every spacing tried, down to 1.1 line heights (143/165, against 46 for the old finder).
+- `tools/split_stress.py`: 0 wrong in 1,274 one-line and 130 two-line cases.
+
+**Checked in the app's own Swift.** `tools/textpencheck/run.ps1` compiles the real `InkLine.swift`, `HandwritingModel.swift` and `InkDeskew.swift` with Windows Swift (stand-ins for `vDSP_mmul` and the CoreGraphics bitmap context) and compares them with the Python twins:
+- Same lines in all 531 cases.
+- The network's log-probabilities on the same image differ by at most 0.015, and the beam gives the same text.
+- The renderer differs from PIL by 0.016 per pixel on average.
+- A 2.6 pt pen radius changes nothing.
+
+### Rulings
+
+- **Boxes without the pen's radius.** A 3D ink's radius made dots and accents look like letters. The Python twin never had the radius, so its measurements now describe the app. Cost if wrong: none found; the radius carries no information about the writing.
+- **Slope at most 5° instead of 12°.** The text pen levels the ink with `InkDeskew` before it looks for lines, and a slope fitted from pieces of letters swung up to ±12° and moved the band 20 pt at the line's start. Cost if wrong: a line whose own baseline drifts more than 5° from the page's levelled direction may lose its last letters to a second line; the existing 8° tilted-line test still passes.
+- **Lines whose letters sit within a bigger line's reach are merged.** Two real lines closer than about 1.45 x-heights could be merged. Cost if wrong: such tight lines read as one.
+- **The test cases use font skeletons chained into pen strokes.** Real hands differ. On the iPad, Apple Vision's readings and the system dictionary also compete with the model; here the dictionary was approximated with word frequency lists (exact readings 369/531).
