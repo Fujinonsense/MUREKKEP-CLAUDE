@@ -33,3 +33,14 @@ The pure parts are compiled and checked with Windows Swift: `SpacedRepetition` (
 
 - The SwiftUI screens and the FoundationModels drafts are written against the documented APIs (`@Guide` with `.count`, `.range`, `.maximumCount`), but they have not been compiled.
 - The first full build is the GitHub workflow.
+
+## Build 19 additions
+
+- **Find my computer on the network (Settings):** searches the iPad's /24 on the Ollama (11434) and LM Studio (1234) ports, 48 addresses at a time, then takes the first server found and makes it the assistant's engine. The app now declares `NSLocalNetworkUsageDescription`.
+- **Search inside notes:** the library search also finds words in PDF text layers, in scanned pages already read and in handwriting. Case, Turkish i forms and accents are ignored, and a hit opens the note at its page.
+
+### Rulings
+
+- **A found computer becomes the engine.** Searching for the computer means wanting its brain. Cost if wrong: someone who had chosen Claude must switch back in Settings.
+- **Handwriting is read into search text when a note is closed, not at launch.** Reading every notebook at launch would keep the iPad busy. Cost if wrong: a notebook not opened since this build is found by title only, until it is opened and closed once.
+- **A book's PDF text is gathered on its first search and kept for the session.** Cost if wrong: the first search in a 1,400-page book takes a few seconds; later searches are instant.
