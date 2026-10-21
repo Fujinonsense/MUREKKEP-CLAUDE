@@ -271,5 +271,101 @@ check(zb(250, 100).newLine(pageSize: zoomPage, margin: 40).rect.origin == CGPoin
 let firstBox = ZoomBox.initial(page: 2, pageSize: zoomPage, margin: 40, aspect: 4)
 check(firstBox.page == 2 && firstBox.rect == CGRect(x: 40, y: 80, width: 240, height: 60), "zoom: first box \(firstBox.rect)")
 
+// MARK: Spaced repetition (SpacedRepetition)
+
+let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
+func after(_ r: CardReview, _ ratings: [ReviewRating], from start: Date = t0) -> CardReview {
+    var card = r
+    var now = start
+    for rating in ratings {
+        card = SpacedRepetition.review(card, rating: rating, now: now)
+        now = card.due ?? now
+    }
+    return card
+}
+func wait(_ r: CardReview, from start: Date = t0) -> Double { ((r.due ?? start).timeIntervalSince(start)) }
+let fresh = CardReview()
+check(abs(wait(SpacedRepetition.review(fresh, rating: .good, now: t0)) - 600) < 1, "srs: new card good -> 10 min")
+check(abs(wait(SpacedRepetition.review(fresh, rating: .again, now: t0)) - 60) < 1, "srs: new card again -> 1 min")
+let graduated = after(fresh, [.good, .good])
+check(graduated.interval == 1 && !graduated.learning, "srs: good twice graduates to 1 day (\(graduated.interval))")
+check(SpacedRepetition.review(fresh, rating: .easy, now: t0).interval == 4, "srs: easy graduates to 4 days")
+let reviewed = SpacedRepetition.review(graduated, rating: .good, now: t0)
+check(abs(reviewed.interval - 2.5) < 1e-9 && abs(wait(reviewed) - 2.5 * 86_400) < 1, "srs: good multiplies by ease (\(reviewed.interval))")
+let lapsed = SpacedRepetition.review(reviewed, rating: .again, now: t0)
+check(lapsed.learning && lapsed.lapses == 1 && abs(lapsed.ease - 2.3) < 1e-9 && abs(wait(lapsed) - 600) < 1, "srs: again relearns in 10 min")
+let relearned = SpacedRepetition.review(lapsed, rating: .good, now: t0)
+check(!relearned.learning && abs(relearned.interval - 1.25) < 1e-9, "srs: relearned at half the interval (\(relearned.interval))")
+var mature = CardReview()
+mature.learning = false
+mature.interval = 10
+mature.reps = 5
+mature.due = t0
+check(abs(SpacedRepetition.review(mature, rating: .hard, now: t0).interval - 12) < 1e-9, "srs: hard x1.2")
+let easyMature = SpacedRepetition.review(mature, rating: .easy, now: t0)
+check(abs(easyMature.interval - 32.5) < 1e-9 && abs(easyMature.ease - 2.65) < 1e-9, "srs: easy x ease x 1.3, ease up")
+var floor = mature
+floor.ease = 1.35
+check(abs(SpacedRepetition.review(floor, rating: .again, now: t0).ease - 1.3) < 1e-9, "srs: ease never below 1.3")
+check(SpacedRepetition.isDue(fresh, now: t0) && !SpacedRepetition.isDue(graduated, now: t0), "srs: new cards are due, graduated ones wait")
+
+// MARK: Study tools (StudyOffline, MindMapLayout)
+
+let turkishParts = [
+    (title: "Türev", text: """
+    Türev, bir fonksiyonun anlık değişim oranıdır. Bir eğrinin bir noktadaki teğetinin eğimine o noktadaki türev denir.
+    Türevin işareti fonksiyonun artan ya da azalan olduğunu gösterir. Türev sıfır olduğunda fonksiyonun kritik noktası vardır.
+    Limit kavramı türevin tanımında kullanılır ve süreklilik türevlenebilmenin ön koşuludur.
+    """),
+    (title: "İntegral", text: """
+    Belirli integral, bir eğrinin altında kalan alanı verir. Antitürev, türevi verilen fonksiyona eşit olan fonksiyondur.
+    Analizin temel teoremi türev ile integralin birbirinin tersi olduğunu söyler. İntegral alan ve hacim hesaplarında kullanılır.
+    """),
+]
+let englishParts = [
+    (title: "Cells", text: """
+    A cell is the smallest unit of life that can replicate independently. Mitochondria are called the powerhouse of the cell.
+    Photosynthesis refers to the process by which plants turn light into chemical energy. The nucleus contains the genetic material of the cell.
+    Ribosome: a small structure that builds proteins from amino acids. Membranes control what enters and leaves the cell.
+    """),
+]
+let trCards = StudyOffline.flashcards(parts: turkishParts, english: false, count: 8)
+check(trCards.contains { $0.front == "Türev nedir?" && $0.back.contains("anlık değişim oranıdır") }, "study: turkish definition card \(trCards.map(\.front))")
+check(trCards.contains { $0.front.hasPrefix("Antitürev") || $0.front.contains("Antitürev") }, "study: second turkish definition")
+check(trCards.count >= 4 && trCards.count <= 8 && Set(trCards.map(\.front)).count == trCards.count, "study: card count and no repeats (\(trCards.count))")
+let enCards = StudyOffline.flashcards(parts: englishParts, english: true, count: 8)
+check(enCards.contains { $0.front == "What is a cell?" } && enCards.contains { $0.front == "What is ribosome?" || $0.front == "What is a ribosome?" },
+      "study: english definition cards \(enCards.map(\.front))")
+check(enCards.contains { $0.front.lowercased().contains("photosynthesis") }, "study: 'refers to' card")
+let quiz = StudyOffline.quiz(parts: turkishParts, english: false, count: 5)
+check(!quiz.isEmpty && quiz.allSatisfy { $0.choices.count == 4 && Set($0.choices).count == 4 && $0.choices.indices.contains($0.answer) },
+      "study: quiz has four different choices (\(quiz.count))")
+check(quiz.allSatisfy { q in q.question.contains("_____") && !q.question.lowercased().contains(q.choices[q.answer].lowercased()) },
+      "study: the answer is blanked out of the question")
+let map = StudyOffline.mindMap(title: "Kalkülüs", parts: turkishParts, english: false)
+check(map.title == "Kalkülüs" && map.children.map(\.title) == ["Türev", "İntegral"] && map.children.allSatisfy { !$0.children.isEmpty },
+      "study: mind map branches")
+let guide = StudyOffline.guide(parts: turkishParts, english: false)
+check(guide.sections.map(\.heading) == ["Türev", "İntegral"] && !guide.summary.isEmpty && guide.terms.contains { $0.term == "Türev" } && !guide.questions.isEmpty,
+      "study: guide")
+
+func tree(_ title: String, _ children: [MindNode] = []) -> MindNode { MindNode(title: title, children: children) }
+let mapRoot = tree("Root", [tree("A", [tree("A1"), tree("A2"), tree("A3")]), tree("B"), tree("C", [tree("C1")])])
+let placed = MindMapLayout.layout(mapRoot, collapsed: [], size: { node, _ in CGSize(width: 40 + CGFloat(node.title.count) * 8, height: 30) },
+                                  columnGap: 50, rowGap: 12)
+check(placed.count == 8, "mindmap: every node placed")
+var overlap = false
+for i in placed.indices {
+    for j in placed.indices where j > i && placed[i].frame.intersects(placed[j].frame) { overlap = true }
+}
+check(!overlap, "mindmap: no overlap")
+let byID = Dictionary(uniqueKeysWithValues: placed.map { ($0.id, $0) })
+check(placed.allSatisfy { p in p.parent.map { byID[$0]!.frame.maxX < p.frame.minX } ?? true }, "mindmap: children right of their parent")
+let aNode = placed.first { $0.title == "A" }!
+let aKids = placed.filter { $0.parent == aNode.id }
+check(abs(aNode.frame.midY - (aKids.map(\.frame.midY).min()! + aKids.map(\.frame.midY).max()!) / 2) < 0.5, "mindmap: parent centred on its children")
+let folded = MindMapLayout.layout(mapRoot, collapsed: [mapRoot.children[0].id], size: { _, _ in CGSize(width: 60, height: 30) }, columnGap: 50, rowGap: 12)
+check(folded.count == 5 && !folded.contains { $0.title == "A1" }, "mindmap: a folded branch hides its children")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)
