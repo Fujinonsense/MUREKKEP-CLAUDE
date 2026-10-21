@@ -1,11 +1,11 @@
-# Mürekkep — isteklerin tek tek kontrolü (build 23)
+# Mürekkep — isteklerin tek tek kontrolü (build 24)
 
 Durum işaretleri:
 - ✅ **Ölçüldü**: kodda var ve burada testle ya da ölçümle doğrulandı (Python ikizi, Windows Swift veya uygulamanın kendi Swift dosyalarıyla).
 - 🟡 **Kodda var**: yazıldı ve kanıtı kodda, ama ancak iPad'de görülüp hissedilebilir (görünüm, ses, akıcılık).
 - ❌ **Yapılmadı**.
 
-Hiçbir build'in (16–23) iPad derlemesi henüz CI'da yapılmadı: derleme kontrolü GitHub Actions'ta olur. Bunun için `gh auth login` gerekiyor.
+Build 23 ve 24 GitHub Actions'ta (Fujibonita/MUREKKEP-CLAUDE) derlendi.
 
 Kanıt komutu: `py C:/Users/orsyu/mrk-ml/textpen/audit.py <repo>` → 50/50 istekte kodda kanıt bulundu.
 
@@ -13,7 +13,10 @@ Kanıt komutu: `py C:/Users/orsyu/mrk-ml/textpen/audit.py <repo>` → 50/50 iste
 
 | # | İstek | Durum | Kanıt |
 |---|---|---|---|
-| 1 | TR/EN çirkin el yazısıyla eğit, normal ve 3D kalemde kusursuz | ✅ | Model CER %3.08 (önce %3.18). Uygulamanın kendi Swift'iyle 531 vakada tam okuma 376 (build 22: 361, satır düzeltmesinden önce 156). |
+| 1 | TR/EN çirkin el yazısıyla eğit, normal ve 3D kalemde kusursuz | ✅ | **Build 24, senin el yazınla:** PDF olarak attığın 16 satırla iki okuyucu da ince ayarlandı. Hiç görmediği 4 satırında hata %17.6'dan **%4.1**'e indi. Sentetik 531 vakada tam okuma 376 → 401. |
+| 1d | Metin kalemi kelimeleri parça parça çevirip yapıştırıyordu | ✅ | Aynı satırda devam edince satırın tamamı birlikte yeniden okunuyor (`TextPenBatch`, testli). |
+| 1e | Satır ortasına çöp üs ekliyordu (`^D`, `⁽`, `¹`) | ✅ | Nokta, çentik ve kesme işaretleri artık üs sayılmıyor. Senin satırlarında 14 sahte üs → 0. |
+| 1f | Tek satırı ikiye bölüyordu | ✅ | Senin 16 satırında 11/16 → 16/16, uygulamanın kendi Swift'inde. |
 | 1b | Google Fonts el yazısı fontlarıyla sentetik veri üreteci | ✅ | 12 aile, 16 dosya indirildi. TR 30.000 kelime (%83'ünde ç ğ ı İ ö ş ü), EN 20.690. Pillow + SciPy elastik bozma. Eğitimin %30'u bu satırlardan. |
 | 1c | Online HTR: kalem hareketinden okuma (dx, dy, sin, cos, kalem) | ✅ | Kinematik çizgi üreteci, nokta/çengeller kalem kaldırılıp sonradan. Swift = Python (fark ≤ 0.00012). Doğal kalem sırasıyla özensiz 400 satırda tam okuma 151 → 305. Font vakalarında kayıp yok (376 → 376). |
 | 2 | ı → i, Ş → S, tırnak/virgül hataları | ✅ | Doğrulamada Türkçe harf doğruluğu %95.1. Sözlük onarımı (kucuk → küçük) testli. |
@@ -85,4 +88,4 @@ Kanıt komutu: `py C:/Users/orsyu/mrk-ml/textpen/audit.py <repo>` → 50/50 iste
 ## Yapılmayan
 
 - ❌ Android sürümü: sen vazgeçmiştin.
-- ❌ CI derlemesi: `gh auth login` senin adımın.
+- ✅ CI derlemesi: GitHub girişinden sonra çalışıyor (arm64 Mac kuyruğu doluysa Intel Mac ile).
