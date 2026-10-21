@@ -431,5 +431,20 @@ check(BrainBudget.thinking(for: "3x + 5 = 20 ise x kaçtır?") == 2_048 && Brain
       "brain: arithmetic thinks longer")
 check(BrainModel.sizeText(3_061_000_000, english: false) == "3,1 GB" && BrainModel.sizeText(5_977_000_000, english: true) == "6.0 GB", "brain: sizes")
 
+// The text pen reads a line again when the writing goes on (tests/test_textpen_batch.py).
+let aga = CGRect(x: 100, y: 200, width: 60, height: 40)
+func box(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat) -> CGRect { CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0) }
+let batchCases: [(CGRect, TimeInterval, Bool, String)] = [
+    (box(180, 205, 260, 236), 2, true, "next word"), (box(175, 196, 230, 238), 1, true, "ascender"),
+    (box(175, 212, 230, 248), 1, true, "descender"), (box(100, 262, 200, 300), 2, false, "next line"),
+    (box(160 + 4 * 40 + 5, 205, 400, 236), 2, false, "far right"), (box(20, 205, 80, 236), 2, false, "back at the start"),
+    (box(148, 190, 152, 194), 3, true, "dot"), (box(163, 234, 166, 238), 3, true, "full stop"),
+    (box(165, 196, 171, 206), 3, true, "closing quote"), (box(180, 205, 260, 236), 14.9, true, "within the window"),
+    (box(180, 205, 260, 236), 15.1, false, "after the window"), (box(180, 205, 260, 236), -1, false, "negative time"),
+]
+for (next, elapsed, want, name) in batchCases {
+    check(TextPenBatch.continues(last: aga, next: next, elapsed: elapsed) == want, "text pen batch: \(name)")
+}
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

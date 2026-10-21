@@ -136,6 +136,9 @@ final class EditorModel: ObservableObject {
     private var lastTypeset: (page: Int, rect: CGRect, time: Date)?
     /// Where the text pen's last word ended: the next words on that line follow it with one space.
     private var lastTextEnd: (page: Int, end: TextEnd)?
+    /// The handwriting the text pen read last and the text that replaced it: writing that goes on
+    /// along that line is read again together with it (TextPenBatch).
+    private var lastTextRead: (page: Int, strokes: [Stroke], typeset: Set<Int>, ink: CGRect, time: Date, before: TextEnd?)?
     /// What the canvas shows in its middle (for placing plots and calculator results).
     var viewCenter: (page: Int, point: CGPoint)?
     private var selectionSnapshot: (strokes: [Stroke], ids: Set<Int>, stickers: [Sticker])?
@@ -849,7 +852,7 @@ final class EditorModel: ObservableObject {
     /// Adds a text-pen stroke to the waiting batch; the batch turns into text after a pause.
     func queueTextStroke(_ id: Int, page: Int) {
         if let batch = textBatch, batch.page != page {
-            convertTextBatch()
+            convertTextBatch(now: true)
         }
         textBatch = (page, (textBatch?.ids ?? []) + [id])
         textWork?.cancel()
@@ -869,23 +872,44 @@ final class EditorModel: ObservableObject {
     }
 
     /// Reads the waiting handwriting and replaces it with text on the lines (one undo step).
-    func convertTextBatch() {
+    /// `now`: the batch must go at once (the pen moved to another page).
+    func convertTextBatch(now: Bool = false) {
         textWork?.cancel()
         textWork = nil
         guard let batch = textBatch else { return }
+        // A reading still running: this writing waits for it, so it can join the line it typesets.
+        if isTypesetting, !now {
+            let work = DispatchWorkItem { [weak self] in self?.convertTextBatch() }
+            textWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+            return
+        }
         textBatch = nil
         let ids = Set(batch.ids)
         let source = strokes(on: batch.page).filter { ids.contains($0.id) }
         guard !source.isEmpty, layout.pageSizes.indices.contains(batch.page) else { return }
         let marks = source.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
+        // Writing that goes on along the line just turned into text: the whole line is read again,
+        // so its words keep their context and the spaces between them. Not when that text was
+        // erased or changed since.
+        var earlier: [Stroke] = []
+        var replacing = Set<Int>()
+        var previous = lastTextEnd?.page == batch.page ? lastTextEnd?.end : nil
+        if let last = lastTextRead, last.page == batch.page,
+           TextPenBatch.continues(last: last.ink, next: marks, elapsed: Date().timeIntervalSince(last.time)),
+           last.typeset.isSubset(of: Set(strokes(on: batch.page).map(\.id))) {
+            earlier = last.strokes
+            replacing = last.typeset
+            previous = last.before
+        }
         // Thick pens make bigger dots: the size of a lone mark grows with the pen.
         let penWidth = CGFloat(source.map(\.width).max() ?? 0)
         let isSmall = max(marks.width, marks.height) < max(14, 3 * penWidth)
-        // A dot or an accent written after its word had already turned into text. Read alone it
-        // becomes a stray letter ("i" over "ı", "," under "ç"); the dictionary has already given the
-        // word its Turkish letters, so the mark is simply dropped. A mark after the word (a full
-        // stop) is not over it and stays.
-        if isSmall, let last = lastTypeset, last.page == batch.page, Date().timeIntervalSince(last.time) < 8,
+        // A dot or an accent written after its word had already turned into text (and too late to
+        // read the line again). Read alone it becomes a stray letter ("i" over "ı", "," under "ç");
+        // the dictionary has already given the word its Turkish letters, so the mark is simply
+        // dropped. A mark after the word (a full stop) is not over it and stays.
+        if earlier.isEmpty, isSmall, let last = lastTypeset, last.page == batch.page, Date().timeIntervalSince(last.time) < 8,
            last.rect.insetBy(dx: -4, dy: -12).intersects(marks),
            marks.midX > last.rect.minX - 4, marks.midX < last.rect.maxX - 1 {
             let present = Set(strokes(on: batch.page).map(\.id))
@@ -896,36 +920,43 @@ final class EditorModel: ObservableObject {
         let size = layout.pageSizes[batch.page]
         let flowers = settings.flowerLevel
         let access = handwritingAccess
-        let previous = lastTextEnd?.page == batch.page ? lastTextEnd?.end : nil
-        // The page's other ink, which the typed words keep clear of.
-        let others = strokes(on: batch.page).filter { !ids.contains($0.id) && !$0.points.isEmpty }.map { CGRect(ink: $0.bounds) }
+        let start = previous
+        let read = earlier + source
+        let rereading = !earlier.isEmpty
+        let replaced = replacing
+        // The page's other ink, which the typed words keep clear of (not the text being read again).
+        let others = strokes(on: batch.page).filter { !ids.contains($0.id) && !replacing.contains($0.id) && !$0.points.isEmpty }
+            .map { CGRect(ink: $0.bounds) }
         let scale = settings.textPenScale
         isTypesetting = true
         Task { @MainActor [weak self] in
-            let converted = await HandwritingConverter.convert(strokes: source, paper: paper, pageSize: size,
+            let converted = await HandwritingConverter.convert(strokes: read, paper: paper, pageSize: size,
                                                                flowerLevel: flowers, keepPosition: true,
-                                                               ai: access, continueFrom: previous, obstacles: others,
+                                                               ai: access, continueFrom: start, obstacles: others,
                                                                textScale: scale)
             guard let self else { return }
             self.isTypesetting = false
             // Small marks that read as nothing but punctuation stay as ink, quietly.
-            if isSmall, !(converted?.text.contains(where: { $0.isLetter || $0.isNumber }) ?? false) { return }
+            if isSmall, !rereading, !(converted?.text.contains(where: { $0.isLetter || $0.isNumber }) ?? false) { return }
             guard let result = converted else {
                 self.banner = Loc.t("Okunamadı, el yazısı olarak bıraktım.")
                 return
             }
-            // Strokes erased in the meantime stay erased.
+            // Strokes erased in the meantime stay erased; the text read again goes.
             let present = Set(self.strokes(on: batch.page).map(\.id))
-            let removed = result.removed.intersection(present)
+            let removed = result.removed.intersection(present).union(replaced.intersection(present))
             guard !removed.isEmpty else { return }
             self.replaceStrokes(page: batch.page, removing: removed, adding: result.added)
             // The handwriting and the text that replaced it: late dots can land on either.
-            let written = (source.filter { removed.contains($0.id) } + result.added)
+            let handwriting = read.filter { result.removed.contains($0.id) }
+            let written = (handwriting + result.added)
                 .map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
             self.lastTypeset = (batch.page, written, Date())
             if let end = result.end {
                 self.lastTextEnd = (batch.page, end)
             }
+            let ink = handwriting.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
+            self.lastTextRead = (batch.page, handwriting, Set(result.added.map(\.id)), ink, Date(), start)
             self.onHaptic?(.completed)
         }
     }
@@ -1088,8 +1119,9 @@ final class EditorModel: ObservableObject {
     func undo() {
         guard let edit = undoStack.popLast(), pages.indices.contains(edit.page) else { return }
         suggestion = nil
-        // The text the pen would continue may be gone now.
+        // The text the pen would continue (or read again) may be gone now.
         lastTextEnd = nil
+        lastTextRead = nil
         shapeEditSnapshot = nil
         shapeEdit = nil
         if placingSticker != nil {
@@ -1106,6 +1138,7 @@ final class EditorModel: ObservableObject {
     func redo() {
         guard let edit = redoStack.popLast(), pages.indices.contains(edit.page) else { return }
         suggestion = nil
+        lastTextRead = nil
         shapeEditSnapshot = nil
         shapeEdit = nil
         if placingSticker != nil {
