@@ -4,7 +4,7 @@ Strokes are lists of (x, y) page points, y down.
 
 Letter-size strokes (at least 0.6 × the median stroke height) build the lines, each joining the line
 whose band it overlaps by 40 % of the smaller height; the band follows the line's slope once it has
-three letters. Every smaller stroke (dots, accents, commas, exponents, a plus sign's bars) then joins
+six letters. Every smaller stroke (dots, accents, commas, exponents, a plus sign's bars) then joins
 the line whose band is nearest, preferring lines it lies beside."""
 import statistics
 
@@ -15,6 +15,7 @@ RAISED_MIN = 0.25
 OVER_LETTER = 0.1
 GROUP_GAP = 0.5
 RECENT = 12
+FIT = 6  # letters a line needs before its slope is fitted
 MAX_SLOPE = 0.2126  # tan 12°
 
 
@@ -40,16 +41,19 @@ class _Line:
 
     def band(self, boxes, x):
         """(top, bottom) of the line's letters at x. The slope is the median of the slopes between
-        the last 12 letters (a capital or a descender among them cannot tilt it), at most 12°."""
+        the last 12 letters (a capital or a descender among them cannot tilt it), at most 12°; a line
+        of fewer than 6 letters is level ("Bug" alone would point the band below the next letter)."""
         ms = [boxes[i] for i in self.members]
         if len(ms) < 3:
             return min(b.min_y for b in ms), max(b.max_y for b in ms)
         core = statistics.median(b.h for b in ms)
         recent = ms[-RECENT:]
-        slopes = [(b.cy - a.cy) / (b.cx - a.cx) for i, a in enumerate(recent) for b in recent[i + 1:]
-                  if abs(b.cx - a.cx) > 1e-6]
-        a = statistics.median(slopes) if slopes else 0.0
-        a = max(-MAX_SLOPE, min(MAX_SLOPE, a))
+        a = 0.0
+        if len(recent) >= FIT:
+            slopes = [(b.cy - p.cy) / (b.cx - p.cx) for i, p in enumerate(recent) for b in recent[i + 1:]
+                      if abs(b.cx - p.cx) > 1e-6]
+            a = statistics.median(slopes) if slopes else 0.0
+            a = max(-MAX_SLOPE, min(MAX_SLOPE, a))
         yc = statistics.median(b.cy - a * b.cx for b in recent) + a * x
         return yc - core / 2, yc + core / 2
 

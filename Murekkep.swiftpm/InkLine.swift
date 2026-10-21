@@ -103,7 +103,7 @@ enum InkLine {
 /// Which strokes form a line of writing, where dots and accents belong, and which small raised
 /// strokes are exponents (twin of tests/ports/inkline.py). Letter-size strokes (at least 0.6 × the
 /// median stroke height) build the lines, each joining the line whose band it overlaps by 40 % of the
-/// smaller height; the band follows the line's slope once it has three letters. Every smaller stroke
+/// smaller height; the band follows the line's slope once it has six letters. Every smaller stroke
 /// (dots, accents, commas, exponents) then joins the nearest line, preferring lines it lies beside.
 extension InkLine {
     private static let primaryShare: CGFloat = 0.6
@@ -143,12 +143,15 @@ extension InkLine {
         return hs.isEmpty ? max(boxes.map(\.h).max() ?? 1, 1) : median(hs)
     }
 
-    /// The slope comes from the line's last 12 letters, at most 12° (tan 12° ≈ 0.2126).
+    /// The slope comes from the line's last 12 letters, at most 12° (tan 12° ≈ 0.2126), and only once
+    /// the line has 6 letters.
     private static let recentLetters = 12
+    private static let fitLetters = 6
     private static let maxSlope: CGFloat = 0.2126
 
     /// Top and bottom of a line's letters at `x`. The slope is the median of the slopes between the
-    /// last letters, so a capital or a descender among them cannot tilt the band.
+    /// last letters, so a capital or a descender among them cannot tilt the band; a shorter line is
+    /// level ("Bug" alone would point the band below the next letter).
     private static func band(_ members: [Int], _ boxes: [Box], at x: CGFloat) -> (top: CGFloat, bottom: CGFloat) {
         let ms = members.map { boxes[$0] }
         guard ms.count >= 3 else {
@@ -157,9 +160,11 @@ extension InkLine {
         let core = median(ms.map(\.h))
         let recent = Array(ms.suffix(recentLetters))
         var slopes: [CGFloat] = []
-        for i in recent.indices {
-            for j in (i + 1)..<recent.count where abs(recent[j].cx - recent[i].cx) > 1e-6 {
-                slopes.append((recent[j].cy - recent[i].cy) / (recent[j].cx - recent[i].cx))
+        if recent.count >= fitLetters {
+            for i in recent.indices {
+                for j in (i + 1)..<recent.count where abs(recent[j].cx - recent[i].cx) > 1e-6 {
+                    slopes.append((recent[j].cy - recent[i].cy) / (recent[j].cx - recent[i].cx))
+                }
             }
         }
         let a = min(max(slopes.isEmpty ? 0 : median(slopes), -maxSlope), maxSlope)
