@@ -276,14 +276,6 @@ enum Translations {
         "Elektrik": "Electricity",
         "Elektrik gücü": "Electric power",
         "Elektron kütlesi": "Electron mass",
-        "ElevenLabs API anahtarı": "ElevenLabs API key",
-        "ElevenLabs anahtarı geçersiz ya da seslendirme izni yok. Ses ayarlarından kontrol et.": "Invalid ElevenLabs key, or it has no text-to-speech permission. Check it in the voice settings.",
-        "ElevenLabs anahtarı kayıtlı": "ElevenLabs key saved",
-        "ElevenLabs anahtarı yokken OpenAI'nin aynı türden kadın ve erkek sesi kullanılır.": "Without an ElevenLabs key, OpenAI's female and male voices of the same kind are used.",
-        "ElevenLabs aynı anda çok fazla istek aldı. Biraz bekleyip tekrar dene.": "ElevenLabs received too many requests at once. Wait a moment and try again.",
-        "ElevenLabs karakter kotası bitti ya da planın bu modeli kapsamıyor.": "Your ElevenLabs character quota is used up, or your plan doesn't include this model.",
-        "ElevenLabs sesi alınamadı ({0}).": "Couldn't get the ElevenLabs audio ({0}).",
-        "ElevenLabs sesi alınamadı: {0}": "Couldn't get the ElevenLabs audio: {0}",
         "Eleştiri": "Critique",
         "Elini rahat koyacağın açıyı seç ve kilitle; yazdıkların sayfaya göre düz kalır. Kilit açıkken iki parmakla çevirerek de döndürebilirsin, 15°'lerde tık diye oturur.": "Pick the angle that's comfortable for your hand and lock it; your writing stays straight on the page. While it's unlocked you can also turn it with two fingers; it clicks at 15° steps.",
         "Elips": "Ellipse",
@@ -505,9 +497,6 @@ enum Translations {
 
     private static let part5: [String: String] = [
         "Oluştur": "Create",
-        "OpenAI anahtarı geçersiz. Ses ayarlarından kontrol et.": "Invalid OpenAI key. Check it in the voice settings.",
-        "OpenAI anahtarı kayıtlı": "OpenAI key saved",
-        "OpenAI kotası ya da hız sınırı doldu. Biraz bekleyip tekrar dene.": "OpenAI quota or rate limit reached. Wait a moment and try again.",
         "Orta": "Medium",
         "Otomatik": "Automatic",
         "Otomatik · yerel sunucu": "Automatic · local server",
@@ -610,10 +599,7 @@ enum Translations {
         "Sesi kaydet (M4A)": "Save audio (M4A)",
         "Seslendiriliyor…": "Adding narration…",
         "Seslendirme": "Narration",
-        "Seslendirme için Ayarla'dan ElevenLabs anahtarını ekle.": "Add your ElevenLabs key in Set up to get narration.",
-        "Seslendirme için Sesler ayarına ElevenLabs anahtarını ekle. Özet kaydedildi; anahtarı ekleyince menüden \"Yeniden seslendir\"i seç.": "To get narration, add your ElevenLabs key in the Voices settings. The overview was saved; once you add the key, choose \"Voice again\" from the menu.",
         "Sesler": "Voices",
-        "Sesler ElevenLabs'in en doğal modeliyle (Multilingual v2) üretilir. Anahtar elevenlabs.io › profil › API Keys bölümünden alınır (seslendirme izni açık olmalı) ve yalnızca bu cihazda saklanır. Metinler seslendirme için ElevenLabs'e gönderilir; karakterler hesabının kotasından düşer.": "Voices are made with ElevenLabs' most natural model (Multilingual v2). Get the key at elevenlabs.io › profile › API Keys (text-to-speech permission must be on); it's stored only on this device. Text is sent to ElevenLabs to be voiced, and characters count against your account's quota.",
         "Sesli özet": "Audio overview",
         "Sessiz kaydedildi": "Saved without audio",
         "Seviye": "Level",
@@ -730,7 +716,6 @@ enum Translations {
         "Yazı, son seçtiğin kalemin mürekkebi ve rengiyle, şablonun çizgilerine oturtularak yazılır.": "The text is written with the ink and color of the pen you picked last, set on the template's lines.",
         "Yazıya çevir": "Convert to text",
         "Yağlı boya": "Oil paint",
-        "Yedek: OpenAI API anahtarı (isteğe bağlı)": "Fallback: OpenAI API key (optional)",
         "Yedigen": "Heptagon",
         "Yeni": "New",
         "Yeni bir defter aç ya da PDF içe aktar.": "Open a new notebook or import a PDF.",
@@ -1089,6 +1074,8 @@ enum Translations {
     ]
 
     private static let part11: [String: String] = [
+        "İndirilen model yazamadı, Apple modeliyle yazılıyor…": "The downloaded model couldn't write it; writing with Apple's model…",
+        "{0} senaryoyu yazıyor…": "{0} is writing the script…",
         "Bağlantı zaman aşımına uğradı. \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "The connection timed out. Tap \"Download\" again; it continues where it stopped.",
         "Bilgisayardaki sunucu": "Server on your computer",
         "Bu derlemede indirilebilir model motoru (MLX) yok. Yeni derlemede gelir.": "This build has no engine for the downloadable model (MLX). It comes with a new build.",

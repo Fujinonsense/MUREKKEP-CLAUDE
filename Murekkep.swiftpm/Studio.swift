@@ -689,23 +689,14 @@ enum StudioEngine: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The strongest brain on the iPad: the downloaded model, then Apple's (Claude only when chosen).
     static func preferred(settings: AppSettings) -> StudioEngine {
         if settings.hasAPIKey && settings.engine == .claude { return .claude }
+        if DeviceBrain.shared.isReady { return .deviceBrain }
         if OnDeviceAI.isAvailable { return .onDevice }
         if settings.hasAPIKey { return .claude }
         return .offline
     }
-
-    /// Study tools are short enough for the downloaded model, the strongest brain on the iPad.
-    static func preferredForStudy(settings: AppSettings) -> StudioEngine {
-        if settings.hasAPIKey && settings.engine == .claude { return .claude }
-        if DeviceBrain.shared.isReady { return .deviceBrain }
-        return preferred(settings: settings)
-    }
-
-    /// The engines that can write a video or audio overview (its script is too long for the
-    /// downloaded model to write in reasonable time).
-    static var forOverviews: [StudioEngine] { allCases.filter { $0 != .deviceBrain } }
 
     func isAvailable(settings: AppSettings) -> Bool {
         switch self {

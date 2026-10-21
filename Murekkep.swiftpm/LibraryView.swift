@@ -172,7 +172,7 @@ struct LibraryView: View {
                     .pageSizedSheet()
             }
             .sheet(item: $studyRequest) { request in
-                StudyCreateSheet(request: request, engine: StudioEngine.preferredForStudy(settings: settings))
+                StudyCreateSheet(request: request, engine: StudioEngine.preferred(settings: settings))
                     .environmentObject(store)
                     .environmentObject(study)
                     .environmentObject(settings)

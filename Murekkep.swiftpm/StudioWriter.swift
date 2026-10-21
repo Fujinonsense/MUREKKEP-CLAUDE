@@ -94,7 +94,14 @@ enum StudioWriter {
         case .claude:
             return try await claude(options: options, material: material, language: language,
                                     library: library, settings: settings, progress: progress)
-        case .onDevice, .deviceBrain:
+        case .deviceBrain:
+            if let overview = try await brain(options: options, material: material, language: language, progress: progress) {
+                return overview
+            }
+            // The downloaded model could not write it: Apple's model, then the keyless writer.
+            progress(0.05, Loc.t("İndirilen model yazamadı, Apple modeliyle yazılıyor…"))
+            fallthrough
+        case .onDevice:
             do {
                 return try await onDevice(options: options, material: material, language: language, progress: progress)
             } catch is CancellationError {
@@ -217,6 +224,62 @@ enum StudioWriter {
         }
         if out.isEmpty { throw StudioWriterError.noText }
         return out
+    }
+
+    // MARK: The downloaded model
+
+    /// Text of the sources for the downloaded model: excerpts spread over every source (about 14,000
+    /// characters, a few seconds of reading on the iPad), each under its source number.
+    private static func brainSources(_ material: StudioMaterial) -> String {
+        let budget = 14_000
+        let items = material.items.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !items.isEmpty else { return "" }
+        let share = budget / items.count
+        return material.items.enumerated().compactMap { i, item -> String? in
+            let text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            let body = text.count <= share
+                ? text
+                : TextChunks.pick(text, count: max(1, share / 1_600), size: 1_600).joined(separator: "\n…\n")
+            return "Kaynak \(i + 1): \(item.title)\n\(body)"
+        }.joined(separator: "\n\n")
+    }
+
+    /// The same script Claude writes (StudioPrompts), by the model downloaded to the iPad; nil when it
+    /// is not there, fails, or answers in the other language.
+    @MainActor
+    private static func brain(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
+                              progress: @escaping WriteProgress) async throws -> Overview? {
+        guard let directory = DeviceBrain.shared.directory else { return nil }
+        let sources = brainSources(material)
+        guard !sources.isEmpty else { return nil }
+        let titles = material.items.map(\.title)
+        let task = options.kind == .video
+            ? StudioPrompts.video(options, language: language, sources: titles)
+                + "\n- Bu kaynakların yalnızca metni var, sayfa görüntüleri yok: \"figure\" düzenini kullanma."
+            : StudioPrompts.audio(options, language: language, sources: titles)
+        let words = options.length.minutes * language.wordsPerMinute
+        let request = BrainRuntime.Request(system: StudioPrompts.system + "\n" + scriptDirective(language),
+                                           prompt: "KAYNAKLAR:\n" + sources + "\n\n" + task,
+                                           thinking: nil, maxAnswerTokens: min(7_000, words * 3 + 1_200), temperature: 0.6)
+        let title = DeviceBrain.shared.model?.title ?? "Qwen3.5"
+        progress(0.1, Loc.t("{0} senaryoyu yazıyor…", title))
+        do {
+            var reply = ""
+            for try await raw in BrainRuntime.stream(request, directory: directory) {
+                reply = ThinkingText.split(raw, thinking: false).answer
+                progress(min(0.95, 0.1 + 0.85 * Double(reply.count) / Double(max(words * 9, 2_000))), nil)
+            }
+            var overview = try StudioScriptParser.overview(from: reply, options: options, language: language,
+                                                           material: material, engine: Loc.t("Cihazda · {0}", title))
+            guard speaks(language, overview.segmentTexts.joined(separator: " ")) else { return nil }
+            if overview.title.isEmpty { overview.title = fallbackTitle(material) }
+            return overview
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return nil
+        }
     }
 
     // MARK: On the device

@@ -20,7 +20,7 @@ Branch: `murekkep-6-device-brain`, cut from `murekkep-5-study-tools`. It is not 
 - Textbook exercises go one whole exercise at a time.
 - Apple's model now answers a multiple-choice question up to three times and the majority wins. The third answer is asked only when the first two disagree.
 
-**Study tools.** Flashcards, quizzes, mind maps and guides can be written by the downloaded model, from the same JSON prompt as Claude. Video and audio overviews stay with Apple's model.
+**Study tools.** Flashcards, quizzes, mind maps and guides can be written by the downloaded model, from the same JSON prompt as Claude. Video and audio overviews stayed with Apple's model in this build; build 23 gives them to the downloaded model too (see below).
 
 **Look.** The palette comes from the name: blue-black ink on cool notebook paper.
 - The library sits on faint ruled paper.
@@ -52,7 +52,7 @@ The Metal toolchain is installed first when missing.
 - **The app downloads the files itself instead of using swift-huggingface.** That means one less package, no macros, a resumable Range download and a known folder. Cost if wrong: our own code for one HTTP request type.
 - **Thinking is capped with Qwen's own early-stop phrase.** Qwen3.5 declares no budget transition, so the one Qwen3 was trained with is used. Cost if wrong: an answer cut short could lean on half-finished thinking. The thinking text's last paragraph is the fallback answer.
 - **The model stops when the app goes to the background.** The GPU may not be used there, and the app waits up to 0.8 s for the answer to stop. An idle model is unloaded on a memory warning or in the background. Cost if wrong: the first answer after coming back loads the model again (a few seconds).
-- **Video and audio overviews do not use the downloaded model.** A 10-minute script runs to thousands of tokens, about 15–20 minutes at iPad speed. Cost if wrong: the overviews are only as strong as Apple's model.
+- ~~**Video and audio overviews do not use the downloaded model.**~~ Reversed in build 23: the 15–20 minute estimate was wrong. The script is written without thinking: about 3,600 tokens for a standard (7-minute) Turkish overview, at most 7,000 for a long English one. At 20–40 tokens a second that is about 2–6 minutes; this has not been timed on an iPad.
 - **If the downloaded model fails to start, Auto falls back to Apple's model for that answer.** A question is never left unanswered when another on-device brain is there. Cost if wrong: the fallback can hide a model problem. The answer says that it fell back, and why.
 - **The serif is only for titles.** Body text, answers and controls stay in the system font for legibility. Cost if wrong: none for reading; the look is milder than a full serif.
 
