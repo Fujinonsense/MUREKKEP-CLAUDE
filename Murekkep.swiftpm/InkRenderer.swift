@@ -187,6 +187,16 @@ final class InkRenderer {
     private var frameIndex = 0
     /// A page's meshes were rebuilt during this frame (then no extra prewarming).
     private var rebuiltThisFrame = false
+    /// Counts `render` calls; the live stroke's mesh is built once per call.
+    private var renderCount = 0
+    private var preparedActive: (frame: Int, buffer: MTLBuffer, first: Int, count: Int)?
+    /// The committed ink drawn once while the pencil writes (see `InkLayer`).
+    private var layerTexture: MTLTexture?
+    private var layerKey: InkLayerKey?
+    private var layerTime = 0.0
+    private var layerFPS = 0
+    /// nil until built (or if it cannot be built): frames are then drawn directly.
+    private var layerPipeline: MTLRenderPipelineState?
     private var pageCache: [Int: PageGPU] = [:]
     /// Grass geometry per stroke id (strokes never change in place).
     private var grassCache: [Int: GrassField] = [:]
@@ -296,6 +306,15 @@ final class InkRenderer {
         sd.tAddressMode = .clampToEdge
         guard let smp = device.makeSamplerState(descriptor: sd) else { throw RendererError.noQueue }
         sampler = smp
+
+        // Compiling the layer's small shader takes a moment: done off the main thread, so the first
+        // stroke never waits for it.
+        DispatchQueue.global(qos: .utility).async { [weak self, device] in
+            let pipeline = Self.makeLayerPipeline(device: device)
+            DispatchQueue.main.async {
+                self?.layerPipeline = pipeline
+            }
+        }
     }
 
     var now: Double { Date().timeIntervalSinceReferenceDate }
@@ -370,7 +389,31 @@ final class InkRenderer {
             waveTime: input.animateWaves ? Float(nowTime - epoch) : 0,
             coolDuration: Float(input.coolDuration))
 
+        renderCount &+= 1
         ensureDepth(width: texW, height: texH)
+        // While the pencil writes, the committed ink comes from the layer (see InkLayer); otherwise
+        // every frame is drawn directly and no layer is kept.
+        var layered = false
+        if active != nil, layerPipeline != nil, ensureLayer(width: texW, height: texH) {
+            layered = true
+            let key = InkLayerKey(originX: Double(input.docOriginInView.x), originY: Double(input.docOriginInView.y),
+                                  zoom: Double(zoom), width: texW, height: texH, pages: visible,
+                                  versions: visible.map { $0 < pages.count ? pages[$0].version : 0 },
+                                  animate: input.animateWaves, dry: input.dryDuration, cool: input.coolDuration)
+            if !InkLayer.reuse(key: key, old: layerKey, contentFPS: layerFPS, age: nowTime - layerTime) {
+                if drawLayer(cb, frame: &frame, visible: visible, layout: layout, pages: pages, input: input,
+                             now: nowTime, width: texW, height: texH) {
+                    layerKey = key
+                    layerTime = nowTime
+                } else {
+                    layered = false
+                    layerKey = nil
+                }
+            }
+        } else {
+            layerKey = nil
+        }
+
         rpd.colorAttachments[0].loadAction = .clear
         rpd.colorAttachments[0].storeAction = .store
         rpd.colorAttachments[0].clearColor = input.background
@@ -397,7 +440,7 @@ final class InkRenderer {
             }
             let gpu = cached(index: index, page: index < pages.count ? pages[index] : PageInk())
             let activeHere: ActiveStroke? = active?.page == index ? active : nil
-            drawStrokes(enc, frame: &frame, gpu: gpu, rect: rect, active: activeHere)
+            drawStrokes(enc, frame: &frame, gpu: gpu, rect: rect, active: activeHere, part: layered ? .underInk : .all)
             enc.setScissorRect(fullScissor)
 
             // Water, lava and lightning need smooth motion; sway, glitter and drying ink are fine at 30 fps.
@@ -409,6 +452,24 @@ final class InkRenderer {
             if nowTime - gpu.latestLavaBirth < input.coolDuration + 0.5 { animationFPS = 60 }
             if nowTime - gpu.latestGrassBirth < 3.4 || activeHere?.brush == .grass || activeHere?.brush == .lava {
                 animationFPS = 60
+            }
+        }
+
+        if layered, let pipeline = layerPipeline, let texture = layerTexture {
+            // The committed ink over the paper, then the live ink over everything.
+            enc.setScissorRect(fullScissor)
+            enc.setRenderPipelineState(pipeline)
+            enc.setDepthStencilState(depthOff)
+            enc.setFragmentTexture(texture, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            if let a = active, visible.contains(a.page), a.page < layout.pageRects.count {
+                let rect = layout.pageRects[a.page]
+                if let scissor = scissorRect(for: rect, frame: frame, width: texW, height: texH) {
+                    enc.setScissorRect(scissor)
+                    let gpu = cached(index: a.page, page: a.page < pages.count ? pages[a.page] : PageInk())
+                    drawStrokes(enc, frame: &frame, gpu: gpu, rect: rect, active: a, part: .ink, committed: false)
+                    enc.setScissorRect(fullScissor)
+                }
             }
         }
 
@@ -428,6 +489,77 @@ final class InkRenderer {
         return RenderResult(animationFPS: animationFPS, visiblePages: visible)
     }
 
+    // MARK: - Ink layer
+
+    /// Draws the committed shadows, inks and grass of the visible pages into the layer, cleared to
+    /// transparent (every ink pipeline blends premultiplied, so laying the layer over the paper gives
+    /// the same pixels as drawing the ink there). Also notes how fast that ink moves.
+    private func drawLayer(_ cb: MTLCommandBuffer, frame: inout FrameUniforms, visible: [Int], layout: DocumentLayout,
+                           pages: [PageInk], input: RenderInput, now nowTime: Double, width: Int, height: Int) -> Bool {
+        guard let texture = layerTexture else { return false }
+        let lpd = MTLRenderPassDescriptor()
+        lpd.colorAttachments[0].texture = texture
+        lpd.colorAttachments[0].loadAction = .clear
+        lpd.colorAttachments[0].storeAction = .store
+        lpd.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        lpd.depthAttachment.texture = depthTexture
+        lpd.depthAttachment.loadAction = .clear
+        lpd.depthAttachment.storeAction = .dontCare
+        lpd.depthAttachment.clearDepth = 1
+        guard let enc = cb.makeRenderCommandEncoder(descriptor: lpd) else { return false }
+        var fps = 0
+        for index in visible where index < layout.pageRects.count {
+            let rect = layout.pageRects[index]
+            guard let scissor = scissorRect(for: rect, frame: frame, width: width, height: height) else { continue }
+            enc.setScissorRect(scissor)
+            let gpu = cached(index: index, page: index < pages.count ? pages[index] : PageInk())
+            drawStrokes(enc, frame: &frame, gpu: gpu, rect: rect, active: nil, part: .ink)
+            // The committed part of the frame-rate rule in `render`.
+            if input.animateWaves {
+                if gpu.hasWave { fps = 60 }
+                if gpu.hasAnimated { fps = max(fps, 30) }
+            }
+            if nowTime - gpu.latestWetBirth < input.dryDuration + 0.3 { fps = max(fps, 30) }
+            if nowTime - gpu.latestLavaBirth < input.coolDuration + 0.5 || nowTime - gpu.latestGrassBirth < 3.4 { fps = 60 }
+        }
+        enc.endEncoding()
+        layerFPS = fps
+        return true
+    }
+
+    /// A layer texture the size of the drawable; false when it cannot be made.
+    private func ensureLayer(width: Int, height: Int) -> Bool {
+        if let t = layerTexture, t.width == width, t.height == height { return true }
+        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Self.colorFormat, width: width, height: height, mipmapped: false)
+        d.usage = [.renderTarget, .shaderRead]
+        d.storageMode = .private
+        layerTexture = device.makeTexture(descriptor: d)
+        layerKey = nil
+        return layerTexture != nil
+    }
+
+    /// The pipeline that lays the layer over the frame (premultiplied, like the ink itself). Built
+    /// off the main thread when the renderer starts; until then frames are drawn directly.
+    private static func makeLayerPipeline(device: MTLDevice) -> MTLRenderPipelineState? {
+        guard let library = try? device.makeLibrary(source: InkLayer.shaderSource, options: nil),
+              let vfn = library.makeFunction(name: "layer_vertex"),
+              let ffn = library.makeFunction(name: "layer_fragment") else { return nil }
+        let d = MTLRenderPipelineDescriptor()
+        d.vertexFunction = vfn
+        d.fragmentFunction = ffn
+        d.depthAttachmentPixelFormat = .depth32Float
+        let c = d.colorAttachments[0]!
+        c.pixelFormat = colorFormat
+        c.isBlendingEnabled = true
+        c.rgbBlendOperation = .add
+        c.alphaBlendOperation = .add
+        c.sourceRGBBlendFactor = .one
+        c.destinationRGBBlendFactor = .oneMinusSourceAlpha
+        c.sourceAlphaBlendFactor = .one
+        c.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        return try? device.makeRenderPipelineState(descriptor: d)
+    }
+
     /// Builds the ink of the page just above or below the screen during a quiet frame, so scrolling
     /// onto it does not stall while its strokes are turned into meshes.
     private func prewarm(around visible: [Int], pages: [PageInk]) {
@@ -442,6 +574,7 @@ final class InkRenderer {
 
     func invalidateAll() {
         pageCache.removeAll()
+        layerKey = nil
     }
 
     // MARK: - Pages
@@ -516,8 +649,17 @@ final class InkRenderer {
 
     // MARK: - Strokes
 
+    /// Which strokes a call draws: everything (the direct path), or the part under the ink layer
+    /// (highlighters, the live stroke's highlighter and shadow) or the part in and over it (shadows,
+    /// inks and grass; the live ink).
+    private enum StrokePart {
+        case all
+        case underInk
+        case ink
+    }
+
     private func drawStrokes(_ enc: MTLRenderCommandEncoder, frame: inout FrameUniforms, gpu: PageGPU,
-                             rect: CGRect, active: ActiveStroke?) {
+                             rect: CGRect, active: ActiveStroke?, part: StrokePart = .all, committed: Bool = true) {
         // Depth slots: highlighters [0, H), active highlighter H, shadows H+1 (shared, the slots up to
         // H+I stay free), active shadow H+I+1, inks [H+I+2, H+2I+1], active ink H+2I+2.
         let h = gpu.highlighterStrokes
@@ -527,16 +669,16 @@ final class InkRenderer {
         let origin = SIMD2<Float>(Float(rect.minX), Float(rect.minY))
         enc.setDepthStencilState(depthWrite)
 
-        if let vertices = gpu.vertices, let indices = gpu.indices, let strokes = gpu.strokes {
+        if committed, let vertices = gpu.vertices, let indices = gpu.indices, let strokes = gpu.strokes {
             enc.setVertexBuffer(vertices, offset: 0, index: 2)
             enc.setVertexBuffer(strokes, offset: 0, index: 3)
             enc.setFragmentBuffer(strokes, offset: 0, index: 3)
-            if gpu.highlighterIndexCount > 0 {
+            if gpu.highlighterIndexCount > 0, part != .ink {
                 var su = SegUniforms(pageOrigin: origin, pointOffset: 0, orderOffset: 0, depthStep: step)
                 drawRibbon(enc, pipeline: highlighterPipeline, frame: &frame, seg: &su,
                            indices: indices, first: 0, count: gpu.highlighterIndexCount)
             }
-            if gpu.inkIndexCount > 0 {
+            if gpu.inkIndexCount > 0, part != .underInk {
                 var su = SegUniforms(pageOrigin: origin, pointOffset: 0, orderOffset: UInt32(h + 1), depthStep: step)
                 if gpu.has3D {
                     drawOnce(enc, pipeline: shadowPipeline, frame: &frame, seg: &su,
@@ -553,23 +695,57 @@ final class InkRenderer {
                     }
                 }
             }
-            if let blades = gpu.blades, gpu.bladeCount > 0 {
+            if part != .underInk, let blades = gpu.blades, gpu.bladeCount > 0 {
                 var su = SegUniforms(pageOrigin: origin, pointOffset: 0, orderOffset: UInt32(i + 2), depthStep: step)
                 drawDecor(enc, frame: &frame, seg: &su, blades: blades, bladeOffset: 0, bladeCount: gpu.bladeCount,
                           flowers: gpu.flowers, flowerOffset: 0, flowerCount: gpu.flowerCount)
             }
         }
 
-        guard let a = active, !a.points.isEmpty else { return }
+        guard let a = active, !a.points.isEmpty, let mesh = activeMesh(a, time: frame.time) else { return }
+        let buffer = mesh.buffer
+        let firstIndex = mesh.first
+        let count = mesh.count
+        enc.setVertexBuffer(buffer, offset: Self.strokeSlot, index: 2)
+        enc.setVertexBuffer(buffer, offset: 0, index: 3)
+        enc.setFragmentBuffer(buffer, offset: 0, index: 3)
+        var su = SegUniforms(pageOrigin: origin, pointOffset: 0, orderOffset: 0, depthStep: step)
+        if a.brush.isHighlighter {
+            guard part != .ink else { return }
+            su.orderOffset = UInt32(h)
+            drawRibbon(enc, pipeline: highlighterPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: count)
+            return
+        }
+        if a.brush.castsShadow, part != .ink {
+            su.orderOffset = UInt32(h + i + 1)
+            drawOnce(enc, pipeline: shadowPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: count)
+        }
+        guard part != .underInk else { return }
+        su.orderOffset = UInt32(h + 2 * i + 2)
+        if a.brush.blendsOnce {
+            drawOnce(enc, pipeline: inkPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: count)
+        } else {
+            drawRibbon(enc, pipeline: inkPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: count)
+        }
+
+        if a.brush == .grass {
+            drawActiveGrass(enc, frame: &frame, seg: &su, stroke: a)
+        }
+    }
+
+    /// The live stroke's mesh in this frame's buffer, built once per frame (the layered path draws
+    /// it in two parts).
+    private func activeMesh(_ a: ActiveStroke, time: Float) -> (buffer: MTLBuffer, first: Int, count: Int)? {
+        if let prepared = preparedActive, prepared.frame == renderCount { return (prepared.buffer, prepared.first, prepared.count) }
         var verts: [RibbonVertexGPU] = []
         var idx: [UInt32] = []
         RibbonBuilder.append(a.points, stroke: 0, relax: a.brush.relaxesCorners, vertices: &verts, indices: &idx)
-        guard !verts.isEmpty, !idx.isEmpty else { return }
-        var info = StrokeGPU(color: a.color.simd, brush: UInt32(a.brush.rawValue), birth: frame.time, width: a.width, seed: a.seed)
+        guard !verts.isEmpty, !idx.isEmpty else { return nil }
+        var info = StrokeGPU(color: a.color.simd, brush: UInt32(a.brush.rawValue), birth: time, width: a.width, seed: a.seed)
         let vertexBytes = verts.count * MemoryLayout<RibbonVertexGPU>.stride
         let indexOffset = Self.strokeSlot + (vertexBytes + 255) / 256 * 256
         let indexBytes = idx.count * MemoryLayout<UInt32>.stride
-        guard let buffer = activeBuffer(length: indexOffset + indexBytes) else { return }
+        guard let buffer = activeBuffer(length: indexOffset + indexBytes) else { return nil }
         withUnsafeBytes(of: &info) { raw in
             buffer.contents().copyMemory(from: raw.baseAddress!, byteCount: raw.count)
         }
@@ -579,30 +755,9 @@ final class InkRenderer {
         idx.withUnsafeBytes { raw in
             buffer.contents().advanced(by: indexOffset).copyMemory(from: raw.baseAddress!, byteCount: raw.count)
         }
-        enc.setVertexBuffer(buffer, offset: Self.strokeSlot, index: 2)
-        enc.setVertexBuffer(buffer, offset: 0, index: 3)
-        enc.setFragmentBuffer(buffer, offset: 0, index: 3)
-        let firstIndex = indexOffset / MemoryLayout<UInt32>.stride
-        var su = SegUniforms(pageOrigin: origin, pointOffset: 0, orderOffset: 0, depthStep: step)
-        if a.brush.isHighlighter {
-            su.orderOffset = UInt32(h)
-            drawRibbon(enc, pipeline: highlighterPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: idx.count)
-            return
-        }
-        if a.brush.castsShadow {
-            su.orderOffset = UInt32(h + i + 1)
-            drawOnce(enc, pipeline: shadowPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: idx.count)
-        }
-        su.orderOffset = UInt32(h + 2 * i + 2)
-        if a.brush.blendsOnce {
-            drawOnce(enc, pipeline: inkPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: idx.count)
-        } else {
-            drawRibbon(enc, pipeline: inkPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: idx.count)
-        }
-
-        if a.brush == .grass {
-            drawActiveGrass(enc, frame: &frame, seg: &su, stroke: a)
-        }
+        let first = indexOffset / MemoryLayout<UInt32>.stride
+        preparedActive = (renderCount, buffer, first, idx.count)
+        return (buffer, first, idx.count)
     }
 
     /// Blades of the stroke being drawn sprout where the pencil passed; flowers stay buds until it lifts.

@@ -207,5 +207,20 @@ check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 6, 9])) == .rebuild, "me
 check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([5, 4, 6])) == .rebuild, "mesh: a reordered page rebuilds")
 check(InkMeshPlan.plan(old: [], new: strokes([1, 2])) == .rebuild, "mesh: an empty page is built")
 
+// MARK: Ink layer (InkLayer)
+
+let layerKey = InkLayerKey(originX: 12, originY: -40, zoom: 1.5, width: 2048, height: 2732, pages: [3, 4], versions: [7, 2],
+                           animate: true, dry: 2.5, cool: 6)
+var movedKey = layerKey
+movedKey.originY = -41
+var editedKey = layerKey
+editedKey.versions = [8, 2]
+check(InkLayer.reuse(key: layerKey, old: layerKey, contentFPS: 0, age: 5), "layer: still content is reused")
+check(!InkLayer.reuse(key: movedKey, old: layerKey, contentFPS: 0, age: 0.001), "layer: a scrolled view redraws it")
+check(!InkLayer.reuse(key: editedKey, old: layerKey, contentFPS: 0, age: 0.001), "layer: an edited page redraws it")
+check(InkLayer.reuse(key: layerKey, old: layerKey, contentFPS: 30, age: 0.02), "layer: 30 fps ink waits a frame of its own")
+check(!InkLayer.reuse(key: layerKey, old: layerKey, contentFPS: 30, age: 0.04), "layer: 30 fps ink moves on after 1/30 s")
+check(!InkLayer.reuse(key: layerKey, old: nil, contentFPS: 0, age: 0), "layer: no layer yet")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)
