@@ -183,6 +183,11 @@ final class EditorModel: ObservableObject {
 
     var onInkChange: (() -> Void)?
     var onLayoutChange: (() -> Void)?
+    /// Set while lecture takes can be played: a finger tap on ink passes that ink's moment (its birth).
+    var onInkTap: ((Double) -> Void)?
+    /// Strokes hidden while a lecture take replays (they appear as the playhead reaches them).
+    private(set) var replayHidden: Set<Int> = []
+    private var replayRevision = 0
     /// Asks the canvas to show a page (the page navigator, a bookmark, the contents).
     var onScrollRequest: ((Int) -> Void)?
     /// Plays haptics on the canvas (routed to Apple Pencil Pro when it is the active input).
@@ -1257,6 +1262,51 @@ final class EditorModel: ObservableObject {
             }
         }
         store.touch(meta.id)
+    }
+
+    // MARK: Lecture replay
+
+    /// Hides strokes while a take replays; an empty set shows all ink again.
+    func setReplayHidden(_ ids: Set<Int>) {
+        guard ids != replayHidden else { return }
+        replayHidden = ids
+        replayRevision += 1
+        onInkChange?()
+    }
+
+    /// The pages as drawn: without the strokes a replay still hides. Each filtered state gets its own
+    /// version (so the GPU follows it), and strokes appearing in writing order are appended, not rebuilt.
+    var renderPages: [PageInk] {
+        guard !replayHidden.isEmpty else { return pages }
+        let shift = replayRevision << 32
+        return pages.map { page in
+            var shown = page
+            shown.strokes = page.strokes.filter { !replayHidden.contains($0.id) }
+            shown.version = page.version &+ shift
+            return shown
+        }
+    }
+
+    /// Every stroke's id and moment, for the replay.
+    var strokeBirths: [(id: Int, birth: Double)] {
+        pages.flatMap { page in page.strokes.map { (id: $0.id, birth: $0.birth) } }
+    }
+
+    /// The moment of the topmost stroke under a document point, within `reach` points of its line.
+    func strokeBirth(near docPoint: CGPoint, reach: CGFloat) -> Double? {
+        guard let index = layout.page(containing: docPoint, tolerance: reach), index < pages.count else { return nil }
+        let o = layout.pageRects[index].origin
+        let p = SIMD2<Float>(Float(docPoint.x - o.x), Float(docPoint.y - o.y))
+        for s in pages[index].strokes.reversed() {
+            let r = Float(reach) + s.maxRadius
+            let b = s.bounds
+            guard p.x >= b.minX - r, p.x <= b.maxX + r, p.y >= b.minY - r, p.y <= b.maxY + r else { continue }
+            for q in s.points {
+                let d = q.position - p
+                if (d * d).sum() <= r * r { return s.birth }
+            }
+        }
+        return nil
     }
 
     func close() {

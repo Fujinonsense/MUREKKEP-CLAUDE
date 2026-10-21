@@ -241,5 +241,21 @@ for _ in 0..<529 {
 }
 check(abs(glide - 0.929464180816) < 1e-9, "pen sound: attack glide \(glide)")
 
+// MARK: Recordings (tests/test_recording_sync.py)
+
+let takeA = Recording(id: UUID(), start: 1000, duration: 60, title: "A")
+let takeB = Recording(id: UUID(), start: 5000, duration: 30, title: "B")
+check(RecordingSync.hidden(births: [(1, 990)], recording: takeA, time: 0).isEmpty, "recording: earlier ink shows")
+check(RecordingSync.hidden(births: [(1, 1005), (2, 1030)], recording: takeA, time: 0) == [1, 2]
+      && RecordingSync.hidden(births: [(1, 1005), (2, 1030)], recording: takeA, time: 5) == [2]
+      && RecordingSync.hidden(births: [(1, 1005), (2, 1030)], recording: takeA, time: 40).isEmpty, "recording: ink follows the playhead")
+check(RecordingSync.hidden(births: [(1, 2000)], recording: takeA, time: 0).isEmpty, "recording: later ink shows")
+check(RecordingSync.hidden(births: [(1, 1060.4)], recording: takeA, time: 59) == [1], "recording: a lift just after stop belongs")
+let seekA = RecordingSync.seek(birth: 1012, recordings: [takeA, takeB])
+let seekB = RecordingSync.seek(birth: 5020, recordings: [takeA, takeB])
+check(seekA?.id == takeA.id && seekA?.time == 10.5 && seekB?.id == takeB.id && seekB?.time == 18.5, "recording: tap seeks before the line")
+check(RecordingSync.seek(birth: 1000.5, recordings: [takeA])?.time == 0, "recording: first line seeks to zero")
+check(RecordingSync.seek(birth: 3000, recordings: [takeA, takeB]) == nil, "recording: ink outside takes does not seek")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

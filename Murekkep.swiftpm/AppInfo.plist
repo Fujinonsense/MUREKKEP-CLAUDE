@@ -22,5 +22,8 @@
     <!-- "Save Video" in the share sheet. -->
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Video özetlerini Fotoğraflar'a kaydetmek için.</string>
+    <!-- Lecture recording in sync with the ink. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Dersi kaydetmek için: yazdıkların sesle eşleşir, mürekkebe dokununca o ana gidersin.</string>
 </dict>
 </plist>

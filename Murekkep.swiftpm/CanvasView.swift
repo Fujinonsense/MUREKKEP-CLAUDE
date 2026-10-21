@@ -748,7 +748,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
                                 animateWaves: model.settings.animations,
                                 background: metalView.clearColor)
         let result = renderer.render(descriptor: descriptor, drawable: drawable, input: input,
-                                     layout: model.layout, pages: model.pages, paper: model.meta.paper,
+                                     layout: model.layout, pages: model.renderPages, paper: model.meta.paper,
                                      isPDF: model.isPDF, active: activeStroke)
         requestedFPS = result.animationFPS
         refreshLoop()
@@ -2000,6 +2000,13 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         // In pencil-only mode a finger tap on the page is how the text box is closed.
         if g.state == .ended, textBox != nil, pencilOnly {
             finishTextBox()
+            return
+        }
+        // With a lecture take open, a finger tap on ink plays from when it was written.
+        if g.state == .ended, let seek = model.onInkTap,
+           let birth = model.strokeBirth(near: g.location(in: zoomContainer), reach: 18 / max(docTransform.zoom, 0.01)) {
+            seek(birth)
+            playHaptic(.selection, at: nil)
             return
         }
         guard g.state == .ended, model.shapeEdit != nil || model.placingSticker != nil else { return }

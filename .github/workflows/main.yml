@@ -212,6 +212,8 @@ jobs:
               </array>
               <key>NSPhotoLibraryAddUsageDescription</key>
               <string>Video özetlerini Fotoğraflar'a kaydetmek için.</string>
+              <key>NSMicrophoneUsageDescription</key>
+              <string>Dersi kaydetmek için: yazdıkların sesle eşleşir, mürekkebe dokununca o ana gidersin.</string>
               <key>UIApplicationSceneManifest</key>
               <dict>
                   <key>UIApplicationSupportsMultipleScenes</key>

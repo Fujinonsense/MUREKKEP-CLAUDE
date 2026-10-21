@@ -5,10 +5,12 @@ import UIKit
 final class EditorSession: ObservableObject {
     let editor: EditorModel
     let assistant: AssistantModel
+    let lecture: LectureAudio
 
     init(meta: NoteMeta, store: LibraryStore, settings: AppSettings) {
         editor = EditorModel(meta: meta, store: store, settings: settings)
         assistant = AssistantModel(editor: editor, settings: settings)
+        lecture = LectureAudio(folder: store.folder(for: meta.id), editor: editor)
     }
 }
 
@@ -20,7 +22,7 @@ struct EditorScreen: View {
     }
 
     var body: some View {
-        EditorContent(editor: session.editor, assistant: session.assistant)
+        EditorContent(editor: session.editor, assistant: session.assistant, lecture: session.lecture)
     }
 }
 
@@ -32,6 +34,7 @@ private struct ShareItem: Identifiable {
 struct EditorContent: View {
     @ObservedObject var editor: EditorModel
     let assistant: AssistantModel
+    @ObservedObject var lecture: LectureAudio
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showAssistant = false
@@ -43,6 +46,7 @@ struct EditorContent: View {
     @State private var showEngineering = false
     @State private var showAngle = false
     @State private var showNavigator = false
+    @State private var showLecture = false
 
     private var sidePanel: Bool { horizontalSizeClass == .regular }
 
@@ -111,6 +115,15 @@ struct EditorContent: View {
 
                 VStack {
                     Spacer()
+                    if showLecture {
+                        LectureBar(lecture: lecture) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showLecture = false }
+                            lecture.closePlayback()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     HStack(alignment: .bottom) {
                         if abs(settings.pageAngle) >= 0.5 {
                             rotationChip
@@ -129,6 +142,7 @@ struct EditorContent: View {
                     .padding(.bottom, 52)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selection != nil)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showLecture)
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.placingSticker != nil)
 
                 // The writing sound's switch, tucked into the bottom-left corner (off by default).
@@ -189,6 +203,19 @@ struct EditorContent: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showLecture.toggle() }
+                    if showLecture {
+                        lecture.openPlayback()
+                    } else {
+                        lecture.closePlayback()
+                    }
+                } label: {
+                    Image(systemName: lecture.isRecording ? "record.circle.fill" : "mic")
+                        .foregroundStyle(lecture.isRecording ? Color.red : Color.accentColor)
+                        .symbolEffect(.pulse, isActive: lecture.isRecording)
+                }
+                .accessibilityLabel(Loc.t("Ders kaydı"))
                 Button {
                     export()
                 } label: {
@@ -282,6 +309,7 @@ struct EditorContent: View {
         }
         .onDisappear {
             assistant.cancel()
+            lecture.finish()
             editor.close()
         }
     }
