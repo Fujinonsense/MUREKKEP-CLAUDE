@@ -747,6 +747,13 @@ struct StudioCreateCards: View {
     let actions: LibraryActions
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            overviewCards
+            StudyCreateRow(sectionID: sectionID, actions: actions)
+        }
+    }
+
+    private var overviewCards: some View {
         HStack(spacing: 16) {
             ForEach(OverviewKind.allCases) { kind in
                 Button {
@@ -853,6 +860,7 @@ struct StudioSection: View {
                 SectionTitle(title: Loc.t("Özetler"))
                 OverviewGrid(overviews: overviews, actions: actions)
             }
+            StudyShelf(sectionID: sectionID, actions: actions)
         }
     }
 }
@@ -877,6 +885,7 @@ struct StudioPane: View {
                 if studio.overviews.isEmpty && studio.jobs.isEmpty {
                     StudioPromo(actions: actions, sectionID: nil)
                 }
+                StudyShelf(sectionID: nil, actions: actions)
                 ForEach(groups, id: \.key) { group in
                     VStack(alignment: .leading, spacing: 14) {
                         HStack(spacing: 10) {

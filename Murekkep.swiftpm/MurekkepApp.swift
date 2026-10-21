@@ -6,6 +6,7 @@ struct MurekkepApp: App {
     @StateObject private var store = LibraryStore()
     @StateObject private var settings = AppSettings()
     @StateObject private var studio = StudioStore()
+    @StateObject private var study = StudyStore()
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +14,7 @@ struct MurekkepApp: App {
                 .environmentObject(store)
                 .environmentObject(settings)
                 .environmentObject(studio)
+                .environmentObject(study)
                 .tint(Color(red: 0.10, green: 0.33, blue: 0.80))
                 // Another language rebuilds every screen in it (dates and numbers follow too).
                 .environment(\.locale, Locale(identifier: settings.language == .english ? "en_US" : "tr_TR"))

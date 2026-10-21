@@ -56,6 +56,8 @@ struct LibraryActions {
     var delete: (NoteMeta) -> Void
     var makeOverview: (UUID?, OverviewKind, [UUID]) -> Void
     var play: (Overview) -> Void
+    var makeStudy: (UUID?, StudyKind) -> Void
+    var openStudy: (StudySet) -> Void
     var drop: ([NSItemProvider], UUID?) -> Bool
 }
 
@@ -70,6 +72,7 @@ struct LibraryView: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var studio: StudioStore
+    @EnvironmentObject private var study: StudyStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var path: [UUID] = []
     @AppStorage("library.place") private var placeRaw = "home"
@@ -91,6 +94,8 @@ struct LibraryView: View {
     @State private var errorText: String?
     @State private var studioRequest: StudioRequest?
     @State private var playing: Overview?
+    @State private var studyRequest: StudyRequest?
+    @State private var openedStudy: StudySet?
 
     private var isRegular: Bool { sizeClass != .compact }
 
@@ -164,6 +169,17 @@ struct LibraryView: View {
                     .environmentObject(settings)
                     .pageSizedSheet()
             }
+            .sheet(item: $studyRequest) { request in
+                StudyCreateSheet(request: request, engine: StudioEngine.preferred(settings: settings))
+                    .environmentObject(store)
+                    .environmentObject(study)
+                    .environmentObject(settings)
+                    .pageSizedSheet()
+            }
+            .fullScreenCover(item: $openedStudy) { set in
+                StudySetView(setID: set.id)
+                    .environmentObject(study)
+            }
             .fullScreenCover(item: $playing) { overview in
                 OverviewPlayerView(overview: overview, folder: studio.folder(for: overview.id))
                     .environmentObject(store)
@@ -210,6 +226,7 @@ struct LibraryView: View {
                     if let s = deletingSection {
                         store.deleteSection(s.id)
                         studio.detachSection(s.id)
+                        study.detachSection(s.id)
                         if place == .course(s.id) { placeRaw = LibraryPlace.home.raw }
                     }
                     deletingSection = nil
@@ -262,6 +279,8 @@ struct LibraryView: View {
                 studioRequest = StudioRequest(sectionID: section, kind: kind, preselected: ids)
             },
             play: { playing = $0 },
+            makeStudy: { section, kind in studyRequest = StudyRequest(sectionID: section, kind: kind) },
+            openStudy: { openedStudy = $0 },
             drop: { providers, section in handleDrop(providers, section: section) }
         )
     }

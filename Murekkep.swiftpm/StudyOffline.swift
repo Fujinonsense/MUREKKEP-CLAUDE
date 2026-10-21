@@ -10,7 +10,8 @@ enum StudyOffline {
 
     // MARK: Text
 
-    private static let sentenceBreak = try! NSRegularExpression(pattern: #"(?<=[.!?])\s+(?=[A-ZÇĞİÖŞÜ0-9"“(])"#)
+    // \x22 and \x28 are a quote and an opening bracket: a sentence may start with either.
+    private static let sentenceBreak = try! NSRegularExpression(pattern: #"(?<=[.!?])\s+(?=[A-ZÇĞİÖŞÜ0-9\x22“\x28])"#)
     private static let pageMark = try! NSRegularExpression(pattern: #"\[s\.[^\]]*\]"#)
 
     /// The sentences of a text, in order (lines are kept apart; three words at least).
