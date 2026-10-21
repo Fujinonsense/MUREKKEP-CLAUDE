@@ -104,3 +104,11 @@ def test_lines_are_written_at_an_angle_sometimes():
     angles = [_baseline_angle(synth.compose(rng, source, "Bugün hava çok güzel ve sıcak.")) for _ in range(60)]
     assert max(angles) > 4 and min(angles) < -4
     assert all(abs(a) < 11 for a in angles)
+
+
+def test_capitals_stay_in_the_charset(monkeypatch):
+    # "β".upper() is the Greek capital "Β", which no font draws: an all-caps line must not make it.
+    monkeypatch.setattr(texts, "sentences", lambda lang: ["α ile β açılarının toplamı"])
+    for seed in range(300):
+        text = texts._fragment(np.random.default_rng(seed), "en" if seed % 2 else "tr")
+        assert all(c in CHARSET for c in text), text

@@ -47,7 +47,10 @@ def _fragment(rng, lang):
     # All-caps lines: the line image hides letter size, so the model needs many of them to tell
     # "WE" from "we" by shape and context.
     if rng.random() < 0.12:
-        text = tr_upper(text) if lang == "tr" else text.upper()
+        caps = tr_upper(text) if lang == "tr" else text.upper()
+        # Greek letters have capitals outside the charset ("β" → "Β"): such a line stays as it is.
+        if all(c in ALLOWED for c in caps):
+            text = caps
     return text
 
 
