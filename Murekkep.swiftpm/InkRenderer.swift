@@ -126,10 +126,14 @@ final class PageGPU {
     var version = -1
     /// Meshes of the strokes currently on the page (stroke ids are never reused).
     var ribbons: [Int: RibbonMesh] = [:]
-    /// Ribbon meshes of all strokes: highlighters first, then everything else.
+    /// Stroke ids in buffer order (highlighters first), so a new stroke can be appended.
+    var order: [Int] = []
+    /// Ribbon meshes of all strokes: highlighters first, then everything else. The buffers have room
+    /// to spare; only `vertexCount` vertices, the counted indices and the counted strokes are in use.
     var vertices: MTLBuffer?
     var indices: MTLBuffer?
     var strokes: MTLBuffer?
+    var vertexCount = 0
     var blades: MTLBuffer?
     var flowers: MTLBuffer?
     var highlighterIndexCount = 0
@@ -736,10 +740,122 @@ final class InkRenderer {
             pageCache[index] = gpu
         }
         if gpu.version != page.version {
-            rebuild(gpu, from: page)
-            rebuiltThisFrame = true
+            let strokes = page.strokes.map { (id: $0.id, highlighter: $0.brush.isHighlighter, grass: $0.brush == .grass) }
+            switch InkMeshPlan.plan(old: gpu.order, new: strokes) {
+            case .same:
+                gpu.version = page.version
+            case let .append(from):
+                // The new strokes are the last non-highlighters of the page (InkMeshPlan checked it).
+                let added = Array(page.strokes.filter { !$0.brush.isHighlighter }.suffix(strokes.count - from))
+                if !append(added, to: gpu, version: page.version) {
+                    rebuild(gpu, from: page)
+                }
+                rebuiltThisFrame = true
+            case .rebuild:
+                rebuild(gpu, from: page)
+                rebuiltThisFrame = true
+            }
         }
         return gpu
+    }
+
+    /// Writes new strokes' meshes after the page's existing geometry (the GPU only ever reads the
+    /// counted part, so frames still in flight are untouched). False when the buffers are full.
+    private func append(_ added: [Stroke], to gpu: PageGPU, version: Int) -> Bool {
+        guard !added.isEmpty, let vb = gpu.vertices, let ib = gpu.indices, let sb = gpu.strokes else { return false }
+        var verts: [RibbonVertexGPU] = []
+        var idxs: [UInt32] = []
+        var infos: [StrokeGPU] = []
+        var runs = gpu.inkRuns
+        let firstInfo = gpu.highlighterStrokes + gpu.inkStrokes
+        let firstIndex = gpu.highlighterIndexCount + gpu.inkIndexCount
+        var meshes: [(Int, RibbonMesh)] = []
+        for s in added {
+            var v: [RibbonVertexGPU] = []
+            var i: [UInt32] = []
+            RibbonBuilder.append(s.points, stroke: 0, relax: s.brush.relaxesCorners, vertices: &v, indices: &i)
+            let mesh = RibbonMesh(vertices: v, indices: i)
+            meshes.append((s.id, mesh))
+            let info = UInt32(firstInfo + infos.count)
+            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.rawValue),
+                                   birth: Float(s.birth - epoch), width: s.width, seed: s.seed))
+            let base = UInt32(gpu.vertexCount + verts.count)
+            let start = firstIndex + idxs.count
+            for var vertex in mesh.vertices {
+                vertex.stroke = info
+                verts.append(vertex)
+            }
+            for index in mesh.indices {
+                idxs.append(index + base)
+            }
+            let count = mesh.indices.count
+            if count > 0 {
+                if !s.brush.blendsOnce, let last = runs.last, !last.blendsOnce, last.first + last.count == start {
+                    runs[runs.count - 1].count += count
+                } else {
+                    runs.append(InkRun(first: start, count: count, blendsOnce: s.brush.blendsOnce))
+                }
+            }
+        }
+        let vStride = MemoryLayout<RibbonVertexGPU>.stride
+        let iStride = MemoryLayout<UInt32>.stride
+        let sStride = MemoryLayout<StrokeGPU>.stride
+        guard vb.length >= (gpu.vertexCount + verts.count) * vStride,
+              ib.length >= (firstIndex + idxs.count) * iStride,
+              sb.length >= (firstInfo + infos.count) * sStride else { return false }
+        verts.withUnsafeBytes { raw in
+            if let base = raw.baseAddress {
+                vb.contents().advanced(by: gpu.vertexCount * vStride).copyMemory(from: base, byteCount: raw.count)
+            }
+        }
+        idxs.withUnsafeBytes { raw in
+            if let base = raw.baseAddress {
+                ib.contents().advanced(by: firstIndex * iStride).copyMemory(from: base, byteCount: raw.count)
+            }
+        }
+        infos.withUnsafeBytes { raw in
+            if let base = raw.baseAddress {
+                sb.contents().advanced(by: firstInfo * sStride).copyMemory(from: base, byteCount: raw.count)
+            }
+        }
+        for (id, mesh) in meshes {
+            gpu.ribbons[id] = mesh
+            gpu.order.append(id)
+        }
+        for s in added {
+            if s.brush.castsShadow { gpu.has3D = true }
+            if s.brush.isAnimated { gpu.hasAnimated = true }
+            if s.brush.isFastAnimated { gpu.hasWave = true }
+            if s.brush == .lava { gpu.latestLavaBirth = max(gpu.latestLavaBirth, Self.lavaCoolEnd(s)) }
+            if s.brush == .wet { gpu.latestWetBirth = max(gpu.latestWetBirth, s.birth) }
+        }
+        gpu.vertexCount += verts.count
+        gpu.inkIndexCount += idxs.count
+        gpu.inkStrokes += infos.count
+        gpu.inkRuns = runs
+        gpu.version = version
+        return true
+    }
+
+    /// When the last point of a lava stroke starts cooling.
+    private static func lavaCoolEnd(_ s: Stroke) -> Double {
+        var length: Float = 0
+        for i in s.points.indices.dropFirst() {
+            let step = s.points[i].position - s.points[i - 1].position
+            length += (step * step).sum().squareRoot()
+        }
+        return s.birth + Double(length) / lavaCoolSpeed
+    }
+
+    /// A shared buffer with half as much room again, so the next strokes can be appended in place.
+    private func roomyBuffer<T>(_ items: [T]) -> MTLBuffer? {
+        guard !items.isEmpty else { return nil }
+        return items.withUnsafeBytes { raw -> MTLBuffer? in
+            guard let base = raw.baseAddress,
+                  let buffer = device.makeBuffer(length: raw.count + raw.count / 2 + 4096, options: .storageModeShared) else { return nil }
+            buffer.contents().copyMemory(from: base, byteCount: raw.count)
+            return buffer
+        }
     }
 
     private func rebuild(_ gpu: PageGPU, from page: PageInk) {
@@ -810,12 +926,7 @@ final class InkRenderer {
             if s.brush.isFastAnimated { hasWave = true }
             switch s.brush {
             case .lava:
-                var length: Float = 0
-                for i in s.points.indices.dropFirst() {
-                    let step = s.points[i].position - s.points[i - 1].position
-                    length += (step * step).sum().squareRoot()
-                }
-                latestLava = max(latestLava, s.birth + Double(length) / Self.lavaCoolSpeed)
+                latestLava = max(latestLava, Self.lavaCoolEnd(s))
             case .wet:
                 latestWet = max(latestWet, s.birth)
             case .grass:
@@ -840,15 +951,11 @@ final class InkRenderer {
             grassCache = grassCache.filter { usedGrass.contains($0.key) }
         }
 
-        gpu.vertices = verts.isEmpty ? nil : verts.withUnsafeBytes { raw in
-            device.makeBuffer(bytes: raw.baseAddress!, length: raw.count, options: .storageModeShared)
-        }
-        gpu.indices = idxs.isEmpty ? nil : idxs.withUnsafeBytes { raw in
-            device.makeBuffer(bytes: raw.baseAddress!, length: raw.count, options: .storageModeShared)
-        }
-        gpu.strokes = infos.isEmpty ? nil : infos.withUnsafeBytes { raw in
-            device.makeBuffer(bytes: raw.baseAddress!, length: raw.count, options: .storageModeShared)
-        }
+        gpu.vertices = roomyBuffer(verts)
+        gpu.indices = roomyBuffer(idxs)
+        gpu.strokes = roomyBuffer(infos)
+        gpu.vertexCount = verts.count
+        gpu.order = page.strokes.filter(\.brush.isHighlighter).map(\.id) + page.strokes.filter { !$0.brush.isHighlighter }.map(\.id)
         gpu.blades = bladeRecords.isEmpty ? nil : bladeRecords.withUnsafeBytes { raw in
             device.makeBuffer(bytes: raw.baseAddress!, length: raw.count, options: .storageModeShared)
         }

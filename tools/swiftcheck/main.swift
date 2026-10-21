@@ -192,5 +192,20 @@ let parts = SpeechText.chunks(long, maxChars: 260)
 check(parts.allSatisfy { $0.count <= 260 } && parts.joined(separator: " ") == long.split(whereSeparator: \.isWhitespace).joined(separator: " "),
       "speech chunks \(parts.count)")
 
+// MARK: Ink meshes (InkMeshPlan)
+
+func strokes(_ ids: [Int], highlighter: Set<Int> = [], grass: Set<Int> = []) -> [(id: Int, highlighter: Bool, grass: Bool)] {
+    ids.map { (id: $0, highlighter: highlighter.contains($0), grass: grass.contains($0)) }
+}
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 5, 6])) == .same, "mesh: same strokes keep the buffers")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 5, 6, 9, 10])) == .append(from: 3), "mesh: new pen strokes are appended")
+check(InkMeshPlan.plan(old: [2, 4, 5], new: strokes([4, 2, 5, 9], highlighter: [2])) == .append(from: 3),
+      "mesh: buffer order puts highlighters first")
+check(InkMeshPlan.plan(old: [4, 5], new: strokes([4, 5, 9], highlighter: [9])) == .rebuild, "mesh: a new highlighter rebuilds")
+check(InkMeshPlan.plan(old: [4, 5], new: strokes([4, 5, 9], grass: [9])) == .rebuild, "mesh: new grass rebuilds")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 6, 9])) == .rebuild, "mesh: an erased stroke rebuilds")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([5, 4, 6])) == .rebuild, "mesh: a reordered page rebuilds")
+check(InkMeshPlan.plan(old: [], new: strokes([1, 2])) == .rebuild, "mesh: an empty page is built")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)
