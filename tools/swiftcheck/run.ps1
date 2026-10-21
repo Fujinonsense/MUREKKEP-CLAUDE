@@ -6,7 +6,7 @@ $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";
 $env:SDKROOT = [System.Environment]::GetEnvironmentVariable("SDKROOT", "User")
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $app = Join-Path $root "Murekkep.swiftpm"
-$files = @("InkDeskew.swift", "ChapterFinder.swift", "Questions.swift", "SpeechNumbers.swift", "ReadingOrder.swift", "Exercises.swift", "InkMeshPlan.swift", "InkLayer.swift", "PenSoundEnvelope.swift", "RecordingSync.swift", "ZoomBox.swift", "SpacedRepetition.swift", "StudyModels.swift", "StudyOffline.swift", "MindMapLayout.swift", "LocalServerFinder.swift") | ForEach-Object { Join-Path $app $_ }
+$files = @("InkDeskew.swift", "ChapterFinder.swift", "Questions.swift", "SpeechNumbers.swift", "ReadingOrder.swift", "Exercises.swift", "InkMeshPlan.swift", "InkLayer.swift", "PenSoundEnvelope.swift", "RecordingSync.swift", "ZoomBox.swift", "SpacedRepetition.swift", "StudyModels.swift", "StudyOffline.swift", "MindMapLayout.swift", "LocalServerFinder.swift", "TextSearch.swift") | ForEach-Object { Join-Path $app $_ }
 $out = Join-Path $env:TEMP "murekkep-swiftcheck"
 New-Item -ItemType Directory -Force $out | Out-Null
 $exe = Join-Path $out "check.exe"

@@ -44,6 +44,8 @@ enum LibraryPlace: Hashable {
 /// What the panes can ask the library to do.
 struct LibraryActions {
     var open: (UUID) -> Void
+    /// Opens a note at a page (a search hit).
+    var openAt: (UUID, Int) -> Void
     var go: (LibraryPlace) -> Void
     var toggleSidebar: () -> Void
     var newNotebook: (UUID?) -> Void
@@ -248,6 +250,13 @@ struct LibraryView: View {
     private var actions: LibraryActions {
         LibraryActions(
             open: { id in path.append(id) },
+            openAt: { id, page in
+                if var meta = store.note(id) {
+                    meta.lastPage = page
+                    store.update(meta)
+                }
+                path.append(id)
+            },
             go: { p in
                 placeRaw = p.raw
                 query = ""

@@ -583,6 +583,9 @@ struct SearchPane: View {
     let query: String
     let actions: LibraryActions
     let showToggle: Bool
+    /// Words found inside the notes (PDF text, read pages, handwriting).
+    @State private var hits: [ContentHit] = []
+    @State private var searching = false
 
     var body: some View {
         let notes = store.notes.filter { note in
@@ -597,7 +600,7 @@ struct SearchPane: View {
                            showToggle: showToggle, actions: actions) {
                     EmptyView()
                 }
-                if notes.isEmpty && overviews.isEmpty && courses.isEmpty {
+                if notes.isEmpty && overviews.isEmpty && courses.isEmpty && hits.isEmpty && !searching {
                     ContentUnavailableView.search(text: query)
                         .frame(maxWidth: .infinity)
                 }
@@ -627,10 +630,64 @@ struct SearchPane: View {
                     SectionTitle(title: Loc.t("Özetler"))
                     OverviewGrid(overviews: overviews, actions: actions)
                 }
+                if searching || !hits.isEmpty {
+                    HStack(spacing: 10) {
+                        SectionTitle(title: Loc.t("Notların içinde"))
+                        if searching { ProgressView() }
+                    }
+                    VStack(spacing: 8) {
+                        ForEach(hits) { h in
+                            Button {
+                                actions.openAt(h.note, h.page)
+                            } label: {
+                                hitRow(h)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 40)
         }
+        .task(id: query) {
+            hits = []
+            searching = false
+            guard query.count >= 2 else { return }
+            searching = true
+            // Typing on: only the last query is searched.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            let all = store.notes
+            let urls = Dictionary(uniqueKeysWithValues: all.filter { $0.kind == .pdf }.map { ($0.id, store.pdfURL(for: $0.id)) })
+            let found = await ContentIndex.shared.search(query, notes: all, pdfURLs: urls)
+            guard !Task.isCancelled else { return }
+            hits = found
+            searching = false
+        }
+    }
+
+    private func hitRow(_ h: ContentHit) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "text.magnifyingglass")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.ink)
+                .frame(width: 32, height: 32)
+                .background(Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(h.title) · \(Loc.t("s. {0}", "\(h.page + 1)"))")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                (Text(h.hit.before) + Text(h.hit.match).bold().foregroundStyle(Theme.ink) + Text(h.hit.after))
+                    .font(.subheadline)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(radius: 14)
     }
 }
 

@@ -1315,6 +1315,12 @@ final class EditorModel: ObservableObject {
         let wasDirty = dirty
         saveLastPage()
         saveNow()
+        // The handwriting becomes searchable text (only pages whose ink changed are read).
+        let ink = pages.map(\.strokes)
+        let noteID = meta.id
+        Task.detached(priority: .utility) {
+            await InkTextCache.refresh(note: noteID, pages: ink)
+        }
         if wasDirty || meta.kind == .notebook {
             store.makeThumbnail(for: meta, strokes: pages.first?.strokes ?? [], stickers: pages.first?.stickers ?? [])
         }

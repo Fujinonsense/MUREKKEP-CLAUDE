@@ -378,5 +378,20 @@ check(wide.count == 253 && wide.allSatisfy { $0.hasPrefix("10.20.30.") }, "finde
 check(LocalServerFinder.candidates(ip: "10.0.0.5", mask: "255.255.255.252") == ["10.0.0.6"], "finder: a tiny network")
 check(LocalServerFinder.candidates(ip: "bad", mask: "255.255.255.0").isEmpty, "finder: no address, nothing to scan")
 
+// MARK: Content search (TextSearch)
+
+let searchPage = "Ders notları: Öğrenci İSTANBUL'da türevin tanımını öğrendi. Sonra integral geldi; türev ile integral birbirinin tersidir."
+check(TextSearch.normalize("İSTANBUL Işık ÖĞRENCİ") == "istanbul isik ogrenci", "search: turkish letters fold (\(TextSearch.normalize("İSTANBUL Işık ÖĞRENCİ")))")
+let hits = TextSearch.hits(query: "ogrenci", in: searchPage, limit: 5)
+check(hits.count == 1 && hits[0].match == "Öğrenci", "search: diacritics and case do not matter (\(hits.map(\.match)))")
+let many = TextSearch.hits(query: "integral", in: searchPage, limit: 5)
+check(many.count == 2 && many[0].before.hasSuffix("Sonra ") && many[0].after.hasPrefix(" geldi"), "search: every match with its context")
+let short = TextSearch.hits(query: "integral", in: searchPage, limit: 1)
+check(short.count == 1, "search: limit")
+check(TextSearch.hits(query: "  ", in: searchPage, limit: 5).isEmpty && TextSearch.hits(query: "kimya", in: searchPage, limit: 5).isEmpty, "search: nothing to find")
+let longText = String(repeating: "lorem ipsum ", count: 30) + "hedef kelime" + String(repeating: " dolor sit", count: 30)
+let ctx = TextSearch.hits(query: "hedef", in: longText, limit: 1)[0]
+check(ctx.before.count <= 48 && ctx.after.count <= 72 && ctx.before.hasPrefix("…") && ctx.after.hasSuffix("…"), "search: context is trimmed")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)
