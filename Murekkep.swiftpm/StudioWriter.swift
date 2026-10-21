@@ -94,7 +94,7 @@ enum StudioWriter {
         case .claude:
             return try await claude(options: options, material: material, language: language,
                                     library: library, settings: settings, progress: progress)
-        case .onDevice:
+        case .onDevice, .deviceBrain:
             do {
                 return try await onDevice(options: options, material: material, language: language, progress: progress)
             } catch is CancellationError {

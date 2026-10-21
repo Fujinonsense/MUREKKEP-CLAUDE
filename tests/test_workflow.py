@@ -80,3 +80,36 @@ def test_fallback_build(job):
 
 def test_liquid_glass_off(job):
     assert re.search(r"<key>UIDesignRequiresCompatibility</key>\s*<true/>", runs(job))
+
+
+def test_mlx_packages_in_the_full_build(job):
+    """The downloadable model (MLX) is linked only in the first build, at pinned versions."""
+    script = runs(job)
+    full = script.split("cat << 'EOF' > project.yml", 1)[1].split("EOF", 1)[0]
+    for url, version in [("https://github.com/ml-explore/mlx-swift", "0.32.3"),
+                         ("https://github.com/ml-explore/mlx-swift-lm", "3.32.3"),
+                         ("https://github.com/huggingface/swift-transformers", "1.3.5")]:
+        assert f"url: {url}\n" in full and f"exactVersion: {version}" in full
+    for product in ["MLX", "MLXLLM", "MLXLMCommon", "Tokenizers"]:
+        assert f"product: {product}\n" in full
+    plain = script.split("cat << 'EOF' > project-plain.yml", 1)[1].split("EOF", 1)[0]
+    assert "package" not in plain
+    first = [s for s in job["steps"] if s.get("id") == "build"][0]["run"]
+    assert "-clonedSourcePackagesDirPath spm" in first and "-skipMacroValidation" in first
+
+
+def test_mlx_has_its_own_fallback(job):
+    """When MLX does not build, a build without it keeps the voices and Apple's model; the plain build
+    only comes when that fails too."""
+    script = runs(job)
+    assert 'open("project-nomlx.yml", "w"' in script
+    nomlx = [s for s in job["steps"] if s.get("id") == "nomlx"]
+    assert nomlx and nomlx[0].get("continue-on-error") is True
+    assert nomlx[0]["if"] == "steps.build.outcome == 'failure'"
+    assert "xcodegen generate --spec project-nomlx.yml" in nomlx[0]["run"]
+    plain = [s for s in job["steps"] if "project-plain.yml" in s.get("run", "") and "xcodegen generate" in s.get("run", "")]
+    assert plain and "steps.nomlx.outcome != 'success'" in plain[0]["if"]
+    metal = step_with(job, "downloadComponent MetalToolchain")
+    assert metal.get("continue-on-error") is True
+    order = [s.get("id") or s.get("name") for s in job["steps"]]
+    assert order.index("build") < order.index("nomlx")

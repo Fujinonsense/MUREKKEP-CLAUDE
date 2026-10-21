@@ -393,5 +393,40 @@ let longText = String(repeating: "lorem ipsum ", count: 30) + "hedef kelime" + S
 let ctx = TextSearch.hits(query: "hedef", in: longText, limit: 1)[0]
 check(ctx.before.count <= 48 && ctx.after.count <= 72 && ctx.before.hasPrefix("…") && ctx.after.hasSuffix("…"), "search: context is trimmed")
 
+// MARK: Downloadable model (BrainCatalog, tests/test_brain.py)
+
+let gib: UInt64 = 1_073_741_824
+check(BrainModel.best(physicalMemory: 16 * gib, available: 9_000_000_000) == .qwen9B, "brain: 16 GB gets the 9B")
+check(BrainModel.best(physicalMemory: 16 * gib, available: 5_000_000_000) == .qwen4B, "brain: little free memory gets the 4B")
+check(BrainModel.best(physicalMemory: 12 * gib, available: nil) == .qwen9B, "brain: unknown free memory keeps the 9B")
+check(BrainModel.best(physicalMemory: UInt64(7.6 * Double(gib)), available: 4_500_000_000) == .qwen4B, "brain: 8 GB gets the 4B")
+check(BrainModel.best(physicalMemory: 6 * gib, available: nil) == .qwen2B && BrainModel.best(physicalMemory: 4 * gib, available: nil) == nil,
+      "brain: 6 GB gets the 2B, 4 GB none")
+check(["config.json", "model.safetensors", "tokenizer.json", "chat_template.jinja", "vocab.json"].allSatisfy(BrainModel.wanted)
+      && !["README.md", ".gitattributes", "images/demo.png", "onnx/model.json"].contains(where: BrainModel.wanted), "brain: model files only")
+let thought = ThinkingText.split("Önce şıkları tartalım. 12+3=15.\n</think>\n\nB şıkkı doğrudur.\nCevap: B", thinking: true)
+check(thought.thinking == "Önce şıkları tartalım. 12+3=15." && thought.answer.hasSuffix("Cevap: B") && thought.answering, "brain: thinking and answer split")
+check(ThinkingText.split("Önce şıklar", thinking: true) == .init(thinking: "Önce şıklar", answer: "", answering: false)
+      && ThinkingText.split("<think>düşünce</think>Cevap: A", thinking: true) == .init(thinking: "düşünce", answer: "Cevap: A", answering: true)
+      && ThinkingText.split("Kısa cevap.", thinking: false) == .init(thinking: "", answer: "Kısa cevap.", answering: true), "brain: thinking in progress, tags, no thinking")
+let abcde: [Character] = ["A", "B", "C", "D", "E"]
+let choices: [(String, Character?)] = [
+    ("Gerekçe...\nCevap: C", "C"), ("**Cevap: B**", "B"), ("Doğru cevap **D) 12** çünkü toplam 12 eder.", "D"),
+    ("Answer: (a)", "A"), ("The correct answer is E.", "E"), ("Doğru şık C'dir.", "C"), ("YANIT: D", "D"),
+    ("Cevap A olamaz, çünkü fiil yok.\nCevap: D", "D"), ("Cevap açık değil; cevap edilebilir bir soru.", nil), ("Bence **B** çünkü...", "B"),
+]
+for (text, want) in choices {
+    let got = ThinkingText.choice(in: text, letters: abcde)
+    check(got == want, "brain: choice of \"\(text.prefix(28))\" = \(got.map(String.init) ?? "nil")")
+}
+check(ThinkingText.choice(in: "Cevap: E", letters: ["A", "B", "C", "D"]) == nil, "brain: only the question's letters")
+check(ThinkingText.explanation("Metinde yazar umudu anlatıyor.\nBu yüzden B.\nCevap: B") == "Metinde yazar umudu anlatıyor.\nBu yüzden B."
+      && ThinkingText.explanation("**Cevap: B**, çünkü metnin tamamı umudu anlatıyor.") == "**Cevap: B**, çünkü metnin tamamı umudu anlatıyor.",
+      "brain: the choice line leaves the explanation")
+check(BrainBudget.thinking(for: "3x + 5 = 20 ise x kaçtır?") == 2_048 && BrainBudget.thinking(for: "√16 + 2² − 3 = ?") == 2_048
+      && BrainBudget.thinking(for: "Parçada asıl anlatılmak istenen nedir?") == 768 && BrainBudget.thinking(for: "1923 yılında ne oldu?") == 768,
+      "brain: arithmetic thinks longer")
+check(BrainModel.sizeText(3_061_000_000, english: false) == "3,1 GB" && BrainModel.sizeText(5_977_000_000, english: true) == "6.0 GB", "brain: sizes")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

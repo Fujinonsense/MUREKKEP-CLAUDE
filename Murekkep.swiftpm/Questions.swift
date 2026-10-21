@@ -161,6 +161,13 @@ enum QuestionSolving {
             + language.directive
     }
 
+    /// For the downloaded model, which thinks before it writes: a short reason, then the choice alone
+    /// on the last line, where `ThinkingText.choice` reads it.
+    static func brainInstructions(language: AnswerLanguage) -> String {
+        "Sen dikkatli bir sınav öğretmenisin. Soruyu ve varsa parçayı dikkatle oku. Düşünürken her şıkkı tek tek değerlendir; matematikte işlemleri adım adım yap ve bulduğun sonucu soruda yerine koyarak kontrol et. Parçada olmayan bilgiyi uydurma. Düşünmen bitince en fazla üç cümlelik kısa bir gerekçe yaz, son satıra da yalnızca \"Cevap: X\" yaz (X doğru şıkkın harfi). Şık yoksa son satıra \"Cevap:\" ve kısa sonucu yaz. "
+            + language.directive
+    }
+
     /// For models that answer a whole textbook exercise at once (the local server).
     static func exerciseInstructions(language: AnswerLanguage) -> String {
         "Sen dikkatli bir öğretmensin. Alıştırmanın yönergesini ve varsa notlarını oku, maddeleri sırayla çöz. Boşluklu her maddeyi numarasıyla, boşlukları doldurulmuş tam cümle olarak yaz ve doldurduğun kelimeleri kalın yaz (örneğin **the**). Kullanılacak kelimeler verilmişse yalnızca onları kullan; ø boşluğun boş kalacağı anlamına gelir. Diğer maddelerde kısa cevabı kalın yaz ve bir cümleyle gerekçesini ekle. Şık harfi yalnızca maddenin şıkları varsa yaz. "

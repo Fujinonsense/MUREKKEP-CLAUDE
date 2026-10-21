@@ -9,19 +9,19 @@ struct SettingsView: View {
     @State private var serverModels: [String] = []
     @State private var serverStatus: String?
     @State private var checkingServer = false
-    /// 0…1 while the Wi-Fi is searched for the computer's AI.
-    @State private var findProgress: Double?
     @State private var showClaude = false
+    @State private var showServer = false
 
     var body: some View {
         NavigationStack {
             Form {
                 languageSection
+                brainSection
                 engineSection
                 internetSection
-                serverSection
                 pencilSection
                 inkSection
+                serverSection
                 claudeSection
             }
             .navigationTitle(Loc.t("Ayarlar"))
@@ -53,9 +53,20 @@ struct SettingsView: View {
 
     // MARK: Assistant
 
+    private var brainSection: some View {
+        Section {
+            BrainCard()
+                .padding(.vertical, 4)
+        } header: {
+            Text(Loc.t("Yapay zekâ beyni"))
+        } footer: {
+            Text(Loc.t("Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Sorular ve notlar iPad'den çıkmaz."))
+        }
+    }
+
     private var engineSection: some View {
         Section {
-            ForEach(AIEngine.allCases) { engine in
+            ForEach(AIEngine.listed(current: settings.engine)) { engine in
                 Button {
                     settings.engine = engine
                 } label: {
@@ -116,57 +127,48 @@ struct SettingsView: View {
 
     private var serverSection: some View {
         Section {
-            Button {
-                findServer()
-            } label: {
-                HStack {
-                    Label(Loc.t("Bilgisayarımı ağda bul"), systemImage: "wifi")
-                    if let findProgress {
-                        Spacer()
-                        ProgressView(value: findProgress)
-                            .frame(width: 80)
-                    }
-                }
-            }
-            .disabled(findProgress != nil || checkingServer)
-            TextField(Loc.t("ör. 192.168.1.20:11434"), text: $settings.serverURL)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            HStack {
-                TextField(Loc.t("Model (boşsa ilk model)"), text: $settings.serverModel)
+            DisclosureGroup(isExpanded: $showServer) {
+                TextField(Loc.t("ör. 192.168.1.20:11434"), text: $settings.serverURL)
+                    .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                if !serverModels.isEmpty {
-                    Menu {
-                        ForEach(serverModels, id: \.self) { model in
-                            Button(model) { settings.serverModel = model }
-                        }
-                    } label: {
-                        Image(systemName: "chevron.up.chevron.down")
-                    }
-                }
-            }
-            Toggle(Loc.t("Sayfa görüntüsünü de gönder (görsel modeller)"), isOn: $settings.serverSendsImages)
-            Button {
-                checkServer()
-            } label: {
                 HStack {
-                    Text(Loc.t("Bağlantıyı test et ve modelleri getir"))
-                    if checkingServer {
-                        Spacer()
-                        ProgressView()
+                    TextField(Loc.t("Model (boşsa ilk model)"), text: $settings.serverModel)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if !serverModels.isEmpty {
+                        Menu {
+                            ForEach(serverModels, id: \.self) { model in
+                                Button(model) { settings.serverModel = model }
+                            }
+                        } label: {
+                            Image(systemName: "chevron.up.chevron.down")
+                        }
                     }
                 }
-            }
-            .disabled(checkingServer || LocalServerClient.normalizedBase(settings.serverURL) == nil)
-            if let serverStatus {
-                Text(serverStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Toggle(Loc.t("Sayfa görüntüsünü de gönder (görsel modeller)"), isOn: $settings.serverSendsImages)
+                Button {
+                    checkServer()
+                } label: {
+                    HStack {
+                        Text(Loc.t("Bağlantıyı test et ve modelleri getir"))
+                        if checkingServer {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(checkingServer || LocalServerClient.normalizedBase(settings.serverURL) == nil)
+                if let serverStatus {
+                    Text(serverStatus)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } label: {
+                Label(Loc.t("Bilgisayardaki sunucu"), systemImage: "desktopcomputer")
             }
         } header: {
-            Text(Loc.t("Yerel sunucu"))
+            Text(Loc.t("Gelişmiş"))
         } footer: {
             Text(Loc.t("Bilgisayarında Ollama (ollama.com) ya da LM Studio çalıştır. Ollama'yı ağdan erişilebilir başlat: OLLAMA_HOST=0.0.0.0 ollama serve. LM Studio'da \"Serve on Local Network\"ü aç. Adresi IP numarasıyla yaz. Görsel model (ör. llama3.2-vision, gemma3, qwen2.5vl) el yazısını doğrudan okuyabilir."))
         }
@@ -330,26 +332,6 @@ struct SettingsView: View {
             Text(Loc.t("İsteğe bağlı bulut"))
         } footer: {
             Text(Loc.t("Yalnızca motor olarak Claude'u seçersen kullanılır. Anahtar bu cihazda saklanır; ücreti API hesabından düşülür."))
-        }
-    }
-
-    /// Searches the Wi-Fi for Ollama or LM Studio and takes the first one found.
-    private func findServer() {
-        findProgress = 0
-        serverStatus = nil
-        Task { @MainActor in
-            let found = await LocalServerFinder.search { fraction in findProgress = fraction }
-            findProgress = nil
-            guard let first = found.first, let host = first.host else {
-                serverStatus = LocalServerFinder.wifiAddress() == nil
-                    ? Loc.t("iPad Wi-Fi'ye bağlı değil. Bilgisayarınla aynı ağa bağlan.")
-                    : Loc.t("Ağda yapay zekâ sunucusu bulunamadı. Bilgisayarda Ollama'yı ağa açık başlat (OLLAMA_HOST=0.0.0.0) ya da LM Studio'da \"Serve on Local Network\"ü aç; yerel ağ izni sorulduysa onayla ve yeniden dene.")
-                return
-            }
-            settings.serverURL = first.port.map { "\(host):\($0)" } ?? host
-            // Looking for the computer means wanting its brain: the assistant answers with it now.
-            settings.engine = .localServer
-            checkServer()
         }
     }
 

@@ -48,7 +48,7 @@ struct AssistantPanel: View {
                     .font(.headline)
                 Menu {
                     Picker(Loc.t("Motor"), selection: $settings.engine) {
-                        ForEach(AIEngine.allCases) { engine in
+                        ForEach(AIEngine.listed(current: settings.engine)) { engine in
                             Label(engine.title, systemImage: engine.symbol).tag(engine)
                         }
                     }
@@ -159,6 +159,11 @@ struct AssistantPanel: View {
             Text(introDetail)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if showsBrainOffer {
+                BrainCard(compact: true)
+                    .padding(12)
+                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
             HStack(spacing: 8) {
                 Chip(text: Loc.t("API anahtarı gerekmez"), symbol: "key.slash", tint: .green)
                 if settings.webSearch && settings.engine != .claude {
@@ -197,9 +202,16 @@ struct AssistantPanel: View {
             return Loc.t("Claude seçtiğin sayfaları okur; istersen üzerine yazdığın notları da görür.")
         default:
             return editor.isPDF
-                ? Loc.t("Sayfaların metnini ve el yazını cihazında okur, yanıtı cihazdaki modelle ya da yerel sunucunla üretir. İstersen internete de bakar.")
-                : Loc.t("El yazını cihazında metne çevirir, yanıtı cihazdaki modelle ya da yerel sunucunla üretir. İstersen internete de bakar.")
+                ? Loc.t("Sayfaların metnini ve el yazını okur, yanıtı tamamen iPad'de üretir. İstersen internete de bakar.")
+                : Loc.t("El yazını metne çevirir, yanıtı tamamen iPad'de üretir. İstersen internete de bakar.")
         }
+    }
+
+    /// The stronger model is offered where answers are written, until it is on the iPad.
+    private var showsBrainOffer: Bool {
+        guard settings.engine == .auto || settings.engine == .deviceBrain else { return false }
+        let brain = DeviceBrain.shared
+        return BrainRuntime.isCompiledIn && brain.model != nil && brain.phase != .ready
     }
 
     // MARK: Controls

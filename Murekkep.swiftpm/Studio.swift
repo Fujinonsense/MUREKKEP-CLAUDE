@@ -656,6 +656,7 @@ final class StudioJob: ObservableObject, Identifiable {
 /// Which brain writes the script.
 enum StudioEngine: String, CaseIterable, Identifiable {
     case claude
+    case deviceBrain
     case onDevice
     case offline
 
@@ -664,6 +665,7 @@ enum StudioEngine: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .claude: return "Claude"
+        case .deviceBrain: return Loc.t("İndirilen model")
         case .onDevice: return Loc.t("Cihazda")
         case .offline: return Loc.t("Çevrimdışı")
         }
@@ -672,6 +674,7 @@ enum StudioEngine: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .claude: return Loc.t("En iyi kalite. PDF'lerin şekilleriyle birlikte okunur; API kredisi harcar.")
+        case .deviceBrain: return Loc.t("iPad'e indirilen Qwen3.5 ile ücretsiz ve internetsiz. Apple'ın modelinden daha güçlü.")
         case .onDevice: return Loc.t("Apple Intelligence ile ücretsiz ve internetsiz. Kısa kaynaklarda iyi.")
         case .offline: return Loc.t("Her cihazda çalışır; kaynaklardan önemli cümleleri seçer. Basit.")
         }
@@ -680,6 +683,7 @@ enum StudioEngine: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .claude: return "cloud"
+        case .deviceBrain: return "brain"
         case .onDevice: return "cpu"
         case .offline: return "bolt.horizontal.circle"
         }
@@ -692,9 +696,21 @@ enum StudioEngine: String, CaseIterable, Identifiable {
         return .offline
     }
 
+    /// Study tools are short enough for the downloaded model, the strongest brain on the iPad.
+    static func preferredForStudy(settings: AppSettings) -> StudioEngine {
+        if settings.hasAPIKey && settings.engine == .claude { return .claude }
+        if DeviceBrain.shared.isReady { return .deviceBrain }
+        return preferred(settings: settings)
+    }
+
+    /// The engines that can write a video or audio overview (its script is too long for the
+    /// downloaded model to write in reasonable time).
+    static var forOverviews: [StudioEngine] { allCases.filter { $0 != .deviceBrain } }
+
     func isAvailable(settings: AppSettings) -> Bool {
         switch self {
         case .claude: return settings.hasAPIKey
+        case .deviceBrain: return DeviceBrain.shared.isReady
         case .onDevice: return OnDeviceAI.isAvailable
         case .offline: return true
         }

@@ -123,9 +123,12 @@ final class AssistantModel: ObservableObject {
         }
         switch settings.engine {
         case .auto:
+            if let brain = Self.readyBrain { return (ResolvedEngine.deviceBrain(title: brain.title).label, AIEngine.deviceBrain.symbol) }
             if OnDeviceAI.isAvailable { return (ResolvedEngine.onDevice.label, AIEngine.onDevice.symbol) }
-            if LocalServerClient.normalizedBase(settings.serverURL) != nil { return (Loc.t("Otomatik · yerel sunucu"), AIEngine.localServer.symbol) }
             return (Loc.t("Otomatik · çevrimdışı"), AIEngine.offline.symbol)
+        case .deviceBrain:
+            if let brain = Self.readyBrain { return (ResolvedEngine.deviceBrain(title: brain.title).label, AIEngine.deviceBrain.symbol) }
+            return (Loc.t("Model indirilmedi"), AIEngine.deviceBrain.symbol)
         case .onDevice:
             return (OnDeviceAI.isAvailable ? ResolvedEngine.onDevice.label : Loc.t("Apple Intelligence yok"), AIEngine.onDevice.symbol)
         case .localServer:
@@ -136,6 +139,12 @@ final class AssistantModel: ObservableObject {
         case .claude:
             return ("Claude · \(settings.model.title)", AIEngine.claude.symbol)
         }
+    }
+
+    /// The downloaded model, when it can answer now.
+    static var readyBrain: BrainModel? {
+        let brain = DeviceBrain.shared
+        return brain.isReady ? brain.model : nil
     }
 
     func run(_ action: QuickAction) {
@@ -261,6 +270,7 @@ final class AssistantModel: ObservableObject {
             setEngine(resolved.label + (warning == nil ? "" : Loc.t(" (yedek)")))
             let pageLimit: Int
             switch resolved {
+            case .deviceBrain: pageLimit = 8
             case .onDevice: pageLimit = 5
             case .localServer: pageLimit = 12
             case .offline, .claude: pageLimit = 30
@@ -283,16 +293,26 @@ final class AssistantModel: ObservableObject {
             let facts = AnswerLanguage.$bound.withValue(language) { OfflineBrain.mathFacts(pages, current: editor.currentPage) }
             // A page of questions: the small models are far more accurate one question at a time. A
             // textbook page goes exercise by exercise, each item with its exercise's instruction.
-            if Self.wantsSolving(question: question, action: action) {
-                let here = pages.filter { $0.page == editor.currentPage }
-                let source = here.isEmpty ? pages : here
-                let text = source.map(\.text).joined(separator: "\n")
-                let questions = QuestionSplitter.split(text)
-                let exercises = ExerciseSplitter.split(text)
-                let multipleChoice = questions.filter { $0.options.count >= 2 }.count >= 2
-                let textbook = !multipleChoice && exercises.contains { $0.kind != .skip }
-                if textbook || questions.count >= 2 {
-                    switch resolved {
+            let solving = Self.wantsSolving(question: question, action: action)
+            let here = pages.filter { $0.page == editor.currentPage }
+            let source = here.isEmpty ? pages : here
+            let sourceText = source.map(\.text).joined(separator: "\n")
+            let questions = solving ? QuestionSplitter.split(sourceText) : []
+            let exercises = solving ? ExerciseSplitter.split(sourceText) : []
+            let multipleChoice = questions.filter { $0.options.count >= 2 }.count >= 2
+            let textbook = !multipleChoice && exercises.contains { $0.kind != .skip }
+            let onePerQuestion = solving && (textbook || questions.count >= 2)
+
+            func respond(with engine: ResolvedEngine) async throws {
+                if onePerQuestion {
+                    switch engine {
+                    case .deviceBrain:
+                        if textbook {
+                            try await solveExercisesWithBrain(exercises, language: language)
+                        } else {
+                            try await solveWithBrain(questions, language: language)
+                        }
+                        return
                     case .onDevice:
                         if textbook {
                             try await solveExercisesOnDevice(exercises, language: language)
@@ -312,21 +332,36 @@ final class AssistantModel: ObservableObject {
                         }
                         return
                     case .offline, .claude:
-                        appendToAnswer("_" + Loc.t("Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Apple Intelligence (iPadOS 26) ya da bilgisayarındaki yerel sunucu (Ollama, LM Studio) gerekir.") + "_\n\n")
+                        appendToAnswer("_" + Loc.t("Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Ayarlar'dan iPad'e güçlü modeli indir ya da Apple Intelligence'ı aç.") + "_\n\n")
                     }
                 }
+                switch engine {
+                case .deviceBrain:
+                    try await answerWithBrain(question: question, action: action, pages: pages, facts: facts,
+                                              wantsWeb: wantsWeb, editor: editor, language: language)
+                case .onDevice:
+                    try await answerOnDevice(question: question, pages: pages, facts: facts, wantsWeb: wantsWeb, editor: editor,
+                                             language: language)
+                case let .localServer(base, model):
+                    try await answerWithServer(base: base, model: model, question: question, action: action,
+                                               pages: pages, facts: facts, wantsWeb: wantsWeb, withInk: withInk, editor: editor,
+                                               language: language)
+                case .offline, .claude:
+                    try await answerOffline(question: question, action: action, pages: pages, wantsWeb: wantsWeb, editor: editor,
+                                            language: language)
+                }
             }
-            switch resolved {
-            case .onDevice:
-                try await answerOnDevice(question: question, pages: pages, facts: facts, wantsWeb: wantsWeb, editor: editor,
-                                         language: language)
-            case let .localServer(base, model):
-                try await answerWithServer(base: base, model: model, question: question, action: action,
-                                           pages: pages, facts: facts, wantsWeb: wantsWeb, withInk: withInk, editor: editor,
-                                           language: language)
-            case .offline, .claude:
-                try await answerOffline(question: question, action: action, pages: pages, wantsWeb: wantsWeb, editor: editor,
-                                        language: language)
+
+            do {
+                try await respond(with: resolved)
+            } catch {
+                // The downloaded model could not start (memory, missing files): Apple's model answers
+                // instead, so a question is never left without an answer.
+                guard case .deviceBrain = resolved, !(error is CancellationError), !Task.isCancelled,
+                      OnDeviceAI.isAvailable, Self.isBlank(messages.last) else { throw error }
+                setEngine(ResolvedEngine.onDevice.label + Loc.t(" (yedek)"))
+                appendToAnswer("_" + Loc.t("İndirilen model açılamadı: {0} Apple Intelligence ile yanıtlıyorum.", error.localizedDescription) + "_\n\n")
+                try await respond(with: .onDevice)
             }
             if let last = messages.last, last.role == .assistant,
                last.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -364,14 +399,17 @@ final class AssistantModel: ObservableObject {
             return (.localServer(base: base, model: await serverModel(base: base)), nil)
         case .offline, .claude:
             return (.offline, nil)
-        case .auto:
-            if OnDeviceAI.isAvailable { return (.onDevice, nil) }
-            if let base {
-                status = Loc.t("Yerel sunucu aranıyor…")
-                if await LocalServerClient.isReachable(base) {
-                    return (.localServer(base: base, model: await serverModel(base: base)), nil)
-                }
+        case .deviceBrain:
+            if let brain = Self.readyBrain { return (.deviceBrain(title: brain.title), nil) }
+            let reason = DeviceBrain.shared.unavailableReason ?? ""
+            if OnDeviceAI.isAvailable {
+                return (.onDevice, Loc.t("İndirilen model kullanılamadı: {0} Şimdilik Apple Intelligence ile yanıtlıyorum.", reason))
             }
+            return (.offline, Loc.t("İndirilen model kullanılamadı: {0} Şimdilik çevrimdışı çekirdekle yanıtlıyorum.", reason))
+        case .auto:
+            // The strongest brain on this iPad; nothing leaves it.
+            if let brain = Self.readyBrain { return (.deviceBrain(title: brain.title), nil) }
+            if OnDeviceAI.isAvailable { return (.onDevice, nil) }
             return (.offline, nil)
         }
     }
@@ -502,6 +540,131 @@ final class AssistantModel: ObservableObject {
                 throw error
             }
         }
+    }
+
+    // MARK: - Downloaded model
+
+    /// Text of the pages for the downloaded model: a few pages, so the first word still comes in seconds.
+    private static let brainContextBudget = 9_000
+
+    /// Nothing written in the answer yet.
+    static func isBlank(_ message: ChatMessage?) -> Bool {
+        guard let message, message.role == .assistant else { return true }
+        return message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// One reply of the downloaded model. While it thinks, the status counts the seconds; the answer
+    /// goes to `show` as it grows. Returns the answer without the thinking.
+    @MainActor
+    private func runBrain(_ request: BrainRuntime.Request, label: String,
+                          show: ((String) -> Void)? = nil) async throws -> String {
+        guard let directory = DeviceBrain.shared.directory else {
+            throw LocalAIError(DeviceBrain.shared.unavailableReason ?? Loc.t("İndirilen model bulunamadı."))
+        }
+        let started = Date()
+        status = Loc.t("{0} · model hazırlanıyor…", label)
+        var answer = ""
+        var thinking = ""
+        for try await raw in BrainRuntime.stream(request, directory: directory) {
+            let parts = ThinkingText.split(raw, thinking: request.thinking != nil)
+            if parts.answering {
+                answer = parts.answer
+                status = Loc.t("{0} · yazıyor…", label)
+                show?(answer)
+            } else {
+                thinking = parts.thinking
+                status = Loc.t("{0} · düşünüyor ({1} sn)…", label, "\(Int(Date().timeIntervalSince(started)))")
+            }
+        }
+        if answer.isEmpty, !thinking.isEmpty {
+            // Stopped while thinking: its last paragraph is the closest thing to an answer.
+            answer = thinking.components(separatedBy: "\n\n").last ?? thinking
+            show?(answer)
+        }
+        return answer
+    }
+
+    private var brainTitle: String {
+        DeviceBrain.shared.model?.title ?? "Qwen3.5"
+    }
+
+    /// A page of multiple-choice questions, one at a time: the model thinks (longer for arithmetic),
+    /// then writes a short reason and "Cevap: X", and the choice is shown with its option.
+    @MainActor
+    private func solveWithBrain(_ questions: [PageQuestion], language: AnswerLanguage) async throws {
+        let system = QuestionSolving.brainInstructions(language: language)
+        for (i, q) in questions.enumerated() {
+            try Task.checkCancellation()
+            let label = brainTitle + " · " + Loc.t("Soru {0}/{1}", "\(i + 1)", "\(questions.count)")
+            let request = BrainRuntime.Request(system: system, prompt: q.promptText,
+                                               thinking: BrainBudget.thinking(for: q.promptText),
+                                               maxAnswerTokens: 400, temperature: 0.6)
+            do {
+                let answer = try await runBrain(request, label: label)
+                if let letter = ThinkingText.choice(in: answer, letters: q.options.map(\.letter)) {
+                    appendToAnswer(QuestionSolving.line(q, answer: String(letter), reasoning: ThinkingText.explanation(answer)))
+                } else {
+                    appendToAnswer("**\(q.number))** " + answer + "\n\n")
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // The first question failing means the model could not start: the caller falls back.
+                if i == 0 { throw error }
+                appendToAnswer("**\(q.number))** ⚠️ " + error.localizedDescription + "\n\n")
+            }
+        }
+        status = nil
+    }
+
+    /// A textbook page: the model answers a whole exercise at once (it has room for it), thinking first.
+    @MainActor
+    private func solveExercisesWithBrain(_ exercises: [PageExercise], language: AnswerLanguage) async throws {
+        let system = QuestionSolving.exerciseInstructions(language: language)
+        let skipped = Self.skippedNote(language)
+        for (index, e) in exercises.enumerated() {
+            try Task.checkCancellation()
+            guard e.kind != .skip else {
+                appendToAnswer(ExerciseSplitter.render(e, fills: [:], skipped: skipped))
+                continue
+            }
+            let label = brainTitle + " · " + Loc.t("Soru {0}/{1}", "\(index + 1)", "\(exercises.count)")
+            let request = BrainRuntime.Request(system: system, prompt: ExerciseSplitter.exercisePrompt(e),
+                                               thinking: 1_024, maxAnswerTokens: 900, temperature: 0.6)
+            appendToAnswer("**\(e.number)** \(e.instruction)\n")
+            let before = messages.last?.text ?? ""
+            let answer = try await runBrain(request, label: label) { [weak self] text in
+                self?.setAnswer(before + text, isError: false)
+            }
+            setAnswer(before + answer + "\n\n", isError: false)
+        }
+        status = nil
+    }
+
+    /// A free question (or a ready-made action) answered from the pages. Checking a solution or
+    /// anything with arithmetic is thought through first; the rest is answered at once.
+    @MainActor
+    private func answerWithBrain(question: String, action: QuickAction?, pages: [PageText], facts: String,
+                                 wantsWeb: Bool, editor: EditorModel, language: AnswerLanguage) async throws {
+        var web: [WebSource] = []
+        if wantsWeb {
+            status = Loc.t("İnternette aranıyor…")
+            web = await WebSearch.search(searchQuery(question: question, action: action, pages: pages, editor: editor), limit: 4)
+        }
+        try Task.checkCancellation()
+        let prompt = localPrompt(question: question, pages: pages, facts: facts, budget: Self.brainContextBudget,
+                                 editor: editor, history: recentHistory(maxTurns: 4, maxChars: 600), web: web)
+        let deep = action == .check || action == .solve || (action == nil && BrainBudget.isMath(question))
+        let request = BrainRuntime.Request(system: Self.instructions(web: !web.isEmpty, tool: false, language: language),
+                                           prompt: prompt, thinking: deep ? 1_536 : nil,
+                                           maxAnswerTokens: 1_400, temperature: deep ? 0.6 : 0.7)
+        let before = messages.last?.text ?? ""
+        let answer = try await runBrain(request, label: brainTitle) { [weak self] text in
+            self?.setAnswer(before + text, isError: false)
+        }
+        setAnswer(before + answer, isError: false)
+        status = nil
+        setSources(web)
     }
 
     /// "Solve the questions" (the button, or a short request like "bu soruları çöz").

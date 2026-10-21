@@ -5,7 +5,7 @@ enum Translations {
     static let english: [String: String] = {
         var all: [String: String] = [:]
         all.reserveCapacity(920)
-        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10] {
+        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11] {
             all.merge(part) { first, _ in first }
         }
         return all
@@ -1086,5 +1086,55 @@ enum Translations {
         "iPad Wi-Fi'ye bağlı değil. Bilgisayarınla aynı ağa bağlan.": "The iPad is not on Wi-Fi. Join the same network as your computer.",
         "Ağda yapay zekâ sunucusu bulunamadı. Bilgisayarda Ollama'yı ağa açık başlat (OLLAMA_HOST=0.0.0.0) ya da LM Studio'da \"Serve on Local Network\"ü aç; yerel ağ izni sorulduysa onayla ve yeniden dene.": "No AI server found on the network. Start Ollama open to the network (OLLAMA_HOST=0.0.0.0) or turn on \"Serve on Local Network\" in LM Studio; if the local network permission was asked, allow it and try again.",
         "Notların içinde": "Inside your notes",
+    ]
+
+    private static let part11: [String: String] = [
+        "Bağlantı zaman aşımına uğradı. \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "The connection timed out. Tap \"Download\" again; it continues where it stopped.",
+        "Bilgisayardaki sunucu": "Server on your computer",
+        "Bu derlemede indirilebilir model motoru (MLX) yok. Yeni derlemede gelir.": "This build has no engine for the downloadable model (MLX). It comes with a new build.",
+        "Bu iPad için en güçlü model. Bir kez indirilir ({0}, Wi‑Fi önerilir), sonra tamamen cihazda ve internetsiz çalışır.": "The strongest model for this iPad. Downloaded once ({0}, Wi‑Fi recommended), then it runs entirely on the device, offline.",
+        "Bu iPad'deki en güçlü beyin seçilir: indirilen model, yoksa Apple Intelligence, o da yoksa çevrimdışı çekirdek. Hepsi cihazda çalışır.": "The strongest brain on this iPad is used: the downloaded model, otherwise Apple Intelligence, otherwise the offline core. All run on the device.",
+        "Bu iPad'in belleği indirilebilir model için yetmiyor (en az 6 GB gerekir).": "This iPad doesn't have enough memory for the downloadable model (at least 6 GB is needed).",
+        "Cihazda · {0}": "On device · {0}",
+        "Dosya eksik indi; yeniden deneniyor.": "A file came down incomplete; trying again.",
+        "El yazını metne çevirir, yanıtı tamamen iPad'de üretir. İstersen internete de bakar.": "Turns your handwriting into text and writes the answer entirely on the iPad. It can also look things up online.",
+        "Gelişmiş": "Advanced",
+        "Güçlü yerel model": "Strong on-device model",
+        "Hazır. Asistan otomatik olarak bunu kullanıyor; internetsiz çalışır.": "Ready. The assistant uses it automatically; it works offline.",
+        "Model adresi geçersiz.": "The model address is invalid.",
+        "Model dosyaları bulunamadı. Ayarlar'dan modeli yeniden indir.": "The model files weren't found. Download the model again in Settings.",
+        "Model dosyaları sunucuda bulunamadı.": "The model files weren't found on the server.",
+        "Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Sorular ve notlar iPad'den çıkmaz.": "The model is chosen by the iPad's memory: Qwen3.5 9B with 16 GB, 4B with 8 GB, 2B with 6 GB. Questions and notes never leave the iPad.",
+        "Model indirilmedi": "Model not downloaded",
+        "Model için bellek yetmiyor. Açık uygulamaları kapatıp tekrar dene.": "Not enough memory for the model. Close other apps and try again.",
+        "Model listesi alınamadı (HTTP {0}).": "Couldn't get the model's file list (HTTP {0}).",
+        "Model silinsin mi?": "Delete the model?",
+        "Sayfaların metnini ve el yazını okur, yanıtı tamamen iPad'de üretir. İstersen internete de bakar.": "Reads your pages and handwriting and writes the answer entirely on the iPad. It can also look things up online.",
+        "Soruları adım adım düşünerek çözer. Bir kez indir ({0}), sonra internetsiz çalışır.": "Thinks questions through step by step. Download it once ({0}); then it works offline.",
+        "Uygulama arka plana geçtiği için yanıt durdu. Tekrar sor.": "The answer stopped because the app went to the background. Ask again.",
+        "Uygulama arka plandayken model çalışmaz. Tekrar sor.": "The model can't run while the app is in the background. Ask again.",
+        "Yapay zekâ beyni": "AI brain",
+        "Yeniden dene": "Try again",
+        "Yer açılır; istediğinde yeniden indirebilirsin.": "This frees the space; you can download it again any time.",
+        "iPad'de yeterli yer yok: {0} gerekiyor.": "Not enough space on the iPad: {0} is needed.",
+        "iPad'e bir kez indirilen güçlü model. Tamamen cihazda, internetsiz ve anahtarsız çalışır; matematikte önce adım adım düşünür.": "A strong model downloaded to the iPad once. It runs entirely on the device, offline and without a key; on math it thinks step by step first.",
+        "iPad'e indirilen Qwen3.5 ile ücretsiz ve internetsiz. Apple'ın modelinden daha güçlü.": "Free and offline with Qwen3.5 on the iPad. Stronger than Apple's model.",
+        "{0} henüz indirilmedi (Ayarlar > Yapay zekâ beyni).": "{0} isn't downloaded yet (Settings > AI brain).",
+        "{0} indiriliyor…": "Downloading {0}…",
+        "{0} · düşünüyor ({1} sn)…": "{0} · thinking ({1} s)…",
+        "{0} · model hazırlanıyor…": "{0} · getting the model ready…",
+        "{0} · yazıyor…": "{0} · writing…",
+        "Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Ayarlar'dan iPad'e güçlü modeli indir ya da Apple Intelligence'ı aç.": "The offline core can't really solve questions; it only shows the hints on the page. To solve them, download the strong model to the iPad in Settings or turn on Apple Intelligence.",
+        "İndir": "Download",
+        "İndirilen model": "Downloaded model",
+        "İndirilen model (Qwen3.5)": "Downloaded model (Qwen3.5)",
+        "İndirilen model açılamadı: {0} Apple Intelligence ile yanıtlıyorum.": "The downloaded model couldn't start: {0} Answering with Apple Intelligence.",
+        "İndirilen model bulunamadı.": "The downloaded model wasn't found.",
+        "İndirilen model hazırlıyor…": "The downloaded model is preparing…",
+        "İndirilen model kullanılamadı: {0} Şimdilik Apple Intelligence ile yanıtlıyorum.": "The downloaded model couldn't be used: {0} Answering with Apple Intelligence for now.",
+        "İndirilen model kullanılamadı: {0} Şimdilik çevrimdışı çekirdekle yanıtlıyorum.": "The downloaded model couldn't be used: {0} Answering with the offline core for now.",
+        "İndiriliyor: {0} / {1}. Uygulama açık kalsın; kapanırsa kaldığı yerden sürer.": "Downloading: {0} / {1}. Keep the app open; if it closes, the download continues where it stopped.",
+        "İndirme sunucusu yanıt vermedi (HTTP {0}).": "The download server didn't answer (HTTP {0}).",
+        "İnternet bağlantısı yok. Wi-Fi'ye bağlanınca \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "No internet connection. Once on Wi-Fi, tap \"Download\" again; it continues where it stopped.",
     ]
 }

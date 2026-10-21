@@ -29,6 +29,15 @@ enum StudyWriter {
         switch engine {
         case .claude:
             try await claude(&set, options: options, material: material, settings: settings, progress: progress)
+        case .deviceBrain:
+            do {
+                try await brain(&set, options: options, material: material, progress: progress)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Whatever went wrong, the keyless writer below still makes the set.
+                set.engine = Loc.t("Çevrimdışı")
+            }
         case .onDevice:
             #if canImport(FoundationModels) && !MUREKKEP_PLAIN
             if #available(iOS 26.0, *), OnDeviceAI.isAvailable {
@@ -74,6 +83,49 @@ enum StudyWriter {
                                progress: @escaping Progress) async throws {
         guard let key = settings.apiKey else { throw StudioWriterError.needsKey }
         let lang = language(options.english)
+        let text = String(material.allText.prefix(120_000))
+        let request = ClaudeRequest(model: settings.model.rawValue, effort: settings.effort.rawValue, maxTokens: 16_000,
+                                    system: system(lang), context: .none, contextNote: "",
+                                    turns: [ClaudeTurn(role: .user, text: jsonPrompt(options, sources: text), imageJPEG: nil)])
+        progress(0.2, Loc.t("Claude hazırlıyor…"))
+        let reply = try await ClaudeClient.collect(request, apiKey: key) { chars in
+            progress(min(0.95, 0.2 + Double(chars) / 30_000), nil)
+        }
+        guard let json = jsonObject(in: reply) else { throw StudioWriterError.unreadableScript }
+        set.engine = "Claude · \(settings.model.title)"
+        apply(json, to: &set, kind: options.kind)
+    }
+
+    // MARK: Downloaded model
+
+    /// The downloaded model writes the same JSON as Claude, from as much of the sources as its prompt
+    /// takes in a reasonable time.
+    @MainActor
+    private static func brain(_ set: inout StudySet, options: StudyOptions, material: StudioMaterial,
+                              progress: @escaping Progress) async throws {
+        guard let directory = DeviceBrain.shared.directory else { throw StudioWriterError.noText }
+        let lang = language(options.english)
+        let text = String(material.allText.prefix(14_000))
+        let request = BrainRuntime.Request(system: system(lang), prompt: jsonPrompt(options, sources: text),
+                                           thinking: nil, maxAnswerTokens: 3_500, temperature: 0.5)
+        progress(0.1, Loc.t("İndirilen model hazırlıyor…"))
+        var reply = ""
+        for try await raw in BrainRuntime.stream(request, directory: directory) {
+            reply = ThinkingText.split(raw, thinking: false).answer
+            progress(min(0.95, 0.15 + Double(reply.count) / 9_000), nil)
+        }
+        guard let json = jsonObject(in: reply) else { throw StudioWriterError.unreadableScript }
+        set.engine = Loc.t("Cihazda · {0}", DeviceBrain.shared.model?.title ?? "Qwen3.5")
+        apply(json, to: &set, kind: options.kind)
+    }
+
+    // MARK: JSON
+
+    private static func system(_ lang: OverviewLanguage) -> String {
+        "Sen titiz bir öğretmensin; öğrencinin kaynaklarından çalışma araçları hazırlarsın. " + StudioWriter.scriptDirective(lang)
+    }
+
+    private static func jsonPrompt(_ options: StudyOptions, sources text: String) -> String {
         let shape: String
         switch options.kind {
         case .flashcards:
@@ -88,20 +140,18 @@ enum StudyWriter {
             shape = #"{"summary":["…"],"sections":[{"heading":"…","points":["…"]}],"terms":[{"term":"…","definition":"…"}],"questions":["…"]}"#
                 + " — 3 cümlelik özet, her bölüm için 3-5 madde, 8-14 terim, 5-8 düşündürücü soru."
         }
-        let text = String(material.allText.prefix(120_000))
-        let prompt = "Aşağıdaki kaynaklardan bir çalışma aracı hazırla. Yalnızca kaynaklara dayan. Yanıtın yalnızca şu biçimde tek bir JSON olsun, başka hiçbir şey yazma:\n\(shape)\n\nKaynaklar:\n\(text)"
-        let request = ClaudeRequest(model: settings.model.rawValue, effort: settings.effort.rawValue, maxTokens: 16_000,
-                                    system: "Sen titiz bir öğretmensin; öğrencinin kaynaklarından çalışma araçları hazırlarsın. " + StudioWriter.scriptDirective(lang),
-                                    context: .none, contextNote: "", turns: [ClaudeTurn(role: .user, text: prompt, imageJPEG: nil)])
-        progress(0.2, Loc.t("Claude hazırlıyor…"))
-        let reply = try await ClaudeClient.collect(request, apiKey: key) { chars in
-            progress(min(0.95, 0.2 + Double(chars) / 30_000), nil)
-        }
-        guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"),
-              let data = String(reply[start...end]).data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw StudioWriterError.unreadableScript }
-        set.engine = "Claude · \(settings.model.title)"
-        switch options.kind {
+        return "Aşağıdaki kaynaklardan bir çalışma aracı hazırla. Yalnızca kaynaklara dayan. Yanıtın yalnızca şu biçimde tek bir JSON olsun, başka hiçbir şey yazma:\n\(shape)\n\nKaynaklar:\n\(text)"
+    }
+
+    /// The JSON object in a reply (models sometimes wrap it in a sentence or a code fence).
+    private static func jsonObject(in reply: String) -> [String: Any]? {
+        guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"), start < end,
+              let data = String(reply[start...end]).data(using: .utf8) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    private static func apply(_ json: [String: Any], to set: inout StudySet, kind: StudyKind) {
+        switch kind {
         case .flashcards:
             set.cards = (json["cards"] as? [[String: Any]] ?? []).compactMap { c in
                 guard let f = c["front"] as? String, let b = c["back"] as? String, !f.isEmpty, !b.isEmpty else { return nil }

@@ -367,7 +367,7 @@ struct StudioCreateSheet: View {
     private var engineSection: some View {
         Section {
             Picker(Loc.t("Senaryoyu yazan"), selection: $engine) {
-                ForEach(StudioEngine.allCases) { e in
+                ForEach(StudioEngine.forOverviews) { e in
                     Label(e.title + (e.isAvailable(settings: settings) ? "" : Loc.t(" (kullanılamıyor)")), systemImage: e.symbol).tag(e)
                 }
             }

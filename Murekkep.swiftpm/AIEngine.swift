@@ -4,6 +4,7 @@ import NaturalLanguage
 /// Which brain answers questions in the assistant panel. None of them needs an API key except Claude.
 enum AIEngine: String, CaseIterable, Identifiable, Codable {
     case auto
+    case deviceBrain
     case onDevice
     case localServer
     case offline
@@ -11,9 +12,15 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// The engines Settings lists. The computer's server only shows while it is the choice.
+    static func listed(current: AIEngine) -> [AIEngine] {
+        allCases.filter { $0 != .localServer || current == .localServer }
+    }
+
     var title: String {
         switch self {
         case .auto: return Loc.t("Otomatik")
+        case .deviceBrain: return Loc.t("İndirilen model (Qwen3.5)")
         case .onDevice: return Loc.t("Cihazda (Apple Intelligence)")
         case .localServer: return Loc.t("Yerel sunucu (Ollama / LM Studio)")
         case .offline: return Loc.t("Çevrimdışı çekirdek")
@@ -24,6 +31,7 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
     var shortTitle: String {
         switch self {
         case .auto: return Loc.t("Otomatik")
+        case .deviceBrain: return "Qwen3.5"
         case .onDevice: return Loc.t("Cihazda")
         case .localServer: return Loc.t("Yerel sunucu")
         case .offline: return Loc.t("Çevrimdışı")
@@ -34,6 +42,7 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
     var symbol: String {
         switch self {
         case .auto: return "wand.and.stars"
+        case .deviceBrain: return "brain"
         case .onDevice: return "cpu"
         case .localServer: return "desktopcomputer"
         case .offline: return "bolt.horizontal.circle"
@@ -44,7 +53,9 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .auto:
-            return Loc.t("Önce cihazdaki Apple Intelligence modeli, yoksa yerel sunucun, o da yoksa çevrimdışı çekirdek kullanılır.")
+            return Loc.t("Bu iPad'deki en güçlü beyin seçilir: indirilen model, yoksa Apple Intelligence, o da yoksa çevrimdışı çekirdek. Hepsi cihazda çalışır.")
+        case .deviceBrain:
+            return Loc.t("iPad'e bir kez indirilen güçlü model. Tamamen cihazda, internetsiz ve anahtarsız çalışır; matematikte önce adım adım düşünür.")
         case .onDevice:
             return Loc.t("iPadOS 26 ve Apple Intelligence destekli iPad'lerde tamamen cihazda çalışır. Ücretsiz, anahtar gerekmez.")
         case .localServer:
@@ -59,6 +70,7 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
 
 /// The engine actually used for one answer.
 enum ResolvedEngine: Equatable {
+    case deviceBrain(title: String)
     case onDevice
     case localServer(base: URL, model: String)
     case offline
@@ -66,6 +78,7 @@ enum ResolvedEngine: Equatable {
 
     var label: String {
         switch self {
+        case let .deviceBrain(title): return Loc.t("Cihazda · {0}", title)
         case .onDevice: return Loc.t("Cihazda · Apple Intelligence")
         case let .localServer(_, model): return model.isEmpty ? Loc.t("Yerel sunucu") : Loc.t("Yerel sunucu · {0}", "\(model)")
         case .offline: return Loc.t("Çevrimdışı çekirdek")
@@ -75,6 +88,7 @@ enum ResolvedEngine: Equatable {
 
     var symbol: String {
         switch self {
+        case .deviceBrain: return AIEngine.deviceBrain.symbol
         case .onDevice: return AIEngine.onDevice.symbol
         case .localServer: return AIEngine.localServer.symbol
         case .offline: return AIEngine.offline.symbol
