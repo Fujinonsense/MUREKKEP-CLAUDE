@@ -52,6 +52,9 @@ FINAL = re.compile(
     r"(?:cevap|yan[ıi]t|doğru (?:cevap|şık|seçenek)|answer|correct (?:answer|option))(?:\s+is)?\s*[:：]?\s*\**\s*\(?([A-Ea-e])\)?(?![A-Za-zÇĞİÖŞÜçğıöşü])",
     re.IGNORECASE)
 BOLD = re.compile(r"\*\*\s*\(?([A-Ea-e])\)?\s*\*\*")
+# "D) 4: Doğru." — an option-by-option verdict, when the answer ran out before its "Cevap:" line.
+VERDICT = re.compile(r"^[\s*\-•]*\(?([A-Ea-e])\)[^\n]*?[:：—–\-]\s*\**\s*(?:doğru|correct)\b(?!\s*değil)",
+                     re.IGNORECASE | re.MULTILINE)
 
 
 def choice(answer, letters):
@@ -60,6 +63,9 @@ def choice(answer, letters):
     found = [c for c in found if c in allowed]
     if found:
         return found[-1]
+    marked = {m.group(1).upper() for m in VERDICT.finditer(answer)} & allowed
+    if len(marked) == 1:
+        return marked.pop()
     for m in BOLD.finditer(answer):
         c = m.group(1).upper()
         if c in allowed:

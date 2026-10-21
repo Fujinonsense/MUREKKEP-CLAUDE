@@ -60,6 +60,20 @@ def test_the_choice_is_read():
     assert brain.choice("Bence **B** çünkü...", letters) == "B"
 
 
+def test_the_choice_is_read_from_an_option_by_option_verdict():
+    # Qwen3.5 4B went through every option and ran out of answer tokens before "Cevap: D".
+    letters = list("ABCDE")
+    cut = "**Şıkların Değerlendirilmesi:**\nA) 8: Yanlış.\nB) 0: Yanlış.\nC) Tanımsızdır: Yanlış, limit var.\nD) 4: Doğru.\nE) 2: Yanlış."
+    assert brain.choice(cut, letters) == "D"
+    assert brain.choice("A) went: incorrect\nB) has gone — Correct, present perfect.\nC) go: wrong", letters) == "B"
+    assert brain.choice("* **C)** 3/4: **Doğru**", letters) == "C"
+    # Two options called right, or "doğru değil": no choice from the verdicts.
+    assert brain.choice("A) 1: Doğru\nB) 2: Doğru", letters) is None
+    assert brain.choice("C) x − 2: Doğru değil.", letters) is None
+    # A stated answer still wins.
+    assert brain.choice("A) 8: Doğru gibi görünüyor ama değil.\nCevap: D", letters) == "D"
+
+
 def test_explanation_drops_the_choice_line():
     text = "Metinde yazar umudu anlatıyor.\nBu yüzden B.\nCevap: B"
     assert brain.explanation(text) == "Metinde yazar umudu anlatıyor.\nBu yüzden B."

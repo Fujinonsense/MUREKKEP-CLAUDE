@@ -88,9 +88,14 @@ enum ThinkingText {
         pattern: "(?:cevap|yan[ıi]t|doğru (?:cevap|şık|seçenek)|answer|correct (?:answer|option))(?:\\s+is)?\\s*[:：]?\\s*\\**\\s*\\(?([A-Ea-e])\\)?(?![A-Za-zÇĞİÖŞÜçğıöşü])",
         options: [.caseInsensitive])
     private static let boldLetter = try! NSRegularExpression(pattern: "\\*\\*\\s*\\(?([A-Ea-e])\\)?\\s*\\*\\*")
+    /// "D) 4: Doğru." — an option-by-option verdict, when the answer ran out before its "Cevap:" line.
+    private static let verdictLine = try! NSRegularExpression(
+        pattern: "^[\\s*\\-•]*\\(?([A-Ea-e])\\)[^\\n]*?[:：—–\\-]\\s*\\**\\s*(?:doğru|correct)\\b(?!\\s*değil)",
+        options: [.caseInsensitive, .anchorsMatchLines])
 
     /// The option an answer chose. The last "Cevap: C" / "Answer: (B)" wins (models restate their
-    /// final choice at the end); otherwise the first bold letter. Only letters the question has.
+    /// final choice at the end); then the one option a verdict list calls right; otherwise the
+    /// first bold letter. Only letters the question has.
     static func choice(in answer: String, letters: [Character]) -> Character? {
         let allowed = Set(letters.map { Character($0.uppercased()) })
         let ns = answer as NSString
@@ -102,6 +107,8 @@ enum ThinkingText {
         if let found = finalLine.matches(in: answer, range: range).reversed().lazy.compactMap(letter).first {
             return found
         }
+        let marked = Set(verdictLine.matches(in: answer, range: range).compactMap(letter))
+        if marked.count == 1 { return marked.first }
         return boldLetter.matches(in: answer, range: range).lazy.compactMap(letter).first
     }
 

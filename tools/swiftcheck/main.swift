@@ -414,6 +414,9 @@ let choices: [(String, Character?)] = [
     ("Gerekçe...\nCevap: C", "C"), ("**Cevap: B**", "B"), ("Doğru cevap **D) 12** çünkü toplam 12 eder.", "D"),
     ("Answer: (a)", "A"), ("The correct answer is E.", "E"), ("Doğru şık C'dir.", "C"), ("YANIT: D", "D"),
     ("Cevap A olamaz, çünkü fiil yok.\nCevap: D", "D"), ("Cevap açık değil; cevap edilebilir bir soru.", nil), ("Bence **B** çünkü...", "B"),
+    ("**Şıkların Değerlendirilmesi:**\nA) 8: Yanlış.\nB) 0: Yanlış.\nC) Tanımsızdır: Yanlış, limit var.\nD) 4: Doğru.\nE) 2: Yanlış.", "D"),
+    ("A) went: incorrect\nB) has gone — Correct, present perfect.\nC) go: wrong", "B"), ("* **C)** 3/4: **Doğru**", "C"),
+    ("A) 1: Doğru\nB) 2: Doğru", nil), ("C) x − 2: Doğru değil.", nil), ("A) 8: Doğru gibi görünüyor ama değil.\nCevap: D", "D"),
 ]
 for (text, want) in choices {
     let got = ThinkingText.choice(in: text, letters: abcde)
