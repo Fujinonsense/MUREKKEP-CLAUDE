@@ -28,6 +28,12 @@ func vDSP_mmul(_ a: UnsafePointer<Float>, _ ia: vDSP_Stride, _ b: UnsafePointer<
     }
 }
 
+// MARK: StrokeFont (Reading.raisedText asks it for raised characters; exponents are not read here)
+
+enum StrokeFont {
+    static func raised(_ c: Character) -> Character? { nil }
+}
+
 // MARK: UIKit
 
 final class NSDataAsset {

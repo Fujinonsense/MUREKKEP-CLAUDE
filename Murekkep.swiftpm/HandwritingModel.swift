@@ -25,7 +25,7 @@ final class HandwritingModel {
         let cout: Int
     }
 
-    private struct LSTM {
+    struct LSTM {
         let wihT: [Float]  // [inputs, 640]
         let whh: [Float]   // [640, 160]
         let b: [Float]     // [640]
@@ -36,12 +36,12 @@ final class HandwritingModel {
     private let lstms: [LSTM]  // layer 1 forward, layer 1 backward, layer 2 forward, layer 2 backward
     private let fcT: [Float]   // [320, classes]
     private let fcB: [Float]
-    private static let hidden = 160
+    static let hidden = 160
     private static let pools: [Int: (Int, Int)] = [0: (2, 2), 1: (2, 2), 3: (2, 1), 5: (2, 1)]
 
     // MARK: Loading hwmodel.bin
 
-    private struct Reader {
+    struct Reader {
         let bytes: [UInt8]
         var pos = 0
 
@@ -125,7 +125,7 @@ final class HandwritingModel {
         fcB = tensors[25].values
     }
 
-    private static func transpose(_ a: [Float], rows: Int, cols: Int) -> [Float] {
+    static func transpose(_ a: [Float], rows: Int, cols: Int) -> [Float] {
         var out = [Float](repeating: 0, count: rows * cols)
         for r in 0..<rows {
             for c in 0..<cols {
@@ -138,7 +138,7 @@ final class HandwritingModel {
     // MARK: The network
 
     /// C[m × n] = A[m × p] · B[p × n], row-major.
-    private static func matmul(_ a: [Float], _ b: [Float], m: Int, n: Int, p: Int) -> [Float] {
+    static func matmul(_ a: [Float], _ b: [Float], m: Int, n: Int, p: Int) -> [Float] {
         var c = [Float](repeating: 0, count: m * n)
         a.withUnsafeBufferPointer { pa in
             b.withUnsafeBufferPointer { pb in
@@ -204,9 +204,9 @@ final class HandwritingModel {
         return out
     }
 
-    private static func sigmoid(_ v: Float) -> Float { 1 / (1 + exp(-v)) }
+    static func sigmoid(_ v: Float) -> Float { 1 / (1 + exp(-v)) }
 
-    private static func run(_ xs: [Float], steps: Int, _ layer: LSTM, reverse: Bool) -> [Float] {
+    static func run(_ xs: [Float], steps: Int, _ layer: LSTM, reverse: Bool) -> [Float] {
         let hidden = Self.hidden
         let gates = 4 * hidden
         let pre = matmul(xs, layer.wihT, m: steps, n: gates, p: layer.inputs)

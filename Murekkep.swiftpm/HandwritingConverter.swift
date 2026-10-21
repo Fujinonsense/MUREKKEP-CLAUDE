@@ -258,14 +258,30 @@ enum HandwritingConverter {
             for text in repaired where seen.insert(text).inserted {
                 visionTexts.append(text)
             }
-            let candidates = beam.map(\.text) + visionTexts
+            // The pen-motion reader reads the same strokes in the order they were drawn; its own
+            // readings join the candidates and it scores every one.
+            var penTexts: [String] = []
+            var penScores: [String: Float]?
+            let pen = OnlineReader.shared
+            let penLP = pen?.logProbs(base.map { s in s.points.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) } })
+            if let pen, let penLP {
+                for c in CTC.beam(penLP, charset: pen.charset) where seen.insert(c.text).inserted {
+                    penTexts.append(c.text)
+                }
+            }
+            let others = visionTexts + penTexts
+            let candidates = beam.map(\.text) + others
+            if let pen, let penLP {
+                penScores = Dictionary(candidates.map { ($0, CTC.score($0, penLP, charset: pen.charset) ?? -.infinity) },
+                                       uniquingKeysWith: { a, _ in a })
+            }
             let known = await MainActor.run {
                 Dictionary(candidates.map { ($0, Spelling.score($0.lowercased(with: tr))) }, uniquingKeysWith: { a, _ in a })
             }
             let isMath = PageOCR.mathScore(first.text) >= 2 || first.text.contains("=")
             var text = Reading.choose(model: beam,
-                                      vision: visionTexts.map { (text: $0, score: CTC.score($0, lp, charset: model.charset)) },
-                                      length: first.text.count, isMath: isMath, dictionary: known)
+                                      vision: others.map { (text: $0, score: CTC.score($0, lp, charset: model.charset)) },
+                                      length: first.text.count, isMath: isMath, dictionary: known, online: penScores)
             var xs = characterPositions(text, lp: lp, image: image, charset: model.charset, box: box)
             var groups: [(text: String, x: CGFloat)] = []
             for group in raised {

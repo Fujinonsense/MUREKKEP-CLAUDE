@@ -1,3 +1,4 @@
+import math
 import re
 from pathlib import Path
 
@@ -39,6 +40,30 @@ def test_caps_reading_kept():
 
 def test_vision_only_when_model_missing():
     assert choose([], [("merhaba", None), ("merhoba", None)], 0, False, dictionary) == "merhaba"
+
+
+def test_pen_motion_settles_what_the_picture_cannot():
+    # The picture reads "a" a little better; the pen's path says "e" clearly.
+    online = {"bel": -1.0, "bal": -9.0}
+    assert choose([("bal", -2.0), ("bel", -2.3)], [], 3, False, lambda t: 0.0, online) == "bel"
+    assert choose([("bal", -2.0), ("bel", -2.3)], [], 3, False, lambda t: 0.0) == "bal"
+
+
+def test_pen_motion_alone_does_not_beat_a_sure_picture():
+    online = {"bel": -1.0, "bal": -2.0}
+    assert choose([("bal", -0.3), ("bel", -6.0)], [], 3, False, lambda t: 0.0, online) == "bal"
+
+
+def test_reading_the_pen_cannot_follow_is_not_thrown_out():
+    # Three dots drawn in a few points: the pen-motion reader has too few columns for "..." and
+    # gives it no probability; the floor keeps the picture's sure reading.
+    online = {"...": -math.inf, "-": -0.5}
+    assert choose([("...", -0.2), ("-", -9.0)], [], 3, False, lambda t: 0.0, online) == "..."
+
+
+def test_reading_the_pen_reader_did_not_score_gets_the_floor():
+    online = {"bel": -2.0}
+    assert choose([("bal", -1.0), ("bel", -1.2)], [], 3, False, lambda t: 0.0, online) == "bel"
 
 
 def test_superscript_inserted():
