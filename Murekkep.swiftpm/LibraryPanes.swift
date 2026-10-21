@@ -25,8 +25,7 @@ struct PaneHeader<Trailing: View>: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.largeTitle.weight(.bold))
-                    .fontDesign(.rounded)
+                    .font(Theme.display(.largeTitle))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let subtitle {
@@ -50,8 +49,7 @@ struct SectionTitle: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.title3.weight(.bold))
-                .fontDesign(.rounded)
+                .font(Theme.display(.title3))
             Spacer()
             if let action {
                 Button(action.title, action: action.run)
@@ -209,8 +207,7 @@ private struct StatTile: View {
                     .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 0) {
                     Text("\(value)")
-                        .font(.title2.weight(.bold).monospacedDigit())
-                        .fontDesign(.rounded)
+                        .font(Theme.display(.title2).monospacedDigit())
                     Text(label)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
@@ -251,8 +248,7 @@ struct CourseCard: View {
                     .background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Spacer(minLength: 0)
                 Text(section.name)
-                    .font(.title3.weight(.bold))
-                    .fontDesign(.rounded)
+                    .font(Theme.display(.title3))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Text(Loc.t("{0} PDF · {1} defter · {2} özet", "\(pdfs)", "\(notes - pdfs)", "\(overviews)"))
@@ -817,8 +813,7 @@ struct CoursePane: View {
                     .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(section.name)
-                        .font(.largeTitle.weight(.bold))
-                        .fontDesign(.rounded)
+                        .font(Theme.display(.largeTitle))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)

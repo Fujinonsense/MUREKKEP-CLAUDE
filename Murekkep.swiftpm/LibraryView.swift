@@ -475,8 +475,7 @@ struct LibrarySidebar: View {
                 .shadow(color: Theme.aiStart.opacity(0.35), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 1) {
                 Text(Loc.t("Mürekkep"))
-                    .font(.title3.weight(.bold))
-                    .fontDesign(.rounded)
+                    .font(Theme.display(.title3, weight: .bold))
                 HStack(spacing: 4) {
                     Circle()
                         .fill(engineReady ? Color.green : Color.orange)
@@ -807,7 +806,7 @@ struct NoteCard: View {
                     .fill(Color.white)
                     .rotationEffect(.degrees(3))
                     .offset(x: 4, y: 3)
-                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+                    .shadow(color: Theme.shadow.opacity(0.10), radius: 4, y: 2)
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.white)
                 if let image = cover {
@@ -823,8 +822,8 @@ struct NoteCard: View {
             }
             .aspectRatio(0.76, contentMode: .fit)
             .overlay(alignment: .topTrailing) {
-                Text(note.kind == .pdf ? "PDF" : Loc.t("DEFTER"))
-                    .font(.system(size: 9, weight: .heavy))
+                Text(note.kind == .pdf ? "PDF" : Loc.t("Defter"))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
@@ -843,9 +842,9 @@ struct NoteCard: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                    .stroke(Theme.hairline, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.14), radius: 10, y: 6)
+            .shadow(color: Theme.shadow.opacity(0.16), radius: 10, y: 6)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(note.title)

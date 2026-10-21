@@ -658,7 +658,7 @@ struct OverviewCard: View {
                 .background(.black.opacity(0.55), in: Capsule())
                 .padding(8)
             }
-            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
+            .shadow(color: Theme.shadow.opacity(0.14), radius: 10, y: 5)
             Text(overview.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
@@ -798,12 +798,11 @@ struct StudioPromo: View {
     var body: some View {
         HStack(alignment: .center, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                Label(Loc.t("STÜDYO"), systemImage: "sparkles")
-                    .font(.caption.weight(.heavy))
+                Label(Loc.t("Stüdyo"), systemImage: "sparkles")
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.85))
                 Text(Loc.t("PDF'lerinden video ve sesli özet"))
-                    .font(.title2.weight(.bold))
-                    .fontDesign(.rounded)
+                    .font(Theme.display(.title2))
                     .foregroundStyle(.white)
                 Text(Loc.t("Slaytlar, kaynaktaki şekiller, Türkçe ya da İngilizce doğal anlatım, altyazı ve ara sorular. Dinlerken durdurup soru da sorabilirsin."))
                     .font(.subheadline)

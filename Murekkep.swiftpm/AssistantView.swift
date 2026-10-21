@@ -155,7 +155,7 @@ struct AssistantPanel: View {
     private var intro: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(editor.isPDF ? Loc.t("Bu PDF hakkında sor.") : Loc.t("El yazısı notların hakkında sor."))
-                .font(.title3.weight(.bold))
+                .font(Theme.display(.title2))
             Text(introDetail)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -347,7 +347,8 @@ struct MessageBubble: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Theme.ai, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    // The student's own words in their wet ink.
+                    .background(Theme.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .textSelection(.enabled)
                 if let note = message.note {
                     Text(note)
@@ -402,7 +403,16 @@ struct MessageBubble: View {
                 }
             }
             .padding(14)
-            .background(Color(uiColor: .secondarySystemBackground).opacity(0.55), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.leading, 6)
+            // The answer reads like a teacher's note on paper, marked in the margin.
+            .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(message.isError ? AnyShapeStyle(Color.red) : AnyShapeStyle(Theme.ai))
+                    .frame(width: 3)
+                    .padding(.vertical, 14)
+                    .padding(.leading, 7)
+            }
             .contextMenu {
                 Button {
                     UIPasteboard.general.string = message.text

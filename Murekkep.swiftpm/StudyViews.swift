@@ -489,18 +489,23 @@ struct FlashcardSession: View {
             Text(caption)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(tint)
+            // The header line of an index card.
+            Rectangle()
+                .fill(tint.opacity(0.35))
+                .frame(height: 1)
             ScrollView {
                 Text(text)
-                    .font(.title3.weight(.medium))
+                    .font(Theme.display(.title2, weight: .regular))
+                    .lineSpacing(6)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(uiColor: .secondarySystemBackground)))
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.paper))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(tint.opacity(0.25), lineWidth: 1.5))
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+        .shadow(color: Theme.shadow.opacity(0.08), radius: 12, y: 6)
     }
 
     private func ratingButtons(_ card: Flashcard) -> some View {
@@ -549,7 +554,7 @@ struct FlashcardSession: View {
                 .font(.system(size: 56))
                 .foregroundStyle(Theme.ai)
             Text(reviewed == 0 ? Loc.t("Bugün çalışılacak kart yok") : Loc.t("Bugünlük bu kadar"))
-                .font(.title2.weight(.bold))
+                .font(Theme.display(.title2))
             Text(Loc.t("Kartlar, hatırlama durumuna göre yeniden gelir. Yarın tekrar bak."))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -603,7 +608,7 @@ struct QuizSession: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
                 Text(q.question)
-                    .font(.title3.weight(.semibold))
+                    .font(Theme.display(.title3, weight: .regular))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(spacing: 10) {
                     ForEach(q.choices.indices, id: \.self) { i in
@@ -691,7 +696,7 @@ struct QuizSession: View {
                 .font(.system(size: 52))
                 .foregroundStyle(Theme.ai)
             Text(Loc.t("{0}/{1} doğru", "\(right)", "\(round.count)"))
-                .font(.largeTitle.weight(.bold))
+                .font(Theme.display(.largeTitle).monospacedDigit())
             if !wrong.isEmpty {
                 Button {
                     withAnimation {
@@ -932,7 +937,7 @@ struct GuideScreen: View {
     private func block<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.title3.weight(.bold))
+                .font(Theme.display(.title3))
             content()
         }
     }

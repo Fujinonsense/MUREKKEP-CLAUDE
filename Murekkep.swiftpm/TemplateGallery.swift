@@ -108,7 +108,7 @@ struct PaperPreview: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.black.opacity(0.08)))
-        .shadow(color: .black.opacity(0.10), radius: 8, y: 4)
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.hairline))
+        .shadow(color: Theme.shadow.opacity(0.10), radius: 8, y: 4)
     }
 }

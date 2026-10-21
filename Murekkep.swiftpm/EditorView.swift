@@ -337,7 +337,7 @@ struct EditorContent: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Sayfa açısı {0} derece", "\(Int(settings.pageAngle.rounded()))"))
@@ -400,7 +400,7 @@ struct PageBadge: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
         .contentShape(Capsule())
     }
 }

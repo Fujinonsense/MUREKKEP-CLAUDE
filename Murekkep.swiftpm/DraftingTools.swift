@@ -52,8 +52,8 @@ struct DraftingRail: View {
         .padding(.vertical, 7)
         .padding(.horizontal, 5)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.35), lineWidth: 0.6))
-        .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
+        .shadow(color: Theme.shadow.opacity(0.14), radius: 18, y: 8)
     }
 
     private func icon(_ symbol: String, active: Bool) -> some View {
