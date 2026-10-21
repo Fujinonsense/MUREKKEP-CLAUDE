@@ -95,3 +95,100 @@ On held-out handwriting fonts written as real pen strokes (`tools/textpencheck/g
 - **Slope at most 5° instead of 12°.** The text pen levels the ink with `InkDeskew` before it looks for lines, and a slope fitted from pieces of letters swung up to ±12° and moved the band 20 pt at the line's start. Cost if wrong: a line whose own baseline drifts more than 5° from the page's levelled direction may lose its last letters to a second line; the existing 8° tilted-line test still passes.
 - **Lines whose letters sit within a bigger line's reach are merged.** Two real lines closer than about 1.45 x-heights could be merged. Cost if wrong: such tight lines read as one.
 - **The test cases use font skeletons chained into pen strokes.** Real hands differ. On the iPad, Apple Vision's readings and the system dictionary also compete with the model; here the dictionary was approximated with word frequency lists (exact readings 369/531).
+
+## Build 23: handwriting-font data, a pen-motion reader, overviews by the downloaded model
+
+**Handwriting-font generator.**
+- `fetch_handfonts.py` downloads the twelve families asked for from google/fonts (16 files):
+  - Shantell Sans, Playpen Sans, Caveat, Mynerve, Delicious Handrawn, Patrick Hand, Kalam, Shadows Into Light Two
+  - English only: Reenie Beanie, Cedarville Cursive, Gloria Hallelujah, Indie Flower
+- All but Reenie Beanie cover ç ğ ı İ ö ş ü. Turkish text only goes to the fonts that do.
+- `wordlists.py` writes Turkish (30,000 words, 83 % with a Turkish letter; 60,000 phrases) and English (20,690 words; 60,000 phrases) lists.
+- `font_lines.py` draws a line whole:
+  - a random font and size
+  - random letter spacing
+  - a wandering, wavy baseline and a shear
+  - an elastic field (SciPy, smoothed noise)
+- Then it redraws the line as the app draws ink, so the model sees what it sees on the iPad.
+- 30 % of training lines come from it.
+- Fine-tuned from main5 for 30,000 steps:
+  - validation CER 3.18 % → 3.08 %
+  - text pen cases read exactly in the app's own Swift: 361 → 376 of 531
+
+**Pen-motion reader (online HTR).** The text pen now also reads how the pen moved, not only the picture.
+- Input: for each point every 0.1 line heights along the strokes, in drawing order:
+  - the move (dx, dy) in line heights
+  - its direction (sin θ, cos θ)
+  - whether the pen came down there
+- Training data has no fonts. The Kinematic Stroke Generator (`kinematic.py`) writes with the app's single-line font, whose strokes are in drawing order, made to run the way a hand runs them:
+  - downstrokes from the top
+  - crossbars from the left
+  - loops anticlockwise
+- It then makes the writing sloppy:
+  - moved control points and a smooth random field
+  - Catmull-Rom splines sampled with minimum-jerk timing
+  - strokes now and then reversed or reordered, letters joined
+- Dots, accents and cedillas (ç ğ ı İ ö ş ü, i, j, ! ? : ;) are pen-up strokes. They come right after their letter or, as often, once the word is done, and land a little off.
+- A quarter of the training lines are handwriting-font skeletons chained into pen trails, so unusual stroke orders are seen too.
+- Network: three 1-D convolutions, two bidirectional LSTM layers of 160, CTC. 2.3 MB as float16 (`hwonline.bin`).
+- `OnlineReader.swift` is a line-by-line transcription. On the text pen cases:
+  - its features match the Python twin within 0.00012
+  - its log-probabilities match within 0.0007, and it reads the same text on all 583 lines
+- Both readers propose readings and both score every candidate (`Reading.choose`):
+  - The pen's say is `onlineWeight × log P / length`, measured from its best candidate.
+  - It never goes below `onlineFloor`, so a reading the pen-motion reader cannot follow (three dots in a handful of points) is outvoted, not thrown out.
+- Trained 60,000 steps (`runs/online1`). Best validation, step 56,000:
+  - CER 0.24 % on generator lines from an unseen seed
+  - CER 8.2 % on held-out font trails
+- The weight was chosen on two case sets (`tools/textpencheck/online_cases.py --grid`, then the app's Swift):
+
+| Set | Picture alone | Pen motion alone | Both (weight 0.5, floor −4) |
+|---|---|---|---|
+| 531 held-out font skeletons (unnatural stroke order) | 376 | 199 | 376 |
+| 400 sloppy generator lines (a hand's order, unseen seed) | 151 | 333 | 305 |
+
+- Rule: the largest weight that keeps the font cases at or above the picture reader alone. Weight 0.75 gains 16 more generator lines but loses 2 font cases.
+
+**Overviews.** Auto now gives video and audio overviews to the downloaded model as well (the ruling above is reversed).
+- It writes the same script Claude writes, from excerpts of every source (about 14,000 characters).
+- If it fails or answers in the other language, Apple's model and then the offline writer take over.
+
+**Solving accuracy.** Qwen3.5 4B (the 8 GB iPad's model) answered 40 exam-style multiple-choice questions written for this, the way the app asks:
+- The questions:
+  - 24 YKS-style math in Turkish, keys checked with sympy
+  - 16 YDS / prep-school English: grammar, vocabulary, a reading passage, restatement, dialogue, translation
+- The app's settings:
+  - its instructions
+  - thinking up to 2,048 tokens on arithmetic and 768 otherwise
+  - Qwen's "answer now" transition
+  - temperature 0.6, top-p 0.95, top-k 20
+  - at most 400 answer tokens
+- Run in PyTorch bf16 instead of MLX 4-bit (`C:/Users/orsyu/mrk-ml/textpen/brain_eval`).
+- Result: 39/40 right. The one miss was the reading of the answer, not the reasoning. The model went through every option ("D) 4: Doğru.") and ran out of answer tokens before "Cevap: D". The app now reads such a verdict list (`ThinkingText.choice`), which makes it 40/40 on the stored answers.
+- Nearly every question used the whole thinking budget and still came out right.
+- Word problems without operators (work, sequence, geometry) get the 768 budget and were right too.
+
+Not covered by this:
+- reading the questions off a page (the text layer, OCR and the question splitter)
+- the 9B and 2B models
+- harder exams
+
+### Rulings
+
+- **The pen-motion reader votes; it does not replace the picture reader.** Its training writing is synthetic: the app's own letters, moved about. Real hands are not in it, and no real online handwriting with a license that allows this use was at hand (BRUSH is non-commercial; IAM-OnDB needs registration). Cost if wrong: a hand far from the generator's gets little help from it, but the floor keeps it from overruling a sure picture reading.
+- **The line height for pen features comes from points spaced along the ink, not from the pen's samples.** A slow pen gives many more samples where it lingers, which moved the 5th–95th percentile by about 3 %. Cost if wrong: none found; the spaced points describe the shape alone.
+- **main6 replaces main5.** It is better on both measures: validation 3.08 % against 3.18 %, and 376 exact readings against 361. Cost if wrong: the 30 % of font-image lines trade some stroke-font accuracy for variety. On held-out stroke fonts it still came out ahead.
+- **The option-by-option verdict is read only when no answer line is.** Exactly one option must be called right ("Doğru" / "Correct", not "doğru değil"). Cost if wrong: a reply that calls one option right in passing and never states its own choice could be shown that option.
+
+### Checks run here (build 23)
+
+- `pytest tests`: 238 passed, 1 skipped.
+- `tools/swiftcheck/run.ps1`: all passed, with the six new choice vectors.
+- `tools/textpencheck/run.ps1` with both models: all checks passed on the 531 cases and the 400 generator lines.
+- `tools/balance.ps1` on every changed Swift file.
+- Request audit (`C:/Users/orsyu/mrk-ml/textpen/audit.py`): evidence in code for 50 of 50 requests. The Turkish checklist is `2026-10-21-istek-kontrol-listesi.md`.
+
+### Not verified here (build 23)
+
+- No build since 15 has been compiled by CI. The calls into MLX, Vision and UIKit are checked only by reading their sources and docs.
+- The text pen has not been tried with a real hand on the iPad. Both readers were measured on synthetic writing only.
