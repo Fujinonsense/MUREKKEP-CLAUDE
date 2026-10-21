@@ -129,3 +129,74 @@ enum LocalServerClient {
         return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }
+
+// MARK: - Finding the computer on the Wi-Fi
+
+extension LocalServerFinder {
+    /// The iPad's Wi-Fi address and mask; nil off Wi-Fi.
+    static func wifiAddress() -> (ip: String, mask: String)? {
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0, let first = head else { return nil }
+        defer { freeifaddrs(head) }
+        var found: (ip: String, mask: String)?
+        func text(_ sa: UnsafeMutablePointer<sockaddr>) -> String? {
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            guard getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { return nil }
+            return String(cString: host)
+        }
+        for pointer in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            let ifa = pointer.pointee
+            guard let addr = ifa.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET), let mask = ifa.ifa_netmask else { continue }
+            let name = String(cString: ifa.ifa_name)
+            // en0 is the Wi-Fi; another en* (a USB-C network) only when there is no Wi-Fi.
+            guard name == "en0" || (found == nil && name.hasPrefix("en")) else { continue }
+            if let ip = text(addr), let m = text(mask) {
+                found = (ip: ip, mask: m)
+                if name == "en0" { break }
+            }
+        }
+        return found
+    }
+
+    private static let probeSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 0.8
+        config.timeoutIntervalForResource = 1.5
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
+    /// Servers answering on the Wi-Fi ("http://192.168.1.20:11434"), 48 addresses at a time.
+    static func search(progress: @escaping @MainActor (Double) -> Void) async -> [URL] {
+        guard let wifi = wifiAddress() else { return [] }
+        let targets = candidates(ip: wifi.ip, mask: wifi.mask).flatMap { host in ports.map { "http://\(host):\($0)" } }
+        guard !targets.isEmpty else { return [] }
+        var found: [URL] = []
+        var done = 0
+        await withTaskGroup(of: URL?.self) { group in
+            var pending = targets.makeIterator()
+            for _ in 0..<48 {
+                guard let target = pending.next() else { break }
+                group.addTask { await probe(target) }
+            }
+            while let result = await group.next() {
+                done += 1
+                if let result { found.append(result) }
+                if done % 16 == 0 { await progress(Double(done) / Double(targets.count)) }
+                if let target = pending.next() {
+                    group.addTask { await probe(target) }
+                }
+            }
+        }
+        return found
+    }
+
+    private static func probe(_ raw: String) async -> URL? {
+        guard let base = URL(string: raw) else { return nil }
+        var request = URLRequest(url: LocalServerClient.endpoint(base, "/v1/models"))
+        request.timeoutInterval = 0.8
+        guard let (_, response) = try? await probeSession.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return base
+    }
+}

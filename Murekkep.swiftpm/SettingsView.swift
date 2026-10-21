@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var serverModels: [String] = []
     @State private var serverStatus: String?
     @State private var checkingServer = false
+    /// 0…1 while the Wi-Fi is searched for the computer's AI.
+    @State private var findProgress: Double?
     @State private var showClaude = false
 
     var body: some View {
@@ -114,6 +116,19 @@ struct SettingsView: View {
 
     private var serverSection: some View {
         Section {
+            Button {
+                findServer()
+            } label: {
+                HStack {
+                    Label(Loc.t("Bilgisayarımı ağda bul"), systemImage: "wifi")
+                    if let findProgress {
+                        Spacer()
+                        ProgressView(value: findProgress)
+                            .frame(width: 80)
+                    }
+                }
+            }
+            .disabled(findProgress != nil || checkingServer)
             TextField(Loc.t("ör. 192.168.1.20:11434"), text: $settings.serverURL)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
@@ -315,6 +330,26 @@ struct SettingsView: View {
             Text(Loc.t("İsteğe bağlı bulut"))
         } footer: {
             Text(Loc.t("Yalnızca motor olarak Claude'u seçersen kullanılır. Anahtar bu cihazda saklanır; ücreti API hesabından düşülür."))
+        }
+    }
+
+    /// Searches the Wi-Fi for Ollama or LM Studio and takes the first one found.
+    private func findServer() {
+        findProgress = 0
+        serverStatus = nil
+        Task { @MainActor in
+            let found = await LocalServerFinder.search { fraction in findProgress = fraction }
+            findProgress = nil
+            guard let first = found.first, let host = first.host else {
+                serverStatus = LocalServerFinder.wifiAddress() == nil
+                    ? Loc.t("iPad Wi-Fi'ye bağlı değil. Bilgisayarınla aynı ağa bağlan.")
+                    : Loc.t("Ağda yapay zekâ sunucusu bulunamadı. Bilgisayarda Ollama'yı ağa açık başlat (OLLAMA_HOST=0.0.0.0) ya da LM Studio'da \"Serve on Local Network\"ü aç; yerel ağ izni sorulduysa onayla ve yeniden dene.")
+                return
+            }
+            settings.serverURL = first.port.map { "\(host):\($0)" } ?? host
+            // Looking for the computer means wanting its brain: the assistant answers with it now.
+            settings.engine = .localServer
+            checkServer()
         }
     }
 

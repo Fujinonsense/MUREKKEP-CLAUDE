@@ -367,5 +367,16 @@ check(abs(aNode.frame.midY - (aKids.map(\.frame.midY).min()! + aKids.map(\.frame
 let folded = MindMapLayout.layout(mapRoot, collapsed: [mapRoot.children[0].id], size: { _, _ in CGSize(width: 60, height: 30) }, columnGap: 50, rowGap: 12)
 check(folded.count == 5 && !folded.contains { $0.title == "A1" }, "mindmap: a folded branch hides its children")
 
+// MARK: Finding the computer's AI (LocalServerFinder)
+
+let home = LocalServerFinder.candidates(ip: "192.168.1.37", mask: "255.255.255.0")
+check(home.count == 253 && !home.contains("192.168.1.37") && home.contains("192.168.1.1") && home.contains("192.168.1.254")
+      && !home.contains("192.168.1.0") && !home.contains("192.168.1.255"), "finder: a /24 home network (\(home.count))")
+check(home.first == "192.168.1.36" || home.first == "192.168.1.38", "finder: neighbours first (\(home.first ?? "-"))")
+let wide = LocalServerFinder.candidates(ip: "10.20.30.40", mask: "255.255.0.0")
+check(wide.count == 253 && wide.allSatisfy { $0.hasPrefix("10.20.30.") }, "finder: a wide network is scanned around the iPad only")
+check(LocalServerFinder.candidates(ip: "10.0.0.5", mask: "255.255.255.252") == ["10.0.0.6"], "finder: a tiny network")
+check(LocalServerFinder.candidates(ip: "bad", mask: "255.255.255.0").isEmpty, "finder: no address, nothing to scan")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

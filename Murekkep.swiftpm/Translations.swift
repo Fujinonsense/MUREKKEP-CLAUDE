@@ -1082,5 +1082,8 @@ enum Translations {
         "Düşünmek için sorular": "Questions to think about",
         "Claude hazırlıyor…": "Claude is preparing…",
         "Cihazdaki model hazırlıyor ({0}/{1})…": "The on-device model is preparing ({0}/{1})…",
+        "Bilgisayarımı ağda bul": "Find my computer on the network",
+        "iPad Wi-Fi'ye bağlı değil. Bilgisayarınla aynı ağa bağlan.": "The iPad is not on Wi-Fi. Join the same network as your computer.",
+        "Ağda yapay zekâ sunucusu bulunamadı. Bilgisayarda Ollama'yı ağa açık başlat (OLLAMA_HOST=0.0.0.0) ya da LM Studio'da \"Serve on Local Network\"ü aç; yerel ağ izni sorulduysa onayla ve yeniden dene.": "No AI server found on the network. Start Ollama open to the network (OLLAMA_HOST=0.0.0.0) or turn on \"Serve on Local Network\" in LM Studio; if the local network permission was asked, allow it and try again.",
     ]
 }

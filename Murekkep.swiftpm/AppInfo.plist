@@ -23,6 +23,9 @@
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Video özetlerini Fotoğraflar'a kaydetmek için.</string>
     <!-- Lecture recording in sync with the ink. -->
+    <!-- The assistant can use Ollama or LM Studio on the user's own computer on the same Wi-Fi. -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Aynı Wi-Fi'deki bilgisayarında çalışan yapay zekâya (Ollama, LM Studio) bağlanmak için.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Dersi kaydetmek için: yazdıkların sesle eşleşir, mürekkebe dokununca o ana gidersin.</string>
 </dict>
