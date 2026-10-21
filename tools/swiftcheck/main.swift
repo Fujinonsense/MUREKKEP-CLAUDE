@@ -38,6 +38,24 @@ for item in vectors["deskew"] as! [[String: Any]] {
     check(abs(got - want) <= 0.5, "deskew \(item["name"]!): swift \(got), python \(want)")
 }
 
+// MARK: Reading order (tests/test_reading_order.py)
+
+let scan = json("tests/fixtures/ocr_highnote_p12.json") as! [String: Any]
+let scanPieces = (scan["lines"] as! [[String: Any]]).map { l -> ReadingOrder.Piece in
+    let b = (l["box"] as! [Any]).map(number)
+    return ReadingOrder.Piece(text: l["text"] as! String, box: CGRect(x: b[0], y: b[1], width: b[2], height: b[3]))
+}
+let ordered = ReadingOrder.lines(scanPieces)
+let wantOrder = vectors["reading_order"] as! [String]
+check(ordered == wantOrder, "reading order: \(ordered.count) lines, python \(wantOrder.count)"
+      + (ordered == wantOrder ? "" : ", first difference: \(zip(ordered, wantOrder).first { $0.0 != $0.1 }.map { "\($0.0) | \($0.1)" } ?? "-")"))
+let gapWords = ReadingOrder.Piece(text: "I think sport is", box: CGRect(x: 100, y: 100, width: 260, height: 30),
+                                  words: [("I", CGRect(x: 100, y: 100, width: 10, height: 30)), ("think", CGRect(x: 118, y: 100, width: 70, height: 30)),
+                                          ("sport", CGRect(x: 260, y: 100, width: 70, height: 30)), ("is", CGRect(x: 338, y: 100, width: 22, height: 30))])
+check(ReadingOrder.lines([gapWords]) == ["I think ___ sport is"], "blank between words")
+check(ReadingOrder.normalizeBlanks("Name .......... Date ……") == "Name ___ Date ___" && ReadingOrder.normalizeBlanks("fashion... ...is that") == "fashion... ...is that",
+      "printed blanks")
+
 // MARK: Chapters (tests/test_chapters.py)
 
 func chapters(_ name: String) -> [BookChapter] {

@@ -1,0 +1,1087 @@
+{
+ "note": "High Note 3 student book, PDF page 12 (scanned) at 1678x2400 px. Boxes: RapidOCR line detections (stand-in for Vision observations), pixels, top-left origin, [x, y, w, h]. Text: the printed text as Vision reads it; superscript gap numbers kept as RapidOCR read them (dropped, glued, '1o' for 10, 'é' for 6). Assumed: the first gap reads '1 ø'.",
+ "width": 1678,
+ "height": 2400,
+ "lines": [
+  {
+   "text": "4",
+   "box": [
+    150,
+    1401,
+    37,
+    23
+   ]
+  },
+  {
+   "text": "Italy. He loves 12",
+   "box": [
+    1008,
+    1005,
+    197,
+    36
+   ]
+  },
+  {
+   "text": "SPEAKING In pairs, discuss the questions.",
+   "box": [
+    920,
+    2098,
+    502,
+    35
+   ]
+  },
+  {
+   "text": "WATCH OUT!",
+   "box": [
+    891,
+    1784,
+    211,
+    40
+   ]
+  },
+  {
+   "text": "f We use the with superlatives, ordinal numbers,",
+   "box": [
+    112,
+    2081,
+    589,
+    31
+   ]
+  },
+  {
+   "text": "best jeans come from",
+   "box": [
+    1095,
+    1229,
+    261,
+    31
+   ]
+  },
+  {
+   "text": "door. I'd love to be",
+   "box": [
+    1329,
+    1407,
+    228,
+    31
+   ]
+  },
+  {
+   "text": "1 'Fashion is like a wheel.' What does that mean? Discuss",
+   "box": [
+    95,
+    957,
+    729,
+    50
+   ]
+  },
+  {
+   "text": "The boutique specialises in fashion from Europe.",
+   "box": [
+    179,
+    1354,
+    614,
+    38
+   ]
+  },
+  {
+   "text": "2 /ðiː/ - before a vowel.",
+   "box": [
+    890,
+    1997,
+    290,
+    31
+   ]
+  },
+  {
+   "text": "which thing/person we mean.",
+   "box": [
+    148,
+    2040,
+    362,
+    33
+   ]
+  },
+  {
+   "text": "the only one.",
+   "box": [
+    148,
+    1897,
+    159,
+    29
+   ]
+  },
+  {
+   "text": "grandparents? Would you like to? Say why.",
+   "box": [
+    956,
+    2257,
+    505,
+    31
+   ]
+  },
+  {
+   "text": "specialises in fashion from the USA and from Europe, especially Italy and",
+   "box": [
+    405,
+    249,
+    851,
+    36
+   ]
+  },
+  {
+   "text": "check your ideas.",
+   "box": [
+    148,
+    1029,
+    217,
+    35
+   ]
+  },
+  {
+   "text": "cheap ones.",
+   "box": [
+    955,
+    1719,
+    147,
+    35
+   ]
+  },
+  {
+   "text": "my opinion, the most important thing to know about fashion is that it's like",
+   "box": [
+    405,
+    391,
+    875,
+    35
+   ]
+  },
+  {
+   "text": "friend gave me 1o",
+   "box": [
+    1220,
+    939,
+    218,
+    41
+   ]
+  },
+  {
+   "text": "3 I saw",
+   "box": [
+    920,
+    1268,
+    105,
+    33
+   ]
+  },
+  {
+   "text": "pairs, read sentences 1-3 and underline the when it is",
+   "box": [
+    922,
+    1531,
+    663,
+    34
+   ]
+  },
+  {
+   "text": "6",
+   "box": [
+    150,
+    1483,
+    19,
+    22
+   ]
+  },
+  {
+   "text": "I'm a sales assistant in a boutique in a shopping centre in Oxford. The boutique",
+   "box": [
+    405,
+    213,
+    896,
+    38
+   ]
+  },
+  {
+   "text": "2 Study the Grammar box and match the underlined",
+   "box": [
+    95,
+    1156,
+    672,
+    53
+   ]
+  },
+  {
+   "text": "b We use no article (o) with continents, most countries",
+   "box": [
+    114,
+    1755,
+    651,
+    34
+   ]
+  },
+  {
+   "text": "...is that it's like a wheel.",
+   "box": [
+    179,
+    1477,
+    338,
+    34
+   ]
+  },
+  {
+   "text": "shoes",
+   "box": [
+    1504,
+    1303,
+    77,
+    29
+   ]
+  },
+  {
+   "text": "My mother bought it thirty years ago! So, don't throw away last year's",
+   "box": [
+    405,
+    566,
+    813,
+    38
+   ]
+  },
+  {
+   "text": "I loved, but when I went back on Tuesday",
+   "box": [
+    953,
+    1300,
+    495,
+    34
+   ]
+  },
+  {
+   "text": "g We use a/an when we mention something/someone",
+   "box": [
+    114,
+    2183,
+    661,
+    35
+   ]
+  },
+  {
+   "text": "the shop / the ones over there / the universe",
+   "box": [
+    912,
+    1957,
+    509,
+    31
+   ]
+  },
+  {
+   "text": "1.6 PRONUNCIATION Study Watch out! Then in",
+   "box": [
+    922,
+    1494,
+    601,
+    40
+   ]
+  },
+  {
+   "text": "1 The American jeans are cheaper than the European ones.",
+   "box": [
+    921,
+    1608,
+    678,
+    31
+   ]
+  },
+  {
+   "text": "cotton top.7",
+   "box": [
+    1245,
+    910,
+    154,
+    36
+   ]
+  },
+  {
+   "text": "person when it is one of many or one of a group; not",
+   "box": [
+    148,
+    1865,
+    623,
+    28
+   ]
+  },
+  {
+   "text": "the ideal job / the only thing / the umbrella",
+   "box": [
+    909,
+    2037,
+    498,
+    34
+   ]
+  },
+  {
+   "text": "pronounced /w/, e.g. one, or /j/, e.g. UK.",
+   "box": [
+    912,
+    1919,
+    476,
+    31
+   ]
+  },
+  {
+   "text": "periods (e.g. the 1980s) and some countries (e.g. the",
+   "box": [
+    147,
+    2112,
+    614,
+    34
+   ]
+  },
+  {
+   "text": "11",
+   "box": [
+    922,
+    1009,
+    25,
+    21
+   ]
+  },
+  {
+   "text": "top",
+   "box": [
+    1492,
+    945,
+    49,
+    31
+   ]
+  },
+  {
+   "text": "The most important thing to know about fashion...",
+   "box": [
+    178,
+    1435,
+    644,
+    38
+   ]
+  },
+  {
+   "text": "words in sentences 1-8 with rules a-g. Use one rule",
+   "box": [
+    150,
+    1201,
+    633,
+    31
+   ]
+  },
+  {
+   "text": "is to look in",
+   "box": [
+    955,
+    1406,
+    142,
+    33
+   ]
+  },
+  {
+   "text": "it'll come back into style.",
+   "box": [
+    421,
+    640,
+    294,
+    33
+   ]
+  },
+  {
+   "text": "8 I'm wearing a leather jacket. The jacket looks great.",
+   "box": [
+    156,
+    1558,
+    658,
+    35
+   ]
+  },
+  {
+   "text": "6",
+   "box": [
+    876,
+    2098,
+    19,
+    27
+   ]
+  },
+  {
+   "text": "They say that 1 ø girls care more about clothes than",
+   "box": [
+    924,
+    814,
+    619,
+    31
+   ]
+  },
+  {
+   "text": "a We use no article (o) with plurals and uncountable",
+   "box": [
+    114,
+    1683,
+    628,
+    33
+   ]
+  },
+  {
+   "text": "4",
+   "box": [
+    924,
+    1378,
+    19,
+    23
+   ]
+  },
+  {
+   "text": "for the first time and the when we mention it again.",
+   "box": [
+    148,
+    2219,
+    613,
+    31
+   ]
+  },
+  {
+   "text": "most",
+   "box": [
+    1531,
+    848,
+    68,
+    30
+   ]
+  },
+  {
+   "text": "1E GRAMMAR",
+   "box": [
+    101,
+    858,
+    310,
+    45
+   ]
+  },
+  {
+   "text": "3",
+   "box": [
+    876,
+    735,
+    24,
+    29
+   ]
+  },
+  {
+   "text": "future.",
+   "box": [
+    1328,
+    1042,
+    85,
+    30
+   ]
+  },
+  {
+   "text": "twice. Then find more examples of the rules in the text.",
+   "box": [
+    149,
+    1234,
+    678,
+    31
+   ]
+  },
+  {
+   "text": "Today I'm wearing a leather jacket. The jacket looks great but it isn't new.",
+   "box": [
+    408,
+    535,
+    841,
+    31
+   ]
+  },
+  {
+   "text": "France. It's the ideal job for me because I'm really into clothes: I go to fashion",
+   "box": [
+    405,
+    285,
+    893,
+    34
+   ]
+  },
+  {
+   "text": "a/an or the.",
+   "box": [
+    924,
+    1148,
+    145,
+    29
+   ]
+  },
+  {
+   "text": "fashion designer in 14",
+   "box": [
+    1006,
+    1038,
+    262,
+    36
+   ]
+  },
+  {
+   "text": "1 Which clothes from the past are back in fashion?",
+   "box": [
+    920,
+    2144,
+    607,
+    31
+   ]
+  },
+  {
+   "text": "10",
+   "box": [
+    37,
+    2346,
+    38,
+    30
+   ]
+  },
+  {
+   "text": "boring thing in",
+   "box": [
+    922,
+    877,
+    199,
+    35
+   ]
+  },
+  {
+   "text": "clothes and he'd like to be",
+   "box": [
+    1264,
+    1009,
+    315,
+    31
+   ]
+  },
+  {
+   "text": "present and9",
+   "box": [
+    999,
+    944,
+    162,
+    33
+   ]
+  },
+  {
+   "text": "I can use articles to talk about general and specific things.",
+   "box": [
+    125,
+    2344,
+    740,
+    35
+   ]
+  },
+  {
+   "text": "Japan.",
+   "box": [
+    1416,
+    1230,
+    82,
+    30
+   ]
+  },
+  {
+   "text": "3 Do you ever borrow clothes from your parents or",
+   "box": [
+    919,
+    2223,
+    616,
+    33
+   ]
+  },
+  {
+   "text": "wears any more often become the cool looks of the future. Denim dungarees",
+   "box": [
+    404,
+    463,
+    909,
+    31
+   ]
+  },
+  {
+   "text": "last thing I do before I go out in",
+   "box": [
+    1017,
+    1373,
+    377,
+    33
+   ]
+  },
+  {
+   "text": "boys but I think shopping for clothes is3",
+   "box": [
+    999,
+    846,
+    477,
+    35
+   ]
+  },
+  {
+   "text": "shows, I read fashion magazines, I know all about the latest styles and the",
+   "box": [
+    404,
+    319,
+    859,
+    36
+   ]
+  },
+  {
+   "text": "We pronounce the in two ways:",
+   "box": [
+    889,
+    1847,
+    379,
+    34
+   ]
+  },
+  {
+   "text": "e We use the to talk about a specific thing/person, e.g.",
+   "box": [
+    99,
+    1973,
+    667,
+    36
+   ]
+  },
+  {
+   "text": "13",
+   "box": [
+    922,
+    1040,
+    25,
+    21
+   ]
+  },
+  {
+   "text": "mirror by",
+   "box": [
+    1160,
+    1408,
+    111,
+    29
+   ]
+  },
+  {
+   "text": "1.5 Complete the gaps with o (no article), a/an or",
+   "box": [
+    925,
+    734,
+    654,
+    41
+   ]
+  },
+  {
+   "text": "7",
+   "box": [
+    153,
+    1525,
+    14,
+    17
+   ]
+  },
+  {
+   "text": "clothes - they may be out of fashion now but sooner or later,",
+   "box": [
+    411,
+    601,
+    719,
+    36
+   ]
+  },
+  {
+   "text": "1 /ðə/ - before a consonant or vowels that are",
+   "box": [
+    890,
+    1885,
+    549,
+    31
+   ]
+  },
+  {
+   "text": "1 She has won the £100 prize.",
+   "box": [
+    145,
+    1274,
+    409,
+    34
+   ]
+  },
+  {
+   "text": "d We use a/an with occupations.",
+   "box": [
+    117,
+    1937,
+    391,
+    28
+   ]
+  },
+  {
+   "text": "jeans were",
+   "box": [
+    1455,
+    915,
+    139,
+    28
+   ]
+  },
+  {
+   "text": "3 The expensive shoes are less comfortable than the",
+   "box": [
+    921,
+    1690,
+    633,
+    28
+   ]
+  },
+  {
+   "text": "and cities.",
+   "box": [
+    148,
+    1792,
+    123,
+    29
+   ]
+  },
+  {
+   "text": "The wheel of fashion",
+   "box": [
+    515,
+    152,
+    688,
+    52
+   ]
+  },
+  {
+   "text": "from the 1980s and bright neon colours from the 1990s are back in fashion.",
+   "box": [
+    405,
+    498,
+    870,
+    31
+   ]
+  },
+  {
+   "text": "2 I think",
+   "box": [
+    920,
+    1228,
+    117,
+    33
+   ]
+  },
+  {
+   "text": "c We use a/an to talk about a singular countable thing/",
+   "box": [
+    119,
+    1830,
+    657,
+    31
+   ]
+  },
+  {
+   "text": "morning",
+   "box": [
+    1453,
+    1374,
+    106,
+    33
+   ]
+  },
+  {
+   "text": "a wheel. It turns round and round. The cool looks of the past that nobody",
+   "box": [
+    405,
+    428,
+    856,
+    31
+   ]
+  },
+  {
+   "text": "world. Today I'm wearing5",
+   "box": [
+    1177,
+    878,
+    325,
+    34
+   ]
+  },
+  {
+   "text": "model.",
+   "box": [
+    955,
+    1440,
+    91,
+    30
+   ]
+  },
+  {
+   "text": "first thing I do when I get paid every month is buy some new clothes. But in",
+   "box": [
+    406,
+    358,
+    876,
+    31
+   ]
+  },
+  {
+   "text": "old pair of jeans andé",
+   "box": [
+    918,
+    910,
+    271,
+    35
+   ]
+  },
+  {
+   "text": "Articles",
+   "box": [
+    98,
+    1103,
+    126,
+    38
+   ]
+  },
+  {
+   "text": "2",
+   "box": [
+    926,
+    850,
+    11,
+    13
+   ]
+  },
+  {
+   "text": "USA).",
+   "box": [
+    143,
+    2146,
+    70,
+    30
+   ]
+  },
+  {
+   "text": "pair of shoes in the shop last Monday that",
+   "box": [
+    1082,
+    1269,
+    498,
+    33
+   ]
+  },
+  {
+   "text": "2 Which clothes from the past do you like?",
+   "box": [
+    919,
+    2182,
+    516,
+    33
+   ]
+  },
+  {
+   "text": "Dungarees from the 1980s are back in fashion.",
+   "box": [
+    181,
+    1517,
+    589,
+    34
+   ]
+  },
+  {
+   "text": "Grammar Reference and Practice > page 172",
+   "box": [
+    118,
+    2274,
+    541,
+    31
+   ]
+  },
+  {
+   "text": "READERS' LETTERS",
+   "box": [
+    677,
+    73,
+    367,
+    31
+   ]
+  },
+  {
+   "text": "5",
+   "box": [
+    153,
+    1443,
+    15,
+    19
+   ]
+  },
+  {
+   "text": "8",
+   "box": [
+    921,
+    945,
+    17,
+    18
+   ]
+  },
+  {
+   "text": "5",
+   "box": [
+    875,
+    1494,
+    25,
+    33
+   ]
+  },
+  {
+   "text": "nouns to talk about something/someone in general.",
+   "box": [
+    149,
+    1719,
+    619,
+    28
+   ]
+  },
+  {
+   "text": "2 I'm a sales assistant.",
+   "box": [
+    145,
+    1314,
+    315,
+    36
+   ]
+  },
+  {
+   "text": "because he/she/it is the only one or when it's clear",
+   "box": [
+    149,
+    2010,
+    602,
+    28
+   ]
+  },
+  {
+   "text": "pronounced /ðiː/. Listen to check and repeat.",
+   "box": [
+    921,
+    1564,
+    553,
+    34
+   ]
+  },
+  {
+   "text": "in groups. Then read the text and look at the photos to",
+   "box": [
+    148,
+    998,
+    667,
+    34
+   ]
+  },
+  {
+   "text": "3",
+   "box": [
+    153,
+    1362,
+    15,
+    19
+   ]
+  },
+  {
+   "text": "1 I think_sport is more fun than",
+   "box": [
+    920,
+    1187,
+    428,
+    35
+   ]
+  },
+  {
+   "text": "This week's star letter is from Trudy in Oxford. She has won the £100 prize!",
+   "box": [
+    439,
+    105,
+    844,
+    36
+   ]
+  },
+  {
+   "text": "fashion.",
+   "box": [
+    1407,
+    1187,
+    105,
+    34
+   ]
+  },
+  {
+   "text": "the. Then listen and check.",
+   "box": [
+    924,
+    772,
+    324,
+    31
+   ]
+  },
+  {
+   "text": "4 In pairs, complete the sentences with o (no article),",
+   "box": [
+    870,
+    1103,
+    689,
+    50
+   ]
+  },
+  {
+   "text": "2 The haircut was the worst mistake of my life.",
+   "box": [
+    920,
+    1646,
+    561,
+    33
+   ]
+  },
+  {
+   "text": "I'm really into clothes.",
+   "box": [
+    179,
+    1396,
+    304,
+    35
+   ]
+  },
+  {
+   "text": "Articles",
+   "box": [
+    114,
+    1625,
+    113,
+    38
+   ]
+  },
+  {
+   "text": "because it was too small for her. My best friend is from",
+   "box": [
+    922,
+    976,
+    647,
+    31
+   ]
+  },
+  {
+   "text": "were gone.",
+   "box": [
+    955,
+    1335,
+    142,
+    31
+   ]
+  }
+ ]
+}

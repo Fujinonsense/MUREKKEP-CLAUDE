@@ -121,10 +121,20 @@ struct OCRVariant: Sendable {
 
 /// On-device text recognition (printed text and handwriting) with Vision. No network.
 enum PageOCR {
-    /// Plain text of an image, line by line.
+    /// Plain text of a page image in reading order: column by column, with printed answer blanks as
+    /// "___".
     static func recognize(_ image: CGImage) async -> String {
         let found = await lines(in: image)
-        return found.map(\.text).joined(separator: "\n")
+        let w = CGFloat(image.width)
+        let h = CGFloat(image.height)
+        func pixels(_ r: CGRect) -> CGRect {
+            CGRect(x: r.minX * w, y: r.minY * h, width: r.width * w, height: r.height * h)
+        }
+        let pieces = found.map { line in
+            ReadingOrder.Piece(text: line.text, box: pixels(line.box),
+                               words: line.words.map { (text: $0.text, box: pixels($0.box)) })
+        }
+        return ReadingOrder.lines(pieces).joined(separator: "\n")
     }
 
     /// Lines of an arbitrary image (boxes normalized, top-left origin).
