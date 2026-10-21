@@ -274,7 +274,7 @@ jobs:
                   INFOPLIST_FILE: AppSource/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
-                  CURRENT_PROJECT_VERSION: "16"
+                  CURRENT_PROJECT_VERSION: "17"
                   SWIFT_VERSION: "5.0"
                   TARGETED_DEVICE_FAMILY: "1,2"
                   ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -312,7 +312,7 @@ jobs:
                   INFOPLIST_FILE: AppSource/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
-                  CURRENT_PROJECT_VERSION: "16"
+                  CURRENT_PROJECT_VERSION: "17"
                   SWIFT_VERSION: "5.0"
                   SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MUREKKEP_PLAIN"
                   TARGETED_DEVICE_FAMILY: "1,2"
