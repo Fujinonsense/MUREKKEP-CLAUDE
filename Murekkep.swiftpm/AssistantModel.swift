@@ -281,17 +281,35 @@ final class AssistantModel: ObservableObject {
             let language = Self.answerLanguage(question: question, action: action, pages: pages)
             // Exact results of the math engine, so a language model never gets the arithmetic wrong.
             let facts = AnswerLanguage.$bound.withValue(language) { OfflineBrain.mathFacts(pages, current: editor.currentPage) }
-            // A page of questions: the small models are far more accurate one question at a time.
+            // A page of questions: the small models are far more accurate one question at a time. A
+            // textbook page goes exercise by exercise, each item with its exercise's instruction.
             if Self.wantsSolving(question: question, action: action) {
                 let here = pages.filter { $0.page == editor.currentPage }
-                let questions = QuestionSplitter.split((here.isEmpty ? pages : here).map(\.text).joined(separator: "\n"))
-                if questions.count >= 2 {
+                let source = here.isEmpty ? pages : here
+                let text = source.map(\.text).joined(separator: "\n")
+                let questions = QuestionSplitter.split(text)
+                let exercises = ExerciseSplitter.split(text)
+                let multipleChoice = questions.filter { $0.options.count >= 2 }.count >= 2
+                let textbook = !multipleChoice && exercises.contains { $0.kind != .skip }
+                if textbook || questions.count >= 2 {
                     switch resolved {
                     case .onDevice:
-                        try await solveOnDevice(questions, language: language)
+                        if textbook {
+                            try await solveExercisesOnDevice(exercises, language: language)
+                        } else {
+                            try await solveOnDevice(questions, language: language)
+                        }
                         return
                     case let .localServer(base, model):
-                        try await solveWithServer(questions, base: base, model: model, language: language)
+                        if textbook {
+                            // A vision model checks the gaps and their numbers on the scan itself.
+                            let scanned = source.contains { $0.fromOCR }
+                            let picture = scanned && settings.serverSendsImages ? pagePictureJPEG(editor: editor) : nil
+                            try await solveExercisesWithServer(exercises, base: base, model: model, language: language,
+                                                               picture: picture)
+                        } else {
+                            try await solveWithServer(questions, base: base, model: model, language: language)
+                        }
                         return
                     case .offline, .claude:
                         appendToAnswer("_" + Loc.t("Çevrimdışı çekirdek soruları gerçekten çözemez, yalnızca sayfadaki ipuçlarını gösterir. Çözüm için Apple Intelligence (iPadOS 26) ya da bilgisayarındaki yerel sunucu (Ollama, LM Studio) gerekir.") + "_\n\n")
@@ -519,6 +537,113 @@ final class AssistantModel: ObservableObject {
                 throw await LocalServerClient.readError(bytes, status: code)
             }
             appendToAnswer("**\(q.number))** ")
+            streamLoop: for try await line in bytes.lines {
+                switch LocalServerClient.parse(line: line) {
+                case let .delta(text):
+                    appendToAnswer(text)
+                case .done:
+                    break streamLoop
+                case let .error(message):
+                    throw LocalAIError(message)
+                case .ignored:
+                    break
+                }
+            }
+            appendToAnswer("\n\n")
+        }
+        status = nil
+    }
+
+    /// Said in the answer's language, like the answers around it.
+    private static func skippedNote(_ language: AnswerLanguage) -> String {
+        language == .english ? "Speaking or listening exercise, skipped." : "Konuşma/dinleme alıştırması, atlandı."
+    }
+
+    /// A textbook page on the iPad: every item (or every sentence of a running text) is one call with
+    /// its exercise's instruction, and each exercise is shown when its items are done, with the answers
+    /// written into the sentences.
+    @MainActor
+    private func solveExercisesOnDevice(_ exercises: [PageExercise], language: AnswerLanguage) async throws {
+        let total = exercises.reduce(0) { $0 + ExerciseSplitter.units($1).count }
+        let skipped = Self.skippedNote(language)
+        var done = 0
+        for e in exercises {
+            try Task.checkCancellation()
+            var fills: [Int: [String]] = [:]
+            var notes: [Int: String] = [:]
+            // A running text's answered gaps, written into the sentence before the next one.
+            var known: [Int: String] = [:]
+            var problem: String?
+            for u in ExerciseSplitter.units(e) {
+                try Task.checkCancellation()
+                done += 1
+                status = Loc.t("Soru {0}/{1} çözülüyor…", "\(done)", "\(total)")
+                do {
+                    if let item = e.items.first(where: { $0.number == u.number && !$0.options.isEmpty }) {
+                        let q = PageQuestion(number: item.number, stem: e.instruction + "\n" + item.text,
+                                             options: item.options, passage: e.passage)
+                        let solved = try await OnDeviceAI.solve(q, language: language)
+                        fills[u.number] = [solved.answer]
+                        notes[u.number] = solved.reasoning
+                        continue
+                    }
+                    let before = ExerciseSplitter.fillNumbered(u.before, known: known)
+                    let answer = try await OnDeviceAI.answer(u, of: e, before: before, language: language)
+                    fills[u.number, default: []] += answer.fills
+                    for (gap, fill) in zip(u.gaps, answer.fills) {
+                        known[gap.number] = fill
+                    }
+                    if u.gaps.isEmpty {
+                        notes[u.number] = answer.note
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    fills[u.number, default: []] += Array(repeating: "?", count: max(u.gaps.count, 1))
+                    problem = OnDeviceAI.friendly(error) ?? error.localizedDescription
+                }
+            }
+            appendToAnswer(ExerciseSplitter.render(e, fills: fills, notes: notes, skipped: skipped))
+            if let problem {
+                appendToAnswer("⚠️ \(problem)\n\n")
+            }
+        }
+        status = nil
+    }
+
+    /// A textbook page on the local server: a model that size answers a whole exercise at once.
+    @MainActor
+    private func solveExercisesWithServer(_ exercises: [PageExercise], base: URL, model: String, language: AnswerLanguage,
+                                          picture: Data?) async throws {
+        guard !model.isEmpty else {
+            throw LocalAIError(Loc.t("Sunucuda yüklü model bulunamadı. Bilgisayarda örneğin \"ollama pull llama3.2\" çalıştır, sonra Ayarlar'dan modeli seç."))
+        }
+        let system = QuestionSolving.exerciseInstructions(language: language)
+        let skipped = Self.skippedNote(language)
+        for (index, e) in exercises.enumerated() {
+            try Task.checkCancellation()
+            guard e.kind != .skip else {
+                appendToAnswer(ExerciseSplitter.render(e, fills: [:], skipped: skipped))
+                continue
+            }
+            status = Loc.t("Soru {0}/{1} çözülüyor…", "\(index + 1)", "\(exercises.count)")
+            let text = ExerciseSplitter.exercisePrompt(e)
+            var user: Any = text
+            if let picture {
+                let textPart: [String: Any] = ["type": "text",
+                                               "text": text + "\n(Ekte sayfanın görüntüsü var; boşlukları ve numaralarını oradan doğrula.)"]
+                let imagePart: [String: Any] = ["type": "image_url",
+                                                "image_url": ["url": "data:image/jpeg;base64," + picture.base64EncodedString()]]
+                user = [textPart, imagePart]
+            }
+            let chat: [[String: Any]] = [["role": "system", "content": system], ["role": "user", "content": user]]
+            let request = try LocalServerClient.chatRequest(base: base, model: model, messages: chat, temperature: 0.2)
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard code == 200 else {
+                throw await LocalServerClient.readError(bytes, status: code)
+            }
+            appendToAnswer("**\(e.number)** \(e.instruction)\n")
             streamLoop: for try await line in bytes.lines {
                 switch LocalServerClient.parse(line: line) {
                 case let .delta(text):

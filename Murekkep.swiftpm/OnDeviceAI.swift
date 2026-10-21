@@ -9,6 +9,13 @@ struct SolvedQuestion {
     var reasoning: String
 }
 
+/// One unit of an exercise answered by a model: the fills of its gaps in order (or one short answer)
+/// and why.
+struct ExerciseAnswer {
+    var fills: [String]
+    var note: String
+}
+
 /// Apple's on-device language model (Foundation Models framework, iPadOS 26+).
 /// Runs entirely on the iPad: free, private, works offline. Web search is offered to the
 /// model as a tool that uses the keyless `WebSearch`.
@@ -46,6 +53,19 @@ enum OnDeviceAI {
         #if canImport(FoundationModels) && !MUREKKEP_PLAIN
         if #available(iOS 26.0, *) {
             return try await AppleModelBridge.solve(question, language: language)
+        }
+        #endif
+        throw LocalAIError(unavailableReason ?? Loc.t("Cihaz üstü model kullanılamıyor."))
+    }
+
+    /// One item of a textbook exercise (or one sentence of a running text), answered with the
+    /// exercise's instruction in front of the model. When the instruction lists the words that may
+    /// fill a gap, the model can only write those words, never an option letter.
+    static func answer(_ unit: ExerciseUnit, of exercise: PageExercise, before: String,
+                       language: AnswerLanguage) async throws -> ExerciseAnswer {
+        #if canImport(FoundationModels) && !MUREKKEP_PLAIN
+        if #available(iOS 26.0, *) {
+            return try await AppleModelBridge.answer(unit, of: exercise, before: before, language: language)
         }
         #endif
         throw LocalAIError(unavailableReason ?? Loc.t("Cihaz üstü model kullanılamıyor."))
@@ -129,6 +149,74 @@ enum AppleModelBridge {
             }
         }
         throw LocalAIError(Loc.t("Bu soru cihazdaki model için çok uzun."))
+    }
+
+    /// The schema is built for each unit: an array with one entry per gap, each entry one of the
+    /// exercise's words (or free text when the instruction lists none). The reason comes first, so the
+    /// model thinks before it fills.
+    static func answer(_ unit: ExerciseUnit, of exercise: PageExercise, before: String,
+                       language: AnswerLanguage) async throws -> ExerciseAnswer {
+        let gaps = unit.gaps.count
+        let plain = DynamicGenerationSchema(type: String.self, guides: [])
+        let word = exercise.choices.isEmpty
+            ? plain
+            : DynamicGenerationSchema(name: "Word", description: "One of the allowed words", anyOf: exercise.choices)
+        let reason = gaps > 0
+            ? "One short reason per gap, in order"
+            : "Kısa gerekçe: en fazla iki cümle"
+        let answerProperty = gaps > 0
+            ? DynamicGenerationSchema.Property(name: "fills", description: "The word for each gap, in order",
+                                               schema: DynamicGenerationSchema(arrayOf: word, minimumElements: gaps,
+                                                                               maximumElements: gaps),
+                                               isOptional: false)
+            : DynamicGenerationSchema.Property(name: "answer", description: "The answer to the item, short",
+                                               schema: word, isOptional: false)
+        let root = DynamicGenerationSchema(name: "ExerciseAnswer", description: nil, properties: [
+            DynamicGenerationSchema.Property(name: "reasoning", description: reason, schema: plain, isOptional: false),
+            answerProperty,
+        ])
+        let schema = try GenerationSchema(root: root, dependencies: [])
+        let instructions = gaps > 0
+            ? "You solve one item of a textbook exercise. Read the instruction and the sentence, decide what belongs in each numbered gap, then fill every gap in order. Use only the allowed words when they are given. Never answer with an option letter."
+            : "Sen dikkatli bir öğretmensin. Alıştırmanın yönergesini ve varsa notları oku, maddeyi çöz. Şık harfi yalnızca izin verilen cevaplar harfse yaz. " + language.directive
+        let options = GenerationOptions(temperature: 0.1, maximumResponseTokens: 300)
+        var shown = exercise
+        var previous = before
+        for attempt in 0..<2 {
+            do {
+                let prompt = ExerciseSplitter.unitPrompt(shown, unit, before: previous)
+                let session = LanguageModelSession(instructions: instructions)
+                let response = try await session.respond(to: prompt, schema: schema, options: options)
+                let note = text(property(response.content, "reasoning"))
+                if gaps > 0 {
+                    var fills: [String] = []
+                    if let list = property(response.content, "fills"), case let .array(elements) = list.kind {
+                        fills = elements.map { text($0) }
+                    }
+                    return ExerciseAnswer(fills: fills, note: note)
+                }
+                return ExerciseAnswer(fills: [text(property(response.content, "answer"))], note: note)
+            } catch let error where attempt == 0 && OnDeviceAI.isContextOverflow(error) {
+                shown.context = ""
+                shown.passage = nil
+                previous = ""
+            }
+        }
+        throw LocalAIError(Loc.t("Bu soru cihazdaki model için çok uzun."))
+    }
+
+    private static func property(_ content: GeneratedContent, _ name: String) -> GeneratedContent? {
+        if case let .structure(properties: properties, orderedKeys: _) = content.kind {
+            return properties[name]
+        }
+        return nil
+    }
+
+    private static func text(_ content: GeneratedContent?) -> String {
+        if let content, case let .string(s) = content.kind {
+            return s
+        }
+        return ""
     }
 }
 
