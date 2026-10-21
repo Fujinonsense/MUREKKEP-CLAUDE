@@ -4,7 +4,13 @@ Strokes are lists of (x, y) page points, y down.
 
 Letter-size strokes (at least 0.6 × the median stroke height) build the lines, each joining the line
 whose band it overlaps by 40 % of the smaller height; the band follows the line's slope once it has
-six letters. Every smaller stroke (dots, accents, commas, exponents, a plus sign's bars) then joins
+six letters. A letter-size stroke wholly above or below the band (a y's tail or an ascender drawn on
+its own) joins a line it stands beside when 75 % of it lies within 1.2 band heights of the band,
+the line whose band is nearest when two qualify. Lines split while the writing was read left to right
+(a first letter drawn in pieces gives a band of half a letter) are joined again: a smaller line whose
+middle lies within 0.75 band heights of a bigger one's, or whose letters lie in its reach (a few
+strokes narrower than 2.5 band heights: in its reach widened to 1.6, for long tails, or within the
+line's own ascenders and descenders). Every smaller stroke (dots, accents, commas, exponents, a plus sign's bars) then joins
 the line whose band is nearest, preferring lines it lies beside."""
 import statistics
 
@@ -16,7 +22,13 @@ OVER_LETTER = 0.1
 GROUP_GAP = 0.5
 RECENT = 12
 FIT = 6  # letters a line needs before its slope is fitted
-MAX_SLOPE = 0.2126  # tan 12°
+MAX_SLOPE = 0.0875  # tan 5°: the text pen levels the ink before it looks for lines
+REACH = 1.2  # ascenders and descenders reach this many band heights above and below the band
+INSIDE = 0.75  # share of a stroke's height inside that reach for it to belong to the line
+MERGE = 0.75  # lines whose middles are closer than this many band heights are one line
+FRAGMENT = 3  # a "line" of at most this many strokes, narrower than FRAGMENT_WIDTH band heights,
+FRAGMENT_WIDTH = 2.5  # is a part of a letter when it lies within FRAGMENT_REACH band heights
+FRAGMENT_REACH = 1.6
 
 
 class Box:
@@ -41,7 +53,8 @@ class _Line:
 
     def band(self, boxes, x):
         """(top, bottom) of the line's letters at x. The slope is the median of the slopes between
-        the last 12 letters (a capital or a descender among them cannot tilt it), at most 12°; a line
+        the last 12 letters (a capital or a descender among them cannot tilt it), at most 5° (the text pen
+        levels the ink first); a line
         of fewer than 6 letters is level ("Bug" alone would point the band below the next letter)."""
         ms = [boxes[i] for i in self.members]
         if len(ms) < 3:
@@ -60,6 +73,76 @@ class _Line:
 
 def _overlap(lo1, hi1, lo2, hi2):
     return max(0.0, min(hi1, hi2) - max(lo1, lo2))
+
+
+def _reach(found, boxes, b):
+    """The line a stroke above or below every band belongs to: one it stands beside (not past the
+    line's right end by more than two band heights) with 75 % of the stroke within the ascender and
+    descender reach of its band; the line whose band is nearest wins."""
+    best, best_gap = None, None
+    for line in found:
+        top, bottom = line.band(boxes, b.cx)
+        core = bottom - top
+        if len(line.members) < 3:
+            # A line of one or two strokes has their whole height as its band already.
+            core = statistics.median(boxes[j].h for j in line.members) * 0.5
+        inside = _overlap(b.min_y, b.max_y, top - REACH * core, bottom + REACH * core) / max(b.h, 1e-6)
+        right = max(boxes[j].max_x for j in line.members)
+        if inside < INSIDE or b.min_x > right + 2 * (bottom - top):
+            continue
+        gap = 0.0 if b.max_y >= top and b.min_y <= bottom else min(abs(b.min_y - bottom), abs(top - b.max_y))
+        if best_gap is None or gap < best_gap:
+            best, best_gap = line, gap
+    return best
+
+
+def _same_line(small, big, boxes):
+    """Whether `small` is part of the line `big` (see the module's description)."""
+    ms = [boxes[i] for i in small.members]
+    cx = statistics.median(m.cx for m in ms)
+    top, bottom = big.band(boxes, cx)
+    core = bottom - top
+    if len(big.members) < 3:
+        core = statistics.median(boxes[j].h for j in big.members) * 0.5
+    height = max(bottom - top, statistics.median(m.h for m in ms))
+    if abs(statistics.median(m.cy for m in ms) - (top + bottom) / 2) < MERGE * height:
+        return True
+    left = min(boxes[j].min_x for j in big.members) - 2 * (bottom - top)
+    right = max(boxes[j].max_x for j in big.members) + 2 * (bottom - top)
+    width = max(m.max_x for m in ms) - min(m.min_x for m in ms)
+    fragment = len(ms) <= FRAGMENT and width < FRAGMENT_WIDTH * (bottom - top)
+    reach = FRAGMENT_REACH if fragment else REACH
+    # A fragment may also lie anywhere within the line's own ascenders and descenders (letters that
+    # come in pieces make the band lower than the letters).
+    high = min(boxes[j].min_y for j in big.members) - 0.3 * (bottom - top)
+    low = max(boxes[j].max_y for j in big.members) + 0.3 * (bottom - top)
+    inside = 0
+    for m in ms:
+        t, b = big.band(boxes, m.cx)
+        share = _overlap(m.min_y, m.max_y, t - reach * core, b + reach * core) / max(m.h, 1e-6)
+        if fragment:
+            share = max(share, _overlap(m.min_y, m.max_y, high, low) / max(m.h, 1e-6))
+        inside += share >= INSIDE and left <= m.cx <= right
+    return inside >= INSIDE * len(ms)
+
+
+def _merge(found, boxes):
+    """The lines with every split line joined to the line it is part of, smallest first."""
+    while len(found) > 1:
+        pair = None
+        for small in sorted(found, key=lambda ln: len(ln.members)):
+            for big in sorted(found, key=lambda ln: -len(ln.members)):
+                if big is not small and len(big.members) >= len(small.members) and _same_line(small, big, boxes):
+                    pair = (small, big)
+                    break
+            if pair:
+                break
+        if pair is None:
+            break
+        small, big = pair
+        big.members = sorted(big.members + small.members, key=lambda i: (boxes[i].min_x, i))
+        found.remove(small)
+    return found
 
 
 def lines(strokes):
@@ -81,9 +164,12 @@ def lines(strokes):
             if ratio > best_ratio:
                 best, best_ratio = line, ratio
         if best is None or best_ratio < JOIN:
+            best = _reach(found, boxes, b)
+        if best is None:
             best = _Line()
             found.append(best)
         best.members.append(i)
+    found = _merge(found, boxes)
     taken = set(primary)
     for i, b in enumerate(boxes):
         if i in taken:

@@ -124,3 +124,68 @@ def test_short_start_does_not_tilt_the_band():
                box(195.872, -11.368, 205.547, -3.385), box(206.769, -12.612, 216.435, -3.645),
                box(219.009, -18.092, 220.112, -3.431), box(222.924, -3.824, 223.821, -3.457)]
     assert len(lines(strokes)) == 1
+
+
+def test_descender_and_ascender_strokes_stay_on_their_line():
+    """A y or p whose tail is its own stroke, or a letter's top drawn apart, lies wholly below or
+    above the line's middle band; it still belongs to the line it stands in (tools/textpencheck
+    found such strokes opening lines of their own: "Neler oluyor?" → "..?", "Neler oluyor.", "(")."""
+    base = 200
+    letters = word(100, base, 4)                                    # oluy…
+    tail = [(100 + 4 * X * 1.1, base), (100 + 4 * X * 1.1 - 2, base + X * 1.1)]  # y's tail, below
+    top = [(100 + 5 * X * 1.1, base - X * 1.9), (100 + 5 * X * 1.1, base - X * 1.05)]  # an ascender's top part
+    more = word(100 + 6 * X * 1.1, base, 3)
+    strokes = letters + [tail, top] + more
+    assert len(lines(strokes)) == 1
+
+
+def test_two_close_lines_stay_two_with_tails():
+    """The same allowance must not pull the next line in: lines 2.2 x-heights apart, with tails."""
+    a = word(100, 200, 6) + [[(100 + 6 * X * 1.1, 200), (98 + 6 * X * 1.1, 200 + X * 1.1)]]
+    b = word(100, 200 + 2.2 * X, 6) + [[(100 + 6 * X * 1.1, 200 + 2.2 * X - X * 1.9),
+                                        (100 + 6 * X * 1.1, 200 + 2.2 * X - X * 1.05)]]
+    groups = lines(a + b)
+    assert len(groups) == 2
+    m = membership(a + b, groups)
+    assert len({m[i] for i in range(len(a))}) == 1 and len({m[i] for i in range(len(a), len(a) + len(b))}) == 1
+
+
+def test_first_letter_in_pieces_is_one_line():
+    """A capital drawn as a top bowl and then the rest (B, R, P) gives the line's first band only its
+    top half; the letters that follow must not grow a second line beside it (found by
+    tools/textpencheck: "Bugün hava çok güzel." read as two lines)."""
+    base = 200
+    top_bowl = [(100, base - 1.5 * X), (106, base - 1.35 * X), (106, base - 0.9 * X), (100, base - 0.8 * X)]
+    rest = [(100, base - 0.8 * X), (107, base - 0.6 * X), (107, base - 0.1 * X), (100, base)]
+    strokes = [top_bowl, rest] + word(112, base, 6)
+    assert len(lines(strokes)) == 1
+
+
+def test_short_high_piece_inside_the_line_stays():
+    """"Türevin tanımı" in a held-out script font, levelled (tools/textpencheck case 309): its letters
+    come in pieces, so the line's middle band is only 5.4 pt high; a short piece high in the line (still
+    within the line's own ascenders) opened a line of its own."""
+    strokes = [box(0.0, -11.2, 8.2, -0.8), box(1.8, -16.6, 14.2, -11.2), box(9.1, -9.3, 14.7, -0.9),
+               box(10.2, -9.3, 18.3, -2.3), box(10.4, -2.5, 10.5, -2.3), box(12.7, -5.1, 14.9, -0.9),
+               box(14.3, -6.0, 18.8, -2.3), box(14.3, -5.1, 14.6, -4.9), box(14.8, -5.1, 15.1, -4.9),
+               box(15.3, -12.3, 16.1, -11.3), box(18.6, -12.1, 19.2, -11.5), box(16.7, -7.8, 24.4, -0.4),
+               box(20.4, -9.2, 22.7, -5.6), box(20.4, -5.9, 20.7, -5.7), box(24.4, -8.7, 25.3, -7.5),
+               box(24.4, -7.7, 24.5, -7.7), box(22.1, -6.3, 29.4, -1.0), box(23.0, -9.5, 28.4, -4.3),
+               box(28.7, -9.4, 32.7, -0.4), box(29.5, -6.3, 36.4, -1.9), box(29.5, -2.0, 29.8, -2.0),
+               box(32.8, -9.8, 36.4, -4.5), box(32.9, -4.9, 33.2, -4.7), box(34.9, -8.9, 39.5, -1.2),
+               box(35.6, -2.5, 35.8, -2.2), box(35.6, -5.8, 40.3, -2.2), box(40.0, -11.6, 40.8, -10.4),
+               box(38.2, -9.1, 44.6, -0.4), box(41.0, -8.9, 48.1, -3.7), box(41.0, -3.9, 41.3, -3.9),
+               box(42.9, -7.3, 46.6, -0.3), box(44.3, -5.9, 49.0, -2.1), box(49.9, -5.6, 55.9, -0.4),
+               box(51.0, -13.4, 56.7, -1.6), box(51.0, -1.8, 51.2, -1.6), box(56.7, -16.8, 59.2, -13.1),
+               box(56.7, -13.2, 56.8, -13.2), box(57.3, -13.7, 60.0, -13.4), box(57.5, -13.8, 57.5, -13.7),
+               box(55.8, -7.6, 63.9, -0.2), box(56.7, -9.0, 64.4, -1.8), box(56.9, -1.9, 57.0, -1.8),
+               box(59.4, -4.0, 61.0, -0.5), box(60.5, -5.7, 65.1, -1.7), box(60.5, -1.9, 60.8, -1.9),
+               box(60.8, -4.0, 61.2, -3.8), box(63.2, -9.0, 69.6, -0.1), box(66.0, -7.4, 71.7, -0.1),
+               box(66.0, -3.7, 66.3, -3.7), box(69.4, -5.7, 74.2, -1.9), box(71.7, -8.8, 73.2, -7.2),
+               box(71.1, -9.4, 76.4, -0.7), box(72.0, -2.2, 72.2, -1.9), box(72.0, -5.9, 77.1, -1.9),
+               box(74.9, -9.3, 81.2, -0.0), box(77.7, -8.7, 84.7, -3.5), box(77.7, -3.7, 78.0, -3.7),
+               box(79.2, -7.4, 83.5, 0.0), box(82.0, -8.7, 89.0, -3.5), box(82.0, -3.6, 82.2, -3.5),
+               box(83.4, -7.4, 83.5, -7.3), box(84.0, -7.4, 87.9, -0.3), box(85.5, -5.7, 90.2, -1.8),
+               box(87.7, -7.4, 87.9, -7.2), box(87.7, -8.5, 92.5, -0.5), box(88.5, -1.9, 88.6, -1.6),
+               box(88.5, -5.3, 93.1, -1.6)]
+    assert len(lines(strokes)) == 1
