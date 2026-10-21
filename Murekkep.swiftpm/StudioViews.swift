@@ -21,6 +21,8 @@ struct StudioCreateSheet: View {
     /// 0…1 while the chapters are being found.
     @State private var chapterProgress: Double?
     @State private var chaptersFor: UUID?
+    /// Whether the sources that are not chosen are listed.
+    @State private var showAllSources = false
 
     private static let lastKey = "studio.lastOptions"
 
@@ -51,68 +53,48 @@ struct StudioCreateSheet: View {
         library.sections.first { $0.id == request.sectionID }?.name
     }
 
+    /// From this width the sheet shows two columns: how it is told on the left, what it is about on the right.
+    private static let twoColumnWidth: CGFloat = 860
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    HStack(spacing: 12) {
-                        ForEach(OverviewKind.allCases) { kind in
-                            kindCard(kind)
+            GeometryReader { geo in
+                if geo.size.width >= Self.twoColumnWidth {
+                    HStack(spacing: 0) {
+                        Form {
+                            kindSection
+                            essentialsSection
+                            formatSection
+                            themeSection
+                            voiceSection
+                            engineSection
                         }
-                    }
-                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-                }
-                sourcesSection
-                if bookSource != nil {
-                    chapterSection
-                }
-                formatSection
-                Section(Loc.t("Ayarlar")) {
-                    Picker(Loc.t("Süre"), selection: $options.length) {
-                        ForEach(OverviewLength.allCases) { l in
-                            Text(Loc.t("{0} · ~{1} dk", "\(l.title)", "\(l.minutes)")).tag(l)
-                        }
-                    }
-                    Picker(Loc.t("Seviye"), selection: $options.level) {
-                        ForEach(OverviewLevel.allCases) { l in
-                            Text(l.title).tag(l)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    Picker(Loc.t("Dil"), selection: $options.language) {
-                        ForEach(OverviewLanguage.allCases) { l in
-                            Text(l.title).tag(l)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                if options.kind == .video {
-                    Section(Loc.t("Görünüm")) {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 14) {
-                                ForEach(SlideTheme.allCases) { theme in
-                                    Button {
-                                        options.theme = theme
-                                    } label: {
-                                        ThemePreview(theme: theme, selected: options.theme == theme)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
+                        Divider()
+                        Form {
+                            sourcesSection
+                            if bookSource != nil {
+                                chapterSection
                             }
-                            .padding(.vertical, 6)
+                            focusSection
                         }
+                        .frame(width: max(360, geo.size.width * 0.42))
+                    }
+                } else {
+                    // The choices that shape the result come first; the long lists come after them.
+                    Form {
+                        kindSection
+                        essentialsSection
+                        sourcesSection
+                        if bookSource != nil {
+                            chapterSection
+                        }
+                        formatSection
+                        themeSection
+                        focusSection
+                        voiceSection
+                        engineSection
                     }
                 }
-                Section {
-                    TextField(Loc.t("ör. sınavda çıkabilecek mekanizmalar, klinik önemi, 3. hafta konuları…"), text: $options.focus, axis: .vertical)
-                        .lineLimit(2...5)
-                } header: {
-                    Text(Loc.t("Odak (isteğe bağlı)"))
-                } footer: {
-                    Text(Loc.t("Neye ağırlık verilsin, kime göre anlatılsın, neyi atlasın; serbestçe yaz."))
-                }
-                voiceSection
-                engineSection
             }
             .navigationTitle(courseName.map { "\(options.kind.title) · \($0)" } ?? options.kind.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -171,39 +153,146 @@ struct StudioCreateSheet: View {
         .buttonStyle(.plain)
     }
 
+    private var kindSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                ForEach(OverviewKind.allCases) { kind in
+                    kindCard(kind)
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+        }
+    }
+
+    /// Language, length and level: what the result most depends on, each with its name over it.
+    private var essentialsSection: some View {
+        Section {
+            essential(Loc.t("Dil")) {
+                Picker(Loc.t("Dil"), selection: $options.language) {
+                    ForEach(OverviewLanguage.allCases) { l in
+                        Text(l.title).tag(l)
+                    }
+                }
+            }
+            essential(Loc.t("Süre")) {
+                Picker(Loc.t("Süre"), selection: $options.length) {
+                    ForEach(OverviewLength.allCases) { l in
+                        Text(Loc.t("{0} · ~{1} dk", "\(l.title)", "\(l.minutes)")).tag(l)
+                    }
+                }
+            }
+            essential(Loc.t("Seviye")) {
+                Picker(Loc.t("Seviye"), selection: $options.level) {
+                    ForEach(OverviewLevel.allCases) { l in
+                        Text(l.title).tag(l)
+                    }
+                }
+            }
+        } header: {
+            Text(Loc.t("Temel ayarlar"))
+        } footer: {
+            Text(engine == .offline
+                 ? Loc.t("Çevrimdışı yazar çeviri yapamaz: kaynak başka bir dildeyse özet kaynağın dilinde hazırlanır.")
+                 : Loc.t("Başlıklar, anlatım ve ses baştan sona bu dilde olur; kaynak başka bir dildeyse çevrilerek anlatılır."))
+        }
+    }
+
+    private func essential<Content: View>(_ title: String, @ViewBuilder picker: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            picker()
+                .pickerStyle(.segmented)
+                .labelsHidden()
+        }
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private var themeSection: some View {
+        if options.kind == .video {
+            Section(Loc.t("Görünüm")) {
+                // Every look in view at once, no sideways scrolling.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 176), spacing: 14)], alignment: .leading, spacing: 14) {
+                    ForEach(SlideTheme.allCases) { theme in
+                        Button {
+                            options.theme = theme
+                        } label: {
+                            ThemePreview(theme: theme, selected: options.theme == theme)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    private var focusSection: some View {
+        Section {
+            TextField(Loc.t("ör. sınavda çıkabilecek mekanizmalar, klinik önemi, 3. hafta konuları…"), text: $options.focus, axis: .vertical)
+                .lineLimit(2...5)
+        } header: {
+            Text(Loc.t("Odak (isteğe bağlı)"))
+        } footer: {
+            Text(Loc.t("Neye ağırlık verilsin, kime göre anlatılsın, neyi atlasın; serbestçe yaz."))
+        }
+    }
+
+    /// The chosen sources stay in view; the rest of the library opens on request instead of pushing
+    /// every other setting far down.
     private var sourcesSection: some View {
         Section {
             if candidates.isEmpty {
                 Text(request.sectionID == nil ? Loc.t("Kütüphanede kaynak yok. Önce bir PDF ekle.") : Loc.t("Bu derste kaynak yok. Önce derse PDF ekle."))
                     .foregroundStyle(.secondary)
             }
-            ForEach(candidates) { note in
-                Button {
-                    if selected.contains(note.id) { selected.remove(note.id) } else if selected.count < 10 { selected.insert(note.id) }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: selected.contains(note.id) ? "checkmark.circle.fill" : "circle")
-                            .font(.title3)
-                            .foregroundStyle(selected.contains(note.id) ? Theme.ink : Color.secondary)
-                        Image(systemName: note.kind == .pdf ? "doc.richtext" : "book.closed")
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(note.title)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text(note.kind == .pdf ? Loc.t("PDF · {0} sayfa", "\(note.pageCount)") : Loc.t("El yazısı defter · {0} sayfa", "\(note.pageCount)"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+            ForEach(candidates.filter { selected.contains($0.id) }) { note in
+                sourceRow(note)
+            }
+            let others = candidates.filter { !selected.contains($0.id) }
+            if !others.isEmpty {
+                DisclosureGroup(isExpanded: $showAllSources) {
+                    ForEach(others) { note in
+                        sourceRow(note)
                     }
+                } label: {
+                    Label(Loc.t("Başka kaynak ekle ({0})", "\(others.count)"), systemImage: "plus.circle")
+                        .foregroundStyle(Theme.ink)
                 }
-                .buttonStyle(.plain)
             }
         } header: {
             Text(Loc.t("Kaynaklar · {0} seçili", "\(selected.count)"))
         } footer: {
             Text(Loc.t("En fazla 10 kaynak. El yazısı defterler cihazda okunup metin olarak eklenir."))
         }
+    }
+
+    private func sourceRow(_ note: NoteMeta) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if selected.contains(note.id) { selected.remove(note.id) } else if selected.count < 10 { selected.insert(note.id) }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: selected.contains(note.id) ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(selected.contains(note.id) ? Theme.ink : Color.secondary)
+                Image(systemName: note.kind == .pdf ? "doc.richtext" : "book.closed")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(note.title)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(note.kind == .pdf ? Loc.t("PDF · {0} sayfa", "\(note.pageCount)") : Loc.t("El yazısı defter · {0} sayfa", "\(note.pageCount)"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var formatSection: some View {
@@ -406,6 +495,19 @@ struct StudioCreateSheet: View {
         guard chaptersFor == note.id else { return }
         chapters = found
         chapterProgress = nil
+    }
+}
+
+extension View {
+    /// A sheet the size of a page on iPad (iPadOS 18+) rather than a narrow form, so the create
+    /// sheet's choices have room.
+    @ViewBuilder
+    func pageSizedSheet() -> some View {
+        if #available(iOS 18.0, *) {
+            presentationSizing(.page)
+        } else {
+            presentationDetents([.large])
+        }
     }
 }
 

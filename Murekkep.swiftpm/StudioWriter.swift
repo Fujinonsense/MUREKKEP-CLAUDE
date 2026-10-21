@@ -89,7 +89,7 @@ enum StudioWriter {
     @MainActor
     static func write(options: OverviewOptions, material: StudioMaterial, engine: StudioEngine,
                       library: LibraryStore, settings: AppSettings, progress: @escaping WriteProgress) async throws -> Overview {
-        let language = resolveLanguage(options, material: material)
+        let language = options.language
         switch engine {
         case .claude:
             return try await claude(options: options, material: material, language: language,
@@ -102,26 +102,42 @@ enum StudioWriter {
             } catch {
                 // The small model can refuse or not speak the language: the simple writer still works.
                 progress(0.9, Loc.t("Cihazdaki model olmadı, çevrimdışı yazılıyor…"))
-                return try offline(options: options, material: material, language: language)
+                return try offline(options: options, material: material, chosen: language, progress: progress)
             }
         case .offline:
-            return try offline(options: options, material: material, language: language)
-        }
-    }
-
-    static func resolveLanguage(_ options: OverviewOptions, material: StudioMaterial) -> OverviewLanguage {
-        switch options.language {
-        case .turkish, .english:
-            return options.language
-        case .auto:
-            let focus = options.focus.trimmingCharacters(in: .whitespacesAndNewlines)
-            let detected = focus.count >= 12 ? AnswerLanguage.detect(focus, context: material.sample) : AnswerLanguage.detect(material.sample)
-            return detected == .english ? .english : .turkish
+            return try offline(options: options, material: material, chosen: language, progress: progress)
         }
     }
 
     static func directive(_ language: OverviewLanguage) -> String {
         (language.isEnglish ? AnswerLanguage.english : AnswerLanguage.turkish).directive
+    }
+
+    /// The directive for a script: the source is translated, never quoted in its own language.
+    static func scriptDirective(_ language: OverviewLanguage) -> String {
+        directive(language) + " " + (language.isEnglish
+            ? "Write every title, bullet and narration in English only, even when the source text is in another language: translate it."
+            : "Kaynak metin İngilizce ya da başka bir dilde olsa bile her başlığı, maddeyi ve anlatımı yalnızca Türkçe yaz; kaynağı çevirerek anlat.")
+    }
+
+    /// Whether a piece of a script is in the overview's language (a piece too short to tell counts).
+    static func speaks(_ language: OverviewLanguage, _ text: String) -> Bool {
+        let wanted: AnswerLanguage = language.isEnglish ? .english : .turkish
+        return AnswerLanguage.detect(text, fallback: wanted) == wanted
+    }
+
+    /// Put before a prompt whose first answer came back in the other language.
+    static func languageReminder(_ language: OverviewLanguage) -> String {
+        language.isEnglish
+            ? "IMPORTANT: your previous answer was not in English. Write everything in English."
+            : "ÖNEMLİ: önceki yanıtın Türkçe değildi. Her şeyi Türkçe yaz; İngilizce metni Türkçeye çevir."
+    }
+
+    /// The extractive writer can only repeat the source's own sentences, so it writes in the source's
+    /// language: a frame in one language around sentences in another would be voiced half in each.
+    static func offlineLanguage(_ material: StudioMaterial, chosen: OverviewLanguage) -> OverviewLanguage {
+        let wanted: AnswerLanguage = chosen.isEnglish ? .english : .turkish
+        return AnswerLanguage.detect(material.sample, fallback: wanted) == .english ? .english : .turkish
     }
 
     private static func newOverview(_ options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
@@ -150,7 +166,7 @@ enum StudioWriter {
                 ? StudioPrompts.video(options, language: language, sources: material.items.map(\.title))
                 : StudioPrompts.audio(options, language: language, sources: material.items.map(\.title))
             let request = ClaudeRequest(model: settings.model.rawValue, effort: settings.effort.rawValue, maxTokens: 32_000,
-                                        system: StudioPrompts.system + "\n" + directive(language),
+                                        system: StudioPrompts.system + "\n" + scriptDirective(language),
                                         context: .sources(sources),
                                         contextNote: "Kaynaklar: " + material.items.enumerated().map { "\($0.offset + 1). \($0.element.title)" }.joined(separator: "; "),
                                         turns: [ClaudeTurn(role: .user, text: prompt, imageJPEG: nil)])
@@ -217,14 +233,19 @@ enum StudioWriter {
             guard !chunks.isEmpty else { throw StudioWriterError.noText }
             var overview = newOverview(options, material: material, language: language, title: fallbackTitle(material),
                                        engine: Loc.t("Cihazda · Apple Intelligence"))
-            let instructions = "Sen bir ders anlatıcısısın. Yalnızca verilen metne dayan, uydurma. " + directive(language)
+            let instructions = "Sen bir ders anlatıcısısın. Yalnızca verilen metne dayan, uydurma. " + scriptDirective(language)
             for (i, chunk) in chunks.enumerated() {
                 try Task.checkCancellation()
                 progress(Double(i) / Double(chunks.count), Loc.t("Cihazdaki model yazıyor ({0}/{1})…", "\(i + 1)", "\(chunks.count)"))
                 let prompt = "\(options.format.prompt(for: .audio)) \(options.level.prompt) \(focusLine(options))\nİki sunucu (\(language.hostNames[0]) = 0, \(language.hostNames[1]) = 1) aşağıdaki metni doğal bir sohbetle anlatsın. Seslendirilecek: markdown yok, sembolleri okunuşuyla yaz.\n\nMetin:\n\(chunk)"
-                let draft = try await AppleStudioBridge.dialogue(instructions: instructions, prompt: prompt)
+                var draft = try await AppleStudioBridge.dialogue(instructions: instructions, prompt: prompt)
+                if !speaks(language, draft.lines.map(\.text).joined(separator: " ")) {
+                    draft = try await AppleStudioBridge.dialogue(instructions: instructions,
+                                                                 prompt: languageReminder(language) + "\n" + prompt)
+                }
                 var first = true
-                for line in draft.lines where !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                // A line still in the other language is left out rather than voiced in the wrong accent.
+                for line in draft.lines where !line.text.trimmingCharacters(in: .whitespaces).isEmpty && speaks(language, line.text) {
                     let chapter = first ? TextChunks.heading(in: chunk) ?? (language.isEnglish ? "Part \(i + 1)" : "Bölüm \(i + 1)") : nil
                     overview.lines.append(DialogueLine(host: min(max(line.host, 0), 1), text: line.text, chapter: chapter))
                     first = false
@@ -249,7 +270,7 @@ enum StudioWriter {
         guard !plan.isEmpty else { throw StudioWriterError.noText }
         let topic = fallbackTitle(material)
         let instructions = "Sen ödüllü bir ders anlatıcısısın: merak uyandırır, somut örneklerle ve sıcak bir dille anlatırsın. Yalnızca verilen metne dayan, uydurma. "
-            + directive(language)
+            + scriptDirective(language)
         progress(0.03, Loc.t("Cihazdaki model videoyu planlıyor…"))
         let planPrompt = """
         \(options.level.prompt) \(focusLine(options))
@@ -260,7 +281,18 @@ enum StudioWriter {
 
         Bu konu için bir video özeti planla: kısa bir başlık, merak uyandıran bir kanca sorusu ve onu somut bir örnekle açan anlatım, her bölüm için kısa bir başlık (aynı sırayla) ve izleyiciyi düşündüren bir kapanış sorusu. Sorularda en önemli 1-3 kelimeyi ** ** içine al. Anlatım seslendirilecek: sembolleri okunuşuyla yaz.
         """
-        let outline = try await AppleStudioBridge.plan(instructions: instructions, prompt: planPrompt)
+        var outline = try await AppleStudioBridge.plan(instructions: instructions, prompt: planPrompt)
+        if !speaks(language, outline.hook + " " + outline.hookNarration + " " + outline.closing) {
+            outline = try await AppleStudioBridge.plan(instructions: instructions, prompt: languageReminder(language) + "\n" + planPrompt)
+        }
+        if !speaks(language, outline.hook + " " + outline.hookNarration + " " + outline.closing) {
+            // Still the other language: the plain opening and closing, so nothing is voiced half in each.
+            let en = language.isEnglish
+            outline.hook = en ? "What is **\(topic)**, and why does it matter?" : "**\(topic)** nedir, neden önemlidir?"
+            outline.hookNarration = en ? "In this video we'll see it step by step." : "Bu videoda bunu adım adım göreceğiz."
+            outline.closing = en ? "So where do you see **\(topic)** in everyday life?" : "Peki **\(topic)** konusunu günlük hayatta nerede görüyorsun?"
+            outline.sectionTitles = []
+        }
         let counts = StudioPlan.sceneCounts(options, parts: plan.count)
         let total = counts.reduce(0, +)
         var done = 0
@@ -272,12 +304,19 @@ enum StudioWriter {
                 progress(0.08 + 0.9 * Double(done) / Double(max(total, 1)),
                          Loc.t("Cihazdaki model yazıyor ({0}/{1})…", "\(done + 1)", "\(total)"))
                 let prompt = "\(options.format.prompt(for: .video)) \(options.level.prompt) \(focusLine(options))\nBölüm: \(part.title)\nAşağıdaki ders metninden bu bölüm için bir video slaytı hazırla. Bir tanım varsa definition, adım adım bir süreç varsa steps düzenini seç. Anlatım seslendirilecek: doğal konuşma dili, somut bir örnek, sembolleri okunuşuyla yaz, markdown kullanma.\n\nMetin:\n\(chunk)"
-                if let draft = try? await AppleStudioBridge.scene(instructions: instructions, prompt: prompt) {
-                    scenes.append(scene(from: draft))
+                var draft = try? await AppleStudioBridge.scene(instructions: instructions, prompt: prompt)
+                if let d = draft, !speaks(language, d.title + " " + d.narration) {
+                    draft = try? await AppleStudioBridge.scene(instructions: instructions,
+                                                               prompt: languageReminder(language) + "\n" + prompt)
+                }
+                // A scene still in the other language is left out rather than voiced in the wrong accent.
+                if let d = draft, speaks(language, d.narration) {
+                    scenes.append(scene(from: d))
                 }
                 done += 1
             }
-            let short = i < outline.sectionTitles.count ? outline.sectionTitles[i].trimmingCharacters(in: .whitespaces) : ""
+            var short = i < outline.sectionTitles.count ? outline.sectionTitles[i].trimmingCharacters(in: .whitespaces) : ""
+            if !speaks(language, short) { short = "" }
             let title = short.isEmpty ? part.title : short
             sections.append(OutlineSection(title: title, subtitle: title == part.title ? part.subtitle : part.title, scenes: scenes))
         }
@@ -326,7 +365,13 @@ enum StudioWriter {
 
     // MARK: Offline
 
-    private static func offline(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage) throws -> Overview {
+    @MainActor
+    private static func offline(options: OverviewOptions, material: StudioMaterial, chosen: OverviewLanguage,
+                                progress: WriteProgress) throws -> Overview {
+        let language = offlineLanguage(material, chosen: chosen)
+        if language != chosen {
+            progress(0.92, Loc.t("Çevrimdışı yazar çeviri yapamaz: özet kaynağın dilinde ({0}) hazırlanıyor.", language.title))
+        }
         if options.kind == .video { return try offlineVideo(options: options, material: material, language: language) }
         let text = material.allText
         let chunks = TextChunks.pick(text, count: max(3, options.length.scenes.lowerBound - 2), size: 1400)

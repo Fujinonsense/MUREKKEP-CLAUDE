@@ -149,16 +149,25 @@ enum OverviewLevel: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// The one language of an overview: every title, line and voice uses it. There is no automatic choice,
+/// because a guess from an English book with a Turkish user ended up half in each language.
 enum OverviewLanguage: String, Codable, CaseIterable, Identifiable {
-    case auto
     case turkish
     case english
+
+    /// The app's language: the default for a new overview.
+    static var app: OverviewLanguage { Loc.isEnglish ? .english : .turkish }
+
+    /// Earlier versions also stored "auto": it becomes the app's language.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = OverviewLanguage(rawValue: raw) ?? .app
+    }
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .auto: return Loc.t("Otomatik")
         case .turkish: return "Türkçe"
         case .english: return "English"
         }
@@ -212,7 +221,7 @@ struct OverviewOptions: Codable, Hashable {
     var format: OverviewFormat = .explainer
     var length: OverviewLength = .standard
     var level: OverviewLevel = .university
-    var language: OverviewLanguage = .auto
+    var language: OverviewLanguage = .app
     var theme: SlideTheme = .explainer
     var focus: String = ""
 }
@@ -308,7 +317,7 @@ struct Overview: Codable, Hashable, Identifiable {
     var sourceTitles: [String]
     var created = Date()
     var options: OverviewOptions
-    /// Resolved language (never `.auto`).
+    /// The language it was written and voiced in.
     var language: OverviewLanguage
     var hosts: [String]
     var scenes: [OverviewScene] = []

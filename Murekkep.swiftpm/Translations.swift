@@ -1010,5 +1010,10 @@ enum Translations {
         "Hız: {0}": "Speed: {0}",
         "Kadın sesi": "Female voice",
         "Sesler uygulamanın içinde, iPad'de üretilir: internet ve anahtar gerekmez. Her ses Türkçe ve İngilizce konuşur; sesli sohbette ikinci sunucu öbür cinsiyetteki seçili sesle konuşur.": "The voices are made inside the app, on the iPad: no internet and no key. Every voice speaks Turkish and English; in a podcast the second host speaks with the chosen voice of the other gender.",
+        "Temel ayarlar": "Basics",
+        "Çevrimdışı yazar çeviri yapamaz: kaynak başka bir dildeyse özet kaynağın dilinde hazırlanır.": "The offline writer can't translate: if a source is in another language, the overview is made in the source's language.",
+        "Başlıklar, anlatım ve ses baştan sona bu dilde olur; kaynak başka bir dildeyse çevrilerek anlatılır.": "Titles, narration and voice are in this language from start to finish; a source in another language is translated.",
+        "Başka kaynak ekle ({0})": "Add another source ({0})",
+        "Çevrimdışı yazar çeviri yapamaz: özet kaynağın dilinde ({0}) hazırlanıyor.": "The offline writer can't translate: making the overview in the source's language ({0}).",
     ]
 }

@@ -162,6 +162,7 @@ struct LibraryView: View {
                     .environmentObject(store)
                     .environmentObject(studio)
                     .environmentObject(settings)
+                    .pageSizedSheet()
             }
             .fullScreenCover(item: $playing) { overview in
                 OverviewPlayerView(overview: overview, folder: studio.folder(for: overview.id))
