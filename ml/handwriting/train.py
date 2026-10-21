@@ -17,6 +17,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, IterableDataset
 
+import font_lines
 import synth
 from charset import NUM_CLASSES, decode, encode
 from model import CRNN
@@ -45,7 +46,7 @@ class Lines(IterableDataset):
     def __iter__(self):
         info = torch.utils.data.get_worker_info()
         rng = np.random.default_rng([self.seed, info.id if info else 0])
-        pool = synth.FontPool(self.fonts)
+        pool = synth.FontPool(self.fonts, image_fonts=font_lines.training_fonts())
         while True:
             yield collate([synth.make_line(rng, pool) for _ in range(self.batch)])
 

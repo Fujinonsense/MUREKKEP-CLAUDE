@@ -1,7 +1,7 @@
 """Reads the text pen cases again with the current Python twins (line finder, levelling, renderer,
 model, CTC) and counts exact readings and right line counts, with or without the pen's radius
 (boxes grown by the radius, as Stroke.bounds does in the app).
-usage: python eval_python.py <repo> <cases.json> [--radius] [--lines-only] [--show N]"""
+usage: python eval_python.py <repo> <cases.json> [--radius] [--lines-only] [--show N] [--model hwmodel.bin]"""
 import collections
 import json
 import sys
@@ -14,7 +14,8 @@ from charset import CHARSET  # noqa: E402
 from ink_render import render_line  # noqa: E402
 from ports import ctc, deskew, inkline  # noqa: E402
 
-weights = infer_np.load(repo + "/Murekkep.swiftpm/Assets.xcassets/hwmodel.dataset/hwmodel.bin")
+weights = infer_np.load(sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv
+                        else repo + "/Murekkep.swiftpm/Assets.xcassets/hwmodel.dataset/hwmodel.bin")
 RADIUS = "--radius" in sys.argv
 LINES_ONLY = "--lines-only" in sys.argv
 SHOW = int(sys.argv[sys.argv.index("--show") + 1]) if "--show" in sys.argv else 0

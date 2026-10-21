@@ -60,10 +60,12 @@ class GlyphSource:
 
 
 class FontPool:
-    def __init__(self, paths):
+    def __init__(self, paths, image_fonts=()):
         self.sources = [GlyphSource(p) for p in paths]
         self.plain = [s for s in self.sources if s.caps_ratio <= PLAIN_CAPS]
         self.stroke_font = GlyphSource(None)
+        # Whole-font drawings with an elastic bend (font_lines.py), for a share of the lines.
+        self.image_fonts = tuple(image_fonts)
 
     def random(self, rng):
         return self.sources[int(rng.integers(len(self.sources)))]
@@ -200,8 +202,17 @@ def render_segments(seg, line_px):
     return grid.reshape(HEIGHT, k, w, k).mean(axis=(1, 3)).astype(np.float32)
 
 
+IMAGE_SHARE = 0.3  # of training lines drawn whole by a handwriting font (font_lines.py)
+
+
 def make_line(rng, pool, text=None):
     """(image 48×W float32, text) of one synthetic handwritten line."""
+    if pool.image_fonts and text is None and rng.random() < IMAGE_SHARE:
+        import font_lines
+
+        line = font_lines.make_line(rng, pool.image_fonts)
+        if line is not None:
+            return line
     text = text if text is not None else texts.sample(rng)
     seg = compose(rng, pick_source(rng, pool, text), text)
     if len(seg) == 0:
