@@ -4,7 +4,10 @@ Validation uses 2,000 fixed lines written with fonts never trained on. The run s
 once the character error rate is ≤ 4 % and Turkish letters (ç ğ ı ö ş ü Ç Ğ İ Ö Ş Ü) are ≥ 97 %
 right, after at least --min-steps.
 
-usage: python train.py [--steps 120000] [--batch 48] [--workers 20] [--out DIR]"""
+With --real FILE (real_lines.py) a share of every batch is the user's own handwriting, changed a little
+each time, and the held-out real lines are measured at every evaluation too.
+
+usage: python train.py [--steps 120000] [--batch 48] [--workers 20] [--out DIR] [--real FILE]"""
 import argparse
 import datetime
 import math
@@ -18,6 +21,7 @@ from torch import nn
 from torch.utils.data import DataLoader, IterableDataset
 
 import font_lines
+import real_lines
 import synth
 from charset import NUM_CLASSES, decode, encode
 from model import CRNN
@@ -40,15 +44,17 @@ def collate(items):
 class Lines(IterableDataset):
     """Endless batches of synthetic lines; every worker has its own random stream."""
 
-    def __init__(self, fonts, batch, seed):
+    def __init__(self, fonts, batch, seed, real=None, real_share=0.0):
         self.fonts, self.batch, self.seed = fonts, batch, seed
+        self.real, self.real_share = real or [], real_share
 
     def __iter__(self):
         info = torch.utils.data.get_worker_info()
         rng = np.random.default_rng([self.seed, info.id if info else 0])
         pool = synth.FontPool(self.fonts, image_fonts=font_lines.training_fonts())
         while True:
-            yield collate([synth.make_line(rng, pool) for _ in range(self.batch)])
+            yield collate([real_lines.make_line(rng, self.real) if self.real and rng.random() < self.real_share
+                           else synth.make_line(rng, pool) for _ in range(self.batch)])
 
 
 def greedy(logits, lengths):
@@ -119,6 +125,8 @@ def main():
     ap.add_argument("--eval-every", type=int, default=2000)
     ap.add_argument("--resume", type=str, default=None, help="checkpoint whose weights to start from")
     ap.add_argument("--warmup", type=int, default=1000)
+    ap.add_argument("--real", type=str, default=None, help="the user's own lines (real_lines.py)")
+    ap.add_argument("--real-share", type=float, default=0.3)
     ap.add_argument("--out", type=str, default=str(RUNS / datetime.datetime.now().strftime("%Y%m%d-%H%M")))
     args = ap.parse_args()
     out = Path(args.out)
@@ -137,6 +145,10 @@ def main():
     val_pool = synth.FontPool(val_fonts)
     val = [collate([synth.make_line(rng, val_pool) for _ in range(50)]) for _ in range(40)]
     say(f"fonts {len(train_fonts)} train / {len(val_fonts)} held out; {sum(len(b[4]) for b in val)} validation lines")
+    real_train, real_val = real_lines.load(args.real) if args.real else ([], [])
+    real_batches = [collate(real_lines.images(real_val))] if real_val else []
+    if args.real:
+        say(f"real lines: {len(real_train)} to train on, {len(real_val)} held out")
 
     model = CRNN(NUM_CLASSES).to(device)
     if args.resume:
@@ -152,7 +164,7 @@ def main():
         return 1e-5 + (args.lr - 1e-5) * 0.5 * (1 + math.cos(math.pi * min(p, 1.0)))
 
     ctc = nn.CTCLoss(blank=0, zero_infinity=True)
-    loader = DataLoader(Lines(train_fonts, args.batch, 7), batch_size=None, num_workers=args.workers,
+    loader = DataLoader(Lines(train_fonts, args.batch, 7, real_train, args.real_share), batch_size=None, num_workers=args.workers,
                         persistent_workers=True, prefetch_factor=4, pin_memory=True)
     best = float("inf")
     t0 = time.time()
@@ -183,6 +195,12 @@ def main():
             say(f"eval step {step}: CER {cer:.4f} Turkish letters {tr:.4f} (best CER {best:.4f})")
             for truth, guess in examples[:4]:
                 say(f"   {truth!r} -> {guess!r}")
+            if real_batches:
+                real_cer, _, real_examples = evaluate(model, real_batches, device)
+                torch.save(state, out / f"step{step}.pt")
+                say(f"   real held-out CER {real_cer:.4f}")
+                for truth, guess in real_examples[:6]:
+                    say(f"   real {truth!r} -> {guess!r}")
             if step >= args.min_steps and cer <= 0.04 and tr >= 0.97:
                 say("target reached")
                 break
