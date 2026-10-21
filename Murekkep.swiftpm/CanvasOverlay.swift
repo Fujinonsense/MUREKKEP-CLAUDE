@@ -44,6 +44,46 @@ final class CanvasOverlayView: UIView {
             && shapeHandles.isEmpty && zoomBox == nil
     }
 
+    /// Everything the overlay draws, hashed: the canvas repaints the overlay only when this changes
+    /// (repainting a full-screen layer every frame while the pencil writes costs real time).
+    var signature: Int {
+        var h = Hasher()
+        func addPoint(_ p: CGPoint) {
+            h.combine(p.x)
+            h.combine(p.y)
+        }
+        func addRect(_ r: CGRect?) {
+            guard let r else { return h.combine(0) }
+            addPoint(r.origin)
+            h.combine(r.width)
+            h.combine(r.height)
+        }
+        addPoint(origin)
+        h.combine(zoom)
+        h.combine(instrument.map { String(describing: $0) })
+        h.combine(instrumentLabel)
+        if let l = liveLabel {
+            addPoint(l.point)
+            h.combine(l.text)
+        }
+        for path in previewPaths {
+            h.combine(path.count)
+            path.forEach(addPoint)
+        }
+        h.combine(lasso.count)
+        lasso.forEach(addPoint)
+        addRect(selection)
+        if let c = compass {
+            addPoint(c.center)
+            h.combine(c.radius)
+        }
+        if let pen = compassPen { addPoint(pen) }
+        h.combine(shapeHandles.count)
+        shapeHandles.forEach(addPoint)
+        addRect(zoomBox)
+        return h.finalize()
+    }
+
     private func view(_ p: CGPoint) -> CGPoint {
         CGPoint(x: origin.x + p.x * zoom, y: origin.y + p.y * zoom)
     }

@@ -103,7 +103,9 @@ enum WordCheck {
 }
 
 /// Text of PDF pages already read (repaired text layer, or OCR), kept on disk per note so a book is
-/// read only once. An empty file is a blank page.
+/// read only once. An empty file is a blank page. OCR is kept as ".ocr2": the ".ocr" files of earlier
+/// builds were read row by row across both columns of a page (before `ReadingOrder`), so they are
+/// dropped and those pages read once more.
 enum PageTextCache {
     private static var root: URL? {
         guard let support = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -117,12 +119,13 @@ enum PageTextCache {
 
     static func load(note: UUID, page: Int) -> (text: String, fromOCR: Bool)? {
         if let u = url(note, page, "txt"), let s = try? String(contentsOf: u, encoding: .utf8) { return (text: s, fromOCR: false) }
-        if let u = url(note, page, "ocr"), let s = try? String(contentsOf: u, encoding: .utf8) { return (text: s, fromOCR: true) }
+        if let u = url(note, page, "ocr2"), let s = try? String(contentsOf: u, encoding: .utf8) { return (text: s, fromOCR: true) }
+        if let old = url(note, page, "ocr") { try? FileManager.default.removeItem(at: old) }
         return nil
     }
 
     static func save(_ text: String, fromOCR: Bool, note: UUID, page: Int) {
-        guard let u = url(note, page, fromOCR ? "ocr" : "txt") else { return }
+        guard let u = url(note, page, fromOCR ? "ocr2" : "txt") else { return }
         try? FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? text.write(to: u, atomically: true, encoding: .utf8)
     }

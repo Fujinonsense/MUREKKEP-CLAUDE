@@ -132,6 +132,8 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var zoomBox: ZoomBox?
     /// The touch being handled came from the zoom panel: its points map through the box.
     private var zoomInput = false
+    /// What the overlay last painted (see `CanvasOverlayView.signature`).
+    private var lastOverlaySignature: Int?
 
     init(model: EditorModel) {
         self.model = model
@@ -853,7 +855,13 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private func overlayChanged() {
         let empty = overlay.isEmpty
         overlay.isHidden = empty
-        if !empty {
+        guard !empty else {
+            lastOverlaySignature = nil
+            return
+        }
+        let signature = overlay.signature
+        if signature != lastOverlaySignature {
+            lastOverlaySignature = signature
             overlay.setNeedsDisplay()
         }
     }

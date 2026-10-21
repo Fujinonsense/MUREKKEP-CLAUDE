@@ -449,10 +449,19 @@ final class AssistantModel: ObservableObject {
         let key = -1 - i
         let version = editor.pages[i].version
         if let cached = ocrCache[key], cached.version == version { return cached.text }
+        // Without ink the picture is the PDF page itself: its reading (by the Studio or an earlier
+        // question) is on disk and shared.
+        let noteID = editor.meta.id
+        let inkless = editor.pages[i].strokes.isEmpty && editor.pages[i].stickers.isEmpty
+        if inkless, let stored = PageTextCache.load(note: noteID, page: i), stored.fromOCR {
+            ocrCache[key] = (version: version, text: stored.text)
+            return stored.text
+        }
         status = label
         guard let image = editor.pageImage(i, longEdge: 2400, plainInk: true)?.cgImage else { return "" }
         let text = await PageOCR.recognize(image)
         ocrCache[key] = (version: version, text: text)
+        if inkless { PageTextCache.save(text, fromOCR: true, note: noteID, page: i) }
         return text
     }
 
