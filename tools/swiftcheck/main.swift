@@ -56,6 +56,56 @@ check(ReadingOrder.lines([gapWords]) == ["I think ___ sport is"], "blank between
 check(ReadingOrder.normalizeBlanks("Name .......... Date ……") == "Name ___ Date ___" && ReadingOrder.normalizeBlanks("fashion... ...is that") == "fashion... ...is that",
       "printed blanks")
 
+// MARK: Exercises (tests/test_exercises.py)
+
+func dump(_ found: [PageExercise]) -> String {
+    var out: [String] = []
+    for e in found {
+        out.append("E \(e.number) \(e.kind.rawValue) running=\(e.running ? 1 : 0) choices=\(e.choices.joined(separator: "|")) "
+            + "passage=\(e.passage == nil ? 0 : 1)")
+        out.append("I " + e.instruction)
+        out.append("C " + e.context)
+        for it in e.items {
+            let gaps = it.gaps.map { "\($0.number):\($0.given ?? "")" }.joined(separator: ",")
+            let opts = it.options.map { "\($0.letter):\($0.text)" }.joined(separator: "|")
+            out.append("  item \(it.number) [\(it.text)] gaps=\(gaps) options=\(opts)")
+        }
+        var fills: [Int: [String]] = [:]
+        for (k, u) in ExerciseSplitter.units(e).enumerated() {
+            out.append("  unit \(u.number) \(u.gaps.map { String($0.number) }.joined(separator: ",")) [\(u.text)] before=[\(u.before)]")
+            out.append("  P " + ExerciseSplitter.unitPrompt(e, u, before: u.before).replacingOccurrences(of: "\n", with: "⏎"))
+            let f = u.gaps.isEmpty
+                ? [e.choices.isEmpty ? "x" : e.choices[k % e.choices.count]]
+                : (0..<u.gaps.count).map { j in e.choices.isEmpty ? "x" : e.choices[(k + j) % e.choices.count] }
+            fills[u.number, default: []] += f
+        }
+        out.append("X " + ExerciseSplitter.exercisePrompt(e).replacingOccurrences(of: "\n", with: "⏎"))
+        var notes: [Int: String] = [:]
+        for n in fills.keys { notes[n] = "note \(n)" }
+        out.append("R " + ExerciseSplitter.render(e, fills: fills, notes: notes).replacingOccurrences(of: "\n", with: "⏎"))
+    }
+    return out.joined(separator: "\n")
+}
+
+let pageText = ReadingOrder.lines(scanPieces).joined(separator: "\n")
+check(ExerciseSplitter.split(pageText).map(\.number) == [1, 2, 3, 4, 5, 6], "page exercises from Swift's own reading order")
+for (i, item) in (vectors["exercises"] as! [[String: Any]]).enumerated() {
+    let got = dump(ExerciseSplitter.split(item["text"] as! String))
+    let want = item["dump"] as! String
+    let diff = zip(got.components(separatedBy: "\n"), want.components(separatedBy: "\n")).first { $0.0 != $0.1 }
+    check(got == want, "exercises \(i)" + (got == want ? "" : ": swift [\(diff?.0 ?? "-")] python [\(diff?.1 ?? "-")]"))
+}
+for item in vectors["choices"] as! [[String: Any]] {
+    let got = ExerciseSplitter.choices(item["instruction"] as! String)
+    check(got == item["choices"] as! [String], "choices \(item["instruction"]!): \(got)")
+}
+for item in vectors["articles"] as! [[String: Any]] {
+    let got = ExerciseSplitter.article(item["fill"] as! String, next: item["next"] as! String)
+    check(got == item["article"] as! String, "article \(item["fill"]!) \(item["next"]!): \(got)")
+}
+let numberedFill = ExerciseSplitter.fillNumbered("(7) ___ jeans were (8) ___ present and (9) ___ friend.", known: [7: "the", 9: "a"])
+check(numberedFill == vectors["fill_numbered"] as! String, "fill numbered: \(numberedFill)")
+
 // MARK: Chapters (tests/test_chapters.py)
 
 func chapters(_ name: String) -> [BookChapter] {
