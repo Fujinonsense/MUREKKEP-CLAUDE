@@ -172,6 +172,8 @@ final class EditorModel: ObservableObject {
             store.update(meta)
         }
     }
+    /// The zoom window's panel is open (writing large lands small in a box on the page).
+    @Published var zoomWindowOn = false
     @Published private(set) var pageCount: Int
     @Published private(set) var loadError: String?
 

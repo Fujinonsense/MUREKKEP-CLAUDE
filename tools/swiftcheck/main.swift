@@ -257,5 +257,19 @@ check(seekA?.id == takeA.id && seekA?.time == 10.5 && seekB?.id == takeB.id && s
 check(RecordingSync.seek(birth: 1000.5, recordings: [takeA])?.time == 0, "recording: first line seeks to zero")
 check(RecordingSync.seek(birth: 3000, recordings: [takeA, takeB]) == nil, "recording: ink outside takes does not seek")
 
+// MARK: Zoom window (ZoomBox)
+
+let zoomPage = CGSize(width: 600, height: 800)
+func zb(_ x: CGFloat, _ y: CGFloat) -> ZoomBox { ZoomBox(page: 0, rect: CGRect(x: x, y: y, width: 200, height: 60)) }
+check(zb(60, 100).advanced(pageSize: zoomPage, margin: 40).rect.origin == CGPoint(x: 210, y: 100), "zoom: moves on by 3/4 of its width")
+check(zb(300, 100).advanced(pageSize: zoomPage, margin: 40).rect.origin == CGPoint(x: 360, y: 100), "zoom: stops at the right margin")
+check(zb(360, 100).advanced(pageSize: zoomPage, margin: 40).rect.origin == CGPoint(x: 40, y: 151), "zoom: wraps to the next line")
+check(zb(360, 700).advanced(pageSize: zoomPage, margin: 40) == zb(360, 700), "zoom: stays at the bottom of the page")
+check(zb(210, 100).back(margin: 40).rect.origin == CGPoint(x: 60, y: 100) && zb(60, 100).back(margin: 40).rect.origin.x == 40,
+      "zoom: goes back to the margin")
+check(zb(250, 100).newLine(pageSize: zoomPage, margin: 40).rect.origin == CGPoint(x: 40, y: 151), "zoom: new line")
+let firstBox = ZoomBox.initial(page: 2, pageSize: zoomPage, margin: 40, aspect: 4)
+check(firstBox.page == 2 && firstBox.rect == CGRect(x: 40, y: 80, width: 240, height: 60), "zoom: first box \(firstBox.rect)")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

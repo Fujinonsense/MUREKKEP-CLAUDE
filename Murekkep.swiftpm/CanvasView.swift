@@ -127,6 +127,12 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var lastSqueezeEnd: CFTimeInterval = 0
     private let pencilGestures = UIPencilInteraction()
 
+    // Zoom window (see ZoomPanelView)
+    private var zoomPanel: ZoomPanelView?
+    private var zoomBox: ZoomBox?
+    /// The touch being handled came from the zoom panel: its points map through the box.
+    private var zoomInput = false
+
     init(model: EditorModel) {
         self.model = model
         let device = MTLCreateSystemDefaultDevice()
@@ -492,6 +498,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         lastCanvasSize = size
         lastLayoutAngle = pageAngle
         centerContent()
+        layoutZoomPanel()
         setNeedsRender()
     }
 
@@ -716,6 +723,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         if metalView.isPaused {
             metalView.setNeedsDisplay()
         }
+        zoomPanel?.requestRender()
     }
 
     private func updateClearColor() {
@@ -754,6 +762,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         refreshLoop()
         reportCurrentPage(origin: origin, zoom: zoom)
         updateOverlay(origin: origin, zoom: zoom)
+        zoomPanel?.requestRender()
     }
 
     /// Runs the display loop while ink on screen moves (sea, lava, grass, drying ink); otherwise the
@@ -829,6 +838,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         } else {
             overlay.shapeHandles = []
         }
+        overlay.zoomBox = zoomBox.map { $0.rect.offsetBy(dx: pageOrigin($0.page).x, dy: pageOrigin($0.page).y) }
         if let c = model.compass, model.tool == .compass {
             let o = pageOrigin(c.page)
             overlay.compass = (center: CGPoint(x: c.center.x + o.x, y: c.center.y + o.y), radius: c.radius)
@@ -899,14 +909,15 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     }
 
     private func sample(_ t: UITouch, origin: CGPoint) -> InputSample {
-        var p = t.preciseLocation(in: zoomContainer)
+        var p = docLocation(t)
         if let snap { p = snap.project(p) }
         let force: CGFloat = (t.type == .pencil || t.maximumPossibleForce > 0) ? t.force : 0
         var s = InputSample(location: CGPoint(x: p.x - origin.x, y: p.y - origin.y), force: force, timestamp: t.timestamp)
         if t.type == .pencil {
             s.isPencil = true
             s.altitude = t.altitudeAngle
-            s.azimuth = t.azimuthAngle(in: zoomContainer)
+            let azimuthView: UIView? = zoomInput ? zoomPanel?.inkView : zoomContainer
+            s.azimuth = t.azimuthAngle(in: azimuthView)
             if #available(iOS 17.5, *) {
                 s.roll = t.rollAngle
                 if abs(s.roll) > 0.02 && !model.pencilProDetected {
@@ -938,7 +949,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         if textBox != nil && model.tool != .text {
             finishTextBox()
         }
-        let docPoint = touch.preciseLocation(in: zoomContainer)
+        let docPoint = docLocation(touch)
         let zoom = docTransform.zoom
         // A finger on the ruler moves the ruler; it never draws.
         if touch.type == .direct, model.instrument?.contains(docPoint) == true {
@@ -987,7 +998,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             preparePaperSound(brush: nil)
             model.beginErase(page: page)
             erase(from: docPoint, to: docPoint)
-            showEraserRing(at: touch.location(in: rotationHost))
+            if !zoomInput { showEraserRing(at: touch.location(in: rotationHost)) }
         case .brush, .textPen:
             let brush = model.activeBrush
             guard let page = model.layout.page(containing: docPoint) else {
@@ -1045,7 +1056,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     }
 
     private func touchMoved(_ touch: UITouch, _ event: UIEvent) {
-        let docPoint = touch.preciseLocation(in: zoomContainer)
+        let docPoint = docLocation(touch)
         if let index = shapeHandleDrag {
             dragShapeHandle(index, to: docPoint)
             return
@@ -1055,11 +1066,11 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             guard eraserPage != nil else { return }
             let coalesced = event.coalescedTouches(for: touch) ?? [touch]
             for t in coalesced {
-                let p = t.preciseLocation(in: zoomContainer)
+                let p = docLocation(t)
                 erase(from: lastEraserPoint ?? p, to: p)
                 lastEraserPoint = p
             }
-            showEraserRing(at: touch.location(in: rotationHost))
+            if !zoomInput { showEraserRing(at: touch.location(in: rotationHost)) }
             paperSound(touch, event, brush: nil)
         case .brush, .textPen:
             guard var b = builder, var active = activeStroke else { return }
@@ -1105,7 +1116,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             endGestureState()
             return
         }
-        let docPoint = touch.preciseLocation(in: zoomContainer)
+        let docPoint = docLocation(touch)
         switch gestureTool {
         case .eraser:
             if eraserPage != nil { finishErasing() }
@@ -2339,5 +2350,142 @@ extension CanvasView: UITextViewDelegate {
         if textView === textBox {
             finishTextBox()
         }
+    }
+}
+
+// MARK: - Zoom window
+
+extension CanvasView {
+    /// The left and right margin the zoom box keeps on the page.
+    private static let zoomMargin: CGFloat = 36
+
+    /// Where a touch lands in the document: through the zoom box when it came from the zoom panel.
+    private func docLocation(_ t: UITouch) -> CGPoint {
+        if zoomInput, let panel = zoomPanel, let box = zoomBox {
+            let p = t.preciseLocation(in: panel.inkView)
+            let s = panel.scale(for: box.rect)
+            let o = pageOrigin(box.page)
+            return CGPoint(x: o.x + box.rect.minX + p.x / s, y: o.y + box.rect.minY + p.y / s)
+        }
+        return t.preciseLocation(in: zoomContainer)
+    }
+
+    /// Opens or closes the zoom window (EditorModel.zoomWindowOn).
+    func applyZoomWindow(on: Bool) {
+        guard on != (zoomPanel != nil) else { return }
+        if !on {
+            zoomPanel?.removeFromSuperview()
+            zoomPanel = nil
+            zoomBox = nil
+            refreshOverlay()
+            return
+        }
+        let panel = ZoomPanelView(device: metalView.device, pdfURL: model.pdfURL, isPDF: model.isPDF)
+        panel.source = { [weak self] in self?.zoomFrame() }
+        panel.gesture.onBegan = { [weak self] touch, event in self?.zoomTouchBegan(touch, event) }
+        panel.gesture.onMoved = { [weak self] touch, event in
+            guard let self, self.zoomInput else { return }
+            self.touchMoved(touch, event)
+        }
+        panel.gesture.onEnded = { [weak self] touch, event in self?.zoomTouchEnded(touch, event) }
+        panel.gesture.onCancelled = { [weak self] in
+            guard let self, self.zoomInput else { return }
+            self.touchCancelled()
+            self.zoomInput = false
+        }
+        panel.onBack = { [weak self] in self?.moveZoomBox { box, _ in box.back(margin: Self.zoomMargin) } }
+        panel.onNewLine = { [weak self] in
+            self?.moveZoomBox(turnsPage: true) { box, size in box.newLine(pageSize: size, margin: Self.zoomMargin) }
+        }
+        panel.onForward = { [weak self] in
+            self?.moveZoomBox(turnsPage: true) { box, size in box.advanced(pageSize: size, margin: Self.zoomMargin) }
+        }
+        panel.onClose = { [weak self] in self?.model.zoomWindowOn = false }
+        addSubview(panel)
+        zoomPanel = panel
+        layoutZoomPanel()
+        panel.layoutIfNeeded()
+        let page = min(max(model.currentPage, 0), max(model.layout.pageRects.count - 1, 0))
+        if model.layout.pageRects.indices.contains(page) {
+            zoomBox = ZoomBox.initial(page: page, pageSize: model.layout.pageRects[page].size, margin: Self.zoomMargin,
+                                      aspect: panel.aspect)
+        }
+        refreshOverlay()
+        setNeedsRender()
+    }
+
+    /// The panel along the bottom, a third of the canvas tall, clear of the page badge below it.
+    private func layoutZoomPanel() {
+        guard let panel = zoomPanel else { return }
+        let height = min(max(bounds.height * 0.3, 180), 320)
+        panel.frame = CGRect(x: 12, y: bounds.height - height - 64, width: bounds.width - 24, height: height)
+        // The box keeps the panel's shape (its height follows a new width or turn of the iPad).
+        if var box = zoomBox {
+            box.rect.size.height = (box.rect.width / max(panel.aspect, 1)).rounded()
+            zoomBox = box
+        }
+    }
+
+    private func zoomFrame() -> ZoomFrame? {
+        guard let box = zoomBox else { return nil }
+        let o = pageOrigin(box.page)
+        return ZoomFrame(pages: model.renderPages, layout: model.layout, paper: model.meta.paper, isPDF: model.isPDF,
+                         active: activeStroke, box: box.rect.offsetBy(dx: o.x, dy: o.y),
+                         dryDuration: model.settings.dryDuration, coolDuration: model.settings.lavaCoolDuration,
+                         animate: model.settings.animations, background: metalView.clearColor)
+    }
+
+    private func zoomTouchBegan(_ touch: UITouch, _ event: UIEvent) {
+        // The panel writes and erases; other tools work on the page itself.
+        switch model.tool {
+        case .brush, .textPen, .eraser:
+            break
+        default:
+            return
+        }
+        if pencilOnly && touch.type == .direct { return }
+        zoomInput = true
+        touchBegan(touch, event)
+    }
+
+    private func zoomTouchEnded(_ touch: UITouch, _ event: UIEvent) {
+        guard zoomInput else { return }
+        let inked = gestureTool.inks
+        touchEnded(touch, event)
+        zoomInput = false
+        // Writing that reached the dashed line moves the box on along the line.
+        guard inked, let box = zoomBox, model.pages.indices.contains(box.page),
+              let last = model.pages[box.page].strokes.last else { return }
+        let reach = box.rect.minX + box.rect.width * ZoomPanelView.advanceShare
+        if CGFloat(last.bounds.maxX) > reach {
+            moveZoomBox(turnsPage: true) { b, size in b.advanced(pageSize: size, margin: Self.zoomMargin) }
+        }
+    }
+
+    /// `turnsPage`: at the bottom of a page the box goes on to the next page's first line.
+    private func moveZoomBox(turnsPage: Bool = false, _ change: (ZoomBox, CGSize) -> ZoomBox) {
+        guard let box = zoomBox, model.layout.pageRects.indices.contains(box.page) else { return }
+        var next = change(box, model.layout.pageRects[box.page].size)
+        if next == box, turnsPage, model.layout.pageRects.indices.contains(box.page + 1) {
+            var first = ZoomBox.initial(page: box.page + 1, pageSize: model.layout.pageRects[box.page + 1].size,
+                                        margin: Self.zoomMargin, aspect: zoomPanel?.aspect ?? 4)
+            first.rect.size = box.rect.size
+            next = first
+        }
+        guard next != box else {
+            playHaptic(.alignment, at: nil)
+            return
+        }
+        zoomBox = next
+        // Keep the box in view on the page.
+        let o = pageOrigin(next.page)
+        let (origin, zoom) = docTransform
+        let visible = visibleDocRect(origin: origin, zoom: zoom)
+        let target = next.rect.offsetBy(dx: o.x, dy: o.y)
+        if !visible.insetBy(dx: 0, dy: visible.height * 0.1).contains(target) {
+            scrollToPage(next.page, animated: true)
+        }
+        refreshOverlay()
+        setNeedsRender()
     }
 }

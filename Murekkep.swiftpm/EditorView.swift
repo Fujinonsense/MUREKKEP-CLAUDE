@@ -56,7 +56,7 @@ struct EditorContent: View {
                 CanvasRepresentable(editor: editor, pencilOnly: settings.pencilOnly,
                                     animations: settings.animations, batterySaver: settings.batterySaver,
                                     pageAngle: settings.pageAngle, pageAngleLocked: settings.pageAngleLocked,
-                                    singlePage: editor.singlePage)
+                                    singlePage: editor.singlePage, zoomWindow: editor.zoomWindowOn)
                     .overlay {
                         GeometryReader { geo in
                             if let request = editor.palette {
@@ -217,6 +217,15 @@ struct EditorContent: View {
                 }
                 .accessibilityLabel(Loc.t("Ders kaydı"))
                 Button {
+                    editor.zoomWindowOn.toggle()
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .foregroundStyle(editor.zoomWindowOn ? Theme.ink : Color.accentColor)
+                        .padding(4)
+                        .background(Circle().fill(editor.zoomWindowOn ? Theme.ink.opacity(0.15) : Color.clear))
+                }
+                .accessibilityLabel(editor.zoomWindowOn ? Loc.t("Yakın yazmayı kapat") : Loc.t("Yakın yazma: büyük yaz, sayfaya küçük insin"))
+                Button {
                     export()
                 } label: {
                     Image(systemName: "square.and.arrow.up")
@@ -357,6 +366,7 @@ struct CanvasRepresentable: UIViewRepresentable {
     let pageAngle: Double
     let pageAngleLocked: Bool
     let singlePage: Bool
+    let zoomWindow: Bool
 
     func makeUIView(context: Context) -> CanvasView {
         CanvasView(model: editor)
@@ -367,6 +377,7 @@ struct CanvasRepresentable: UIViewRepresentable {
         view.applyRenderSettings(animations: animations, batterySaver: batterySaver)
         view.applyRotation(degrees: pageAngle, locked: pageAngleLocked)
         view.applyPageMode(single: singlePage)
+        view.applyZoomWindow(on: zoomWindow)
     }
 }
 

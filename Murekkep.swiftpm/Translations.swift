@@ -1029,5 +1029,10 @@ enum Translations {
         "Mürekkebi sesle birlikte göster": "Show the ink along with the sound",
         "Mürekkep sesle birlikte görünüyor": "The ink appears along with the sound",
         "Oynatma hızı": "Playback speed",
+        "Kutuyu geri al": "Move the box back",
+        "Alt satıra geç": "Go to the next line",
+        "Kutuyu ilerlet": "Move the box on",
+        "Yakın yazmayı kapat": "Close zoom writing",
+        "Yakın yazma: büyük yaz, sayfaya küçük insin": "Zoom writing: write large, it lands small on the page",
     ]
 }

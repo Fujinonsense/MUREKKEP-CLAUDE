@@ -19,6 +19,8 @@ final class CanvasOverlayView: UIView {
     var compassPen: CGPoint?
     /// Handles of a recognized shape (document space); the last one moves the whole shape.
     var shapeHandles: [CGPoint] = []
+    /// The zoom window's box (document space).
+    var zoomBox: CGRect?
 
     private let accent = UIColor(red: 0.10, green: 0.33, blue: 0.80, alpha: 1)
     /// Dash and gap of the lasso outline, in screen points (the pencil ticks once per period).
@@ -39,7 +41,7 @@ final class CanvasOverlayView: UIView {
 
     var isEmpty: Bool {
         instrument == nil && liveLabel == nil && previewPaths.isEmpty && lasso.isEmpty && selection == nil && compass == nil
-            && shapeHandles.isEmpty
+            && shapeHandles.isEmpty && zoomBox == nil
     }
 
     private func view(_ p: CGPoint) -> CGPoint {
@@ -48,6 +50,19 @@ final class CanvasOverlayView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        if let box = zoomBox {
+            let r = CGRect(origin: view(box.origin), size: CGSize(width: box.width * zoom, height: box.height * zoom))
+            let path = UIBezierPath(roundedRect: r, cornerRadius: 4)
+            ctx.saveGState()
+            ctx.setFillColor(accent.withAlphaComponent(0.06).cgColor)
+            ctx.addPath(path.cgPath)
+            ctx.fillPath()
+            ctx.setStrokeColor(accent.withAlphaComponent(0.8).cgColor)
+            ctx.setLineWidth(1.5)
+            ctx.addPath(path.cgPath)
+            ctx.strokePath()
+            ctx.restoreGState()
+        }
         if let instrument {
             drawInstrument(instrument, in: ctx)
         }
