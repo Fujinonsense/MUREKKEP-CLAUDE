@@ -5,7 +5,11 @@ drawing order, sloppy), 25 % from handwriting-font skeletons chained into pen tr
 the model also copes with strokes in an unusual order. Validation: 2,000 kinematic lines from a seed
 never trained on, and 1,000 trail lines from the held-out fonts.
 
-usage: python train_online.py [--steps 60000] [--batch 64] [--workers 16] [--out DIR]"""
+With --real FILE (real_lines.py: the user's own lines, strokes in the order they were written) a
+share of every batch is the user's writing, changed a little each time with its stroke order kept,
+and the held-out real lines are measured too.
+
+usage: python train_online.py [--steps 60000] [--batch 64] [--workers 16] [--out DIR] [--real FILE]"""
 import argparse
 import datetime
 import math
@@ -20,6 +24,7 @@ from torch.utils.data import DataLoader, IterableDataset
 
 import kinematic
 import online
+import real_lines
 import synth
 import texts
 import trails
@@ -37,9 +42,12 @@ def trail_sample(rng, pool, text=None):
     return [[(x, y) for x, y in t] for t in trails.polylines(seg)], text
 
 
-def item(rng, pool, trail_share=TRAIL_SHARE):
+def item(rng, pool, trail_share=TRAIL_SHARE, real=None, real_share=0.0):
     """(features, text) or None when the line is too short for its text."""
-    if rng.random() < trail_share:
+    if real and rng.random() < real_share:
+        text, strokes = real[int(rng.integers(len(real)))]
+        got = [s.tolist() for s in real_lines.augment(rng, strokes)], text
+    elif rng.random() < trail_share:
         got = trail_sample(rng, pool)
     else:
         got = kinematic.make_sample(rng)
@@ -64,8 +72,9 @@ def collate(items):
 
 
 class Lines(IterableDataset):
-    def __init__(self, fonts, batch, seed):
+    def __init__(self, fonts, batch, seed, real=None, real_share=0.0):
         self.fonts, self.batch, self.seed = fonts, batch, seed
+        self.real, self.real_share = real or [], real_share
 
     def __iter__(self):
         info = torch.utils.data.get_worker_info()
@@ -74,7 +83,7 @@ class Lines(IterableDataset):
         while True:
             items = []
             while len(items) < self.batch:
-                it = item(rng, pool)
+                it = item(rng, pool, real=self.real, real_share=self.real_share)
                 if it is not None:
                     items.append(it)
             yield collate(items)
@@ -134,6 +143,8 @@ def main():
     ap.add_argument("--warmup", type=int, default=1000)
     ap.add_argument("--eval-every", type=int, default=2000)
     ap.add_argument("--resume", type=str, default=None)
+    ap.add_argument("--real", type=str, default=None)
+    ap.add_argument("--real-share", type=float, default=0.25)
     ap.add_argument("--out", type=str, default=str(RUNS / ("online-" + datetime.datetime.now().strftime("%Y%m%d-%H%M"))))
     args = ap.parse_args()
     out = Path(args.out)
@@ -153,6 +164,8 @@ def main():
     val_kin = fixed(rng, lambda r: item(r, val_pool, trail_share=0.0), 2000)
     val_trail = fixed(rng, lambda r: item(r, val_pool, trail_share=1.0), 1000)
     say(f"device {device}; validation {sum(len(b[4]) for b in val_kin)} kinematic + {sum(len(b[4]) for b in val_trail)} trail lines")
+    real_train, real_val = real_lines.load(args.real) if args.real else ([], [])
+    val_real = [collate([(online.features([s.tolist() for s in st]), t) for t, st in real_val])] if real_val else []
 
     model = online.OnlineNet(NUM_CLASSES).to(device)
     if args.resume:
@@ -167,7 +180,7 @@ def main():
         t = (step - args.warmup) / max(1, args.steps - args.warmup)
         return args.lr * (0.01 + 0.99 * 0.5 * (1 + math.cos(math.pi * t)))
 
-    loader = DataLoader(Lines(train_fonts, args.batch, 11), batch_size=None, num_workers=args.workers,
+    loader = DataLoader(Lines(train_fonts, args.batch, 11, real_train, args.real_share), batch_size=None, num_workers=args.workers,
                         persistent_workers=True, prefetch_factor=4)
     best = math.inf
     started = time.time()
@@ -189,6 +202,10 @@ def main():
             kin = evaluate(model, val_kin, device)
             tr = evaluate(model, val_trail, device)
             score = kin + tr
+            if val_real:
+                real_cer = evaluate(model, val_real, device)
+                score = real_cer
+                say(f"   real held-out CER {real_cer:.4f}")
             if score < best:
                 best = score
                 torch.save(model.state_dict(), out / "best.pt")
