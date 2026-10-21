@@ -222,5 +222,24 @@ check(InkLayer.reuse(key: layerKey, old: layerKey, contentFPS: 30, age: 0.02), "
 check(!InkLayer.reuse(key: layerKey, old: layerKey, contentFPS: 30, age: 0.04), "layer: 30 fps ink moves on after 1/30 s")
 check(!InkLayer.reuse(key: layerKey, old: nil, contentFPS: 0, age: 0), "layer: no layer yet")
 
+// MARK: Pen sound (tests/test_pen_sound.py)
+
+var envelope = PenSoundEnvelope()
+var penLevels: [Double] = []
+for i in 0...120 {
+    let t = Double(i) / 240
+    let x = 160 * t + 14 * sin(2 * Double.pi * 6 * t)
+    let y = 14 * cos(2 * Double.pi * 6 * t)
+    penLevels.append(envelope.update(x: x, y: y, time: t, force: 1.3))
+}
+let penWant = [0.254202910267, 0.615480249498, 0.748007018803, 0.694638672664, 0.881360124266]
+let penGot = [1, 5, 30, 60, 120].map { penLevels[$0] }
+check(zip(penGot, penWant).allSatisfy { abs($0 - $1) < 1e-9 }, "pen sound: loops match python \(penGot)")
+var glide = 0.0
+for _ in 0..<529 {
+    glide += (1 - glide) * PenSoundEnvelope.attack
+}
+check(abs(glide - 0.929464180816) < 1e-9, "pen sound: attack glide \(glide)")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

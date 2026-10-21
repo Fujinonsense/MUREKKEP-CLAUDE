@@ -82,7 +82,6 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var gestureTool: ToolKind = .brush(.pen)
     /// A held drawing recognized as a heart or face; its suggestions open when the pencil lifts.
     private var pendingSketch: PendingSketch?
-    private var lastSoundSample: (point: CGPoint, time: TimeInterval)?
     /// Name of the shape the held stroke snapped to (for the live size/turn label).
     private var snappedTitle: String?
 
@@ -985,6 +984,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             if squeezeIsHeld { erasedDuringSqueeze = true }
             eraserPage = page
             lastEraserPoint = docPoint
+            preparePaperSound(brush: nil)
             model.beginErase(page: page)
             erase(from: docPoint, to: docPoint)
             showEraserRing(at: touch.location(in: rotationHost))
@@ -1010,6 +1010,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
                 b.add(s)
             }
             builder = b
+            preparePaperSound(brush: brush)
             strokeStart = Date().timeIntervalSinceReferenceDate
             activeStroke = ActiveStroke(page: page, brush: brush, color: b.color, width: b.width, seed: b.seed,
                                         points: b.preview(predicted: predicted(touch, event, origin: origin)),
@@ -1059,7 +1060,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
                 lastEraserPoint = p
             }
             showEraserRing(at: touch.location(in: rotationHost))
-            paperSound(touch, brush: nil)
+            paperSound(touch, event, brush: nil)
         case .brush, .textPen:
             guard var b = builder, var active = activeStroke else { return }
             let origin = model.layout.pageRects[active.page].origin
@@ -1069,7 +1070,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             builder = b
             active.points = b.preview(predicted: predicted(touch, event, origin: origin))
             activeStroke = active
-            paperSound(touch, brush: active.brush)
+            paperSound(touch, event, brush: active.brush)
             // A snapped shape follows the pencil: show its size and turn.
             if let title = snappedTitle, let adjustment = b.shapeAdjustment, let tip = b.tip {
                 let o = model.layout.pageRects[active.page].origin
@@ -1207,20 +1208,24 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     // MARK: - Paper sound
 
-    /// Feeds the pencil's speed and pressure to the paper sound (off when the setting is off).
-    private func paperSound(_ touch: UITouch, brush: Brush?) {
+    /// Feeds every sample of the pencil (the coalesced ones too: the turns of letters are in them) to
+    /// the pen sound (off when the setting is off).
+    private func paperSound(_ touch: UITouch, _ event: UIEvent, brush: Brush?) {
         guard model.settings.paperSound else { return }
-        let p = touch.location(in: self)
-        defer { lastSoundSample = (p, touch.timestamp) }
-        guard let last = lastSoundSample else { return }
-        let dt = max(touch.timestamp - last.time, 1.0 / 240)
-        let speed = hypot(p.x - last.point.x, p.y - last.point.y) / CGFloat(dt)
-        let pressure: CGFloat = touch.type == .pencil ? touch.force : 1
-        PaperSound.shared.write(speed: speed, pressure: pressure, brush: brush, level: model.settings.paperSoundLevel)
+        let level = model.settings.paperSoundLevel
+        for t in event.coalescedTouches(for: touch) ?? [touch] {
+            let pressure: CGFloat = t.type == .pencil ? t.force : 1
+            PaperSound.shared.write(point: t.location(in: self), time: t.timestamp, force: pressure, brush: brush, level: level)
+        }
+    }
+
+    /// Pencil down: the pen's sound is readied before the line starts, so it is heard from its start.
+    private func preparePaperSound(brush: Brush?) {
+        guard model.settings.paperSound else { return }
+        PaperSound.shared.prepare(brush: brush, level: model.settings.paperSoundLevel)
     }
 
     private func stopPaperSound() {
-        lastSoundSample = nil
         PaperSound.shared.lift()
     }
 
