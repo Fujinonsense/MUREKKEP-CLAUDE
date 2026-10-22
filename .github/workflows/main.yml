@@ -8,6 +8,11 @@ on:
         type: choice
         options: [macos-26, macos-26-intel]
         default: macos-26
+      edition:
+        description: "Surum (appstore: Murekkep Pro satan App Store surumu)"
+        type: choice
+        options: [personal, appstore]
+        default: personal
   push:
     branches: [ main, master ]
 
@@ -17,6 +22,8 @@ jobs:
     # compiled in only with an iOS 26 SDK. When no arm64 Mac picks the job up, GitHub cancels it;
     # the Intel image has the same Xcode at the same path.
     runs-on: ${{ inputs.runner || 'macos-26' }}
+    env:
+      EDITION: ${{ inputs.edition || 'personal' }}
     steps:
       - name: Projeyi Indir
         uses: actions/checkout@v4
@@ -301,7 +308,7 @@ jobs:
                   INFOPLIST_FILE: AppSource/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
-                  CURRENT_PROJECT_VERSION: "24"
+                  CURRENT_PROJECT_VERSION: "25"
                   SWIFT_VERSION: "5.0"
                   TARGETED_DEVICE_FAMILY: "1,2"
                   ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -339,7 +346,7 @@ jobs:
                   INFOPLIST_FILE: AppSource/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
-                  CURRENT_PROJECT_VERSION: "24"
+                  CURRENT_PROJECT_VERSION: "25"
                   SWIFT_VERSION: "5.0"
                   SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MUREKKEP_PLAIN"
                   TARGETED_DEVICE_FAMILY: "1,2"
@@ -349,6 +356,22 @@ jobs:
                   CODE_SIGNING_ALLOWED: NO
                   ENABLE_USER_SCRIPT_SANDBOXING: NO
           EOF
+
+          # App Store surumu: her sey acik yerine Murekkep Pro'yu satar (APPSTORE bayragi, StoreKit).
+          # project.yml'den MLX'siz proje kesilmeden once eklenir; uc derleme de bayragi alir.
+          if [ "$EDITION" = "appstore" ]; then
+          python3 - << 'PYEOF'
+          for name in ["project.yml", "project-plain.yml"]:
+              text = open(name, encoding="utf-8").read()
+              if "MUREKKEP_PLAIN" in text:
+                  text = text.replace("MUREKKEP_PLAIN\"", "MUREKKEP_PLAIN APPSTORE\"")
+              else:
+                  text = text.replace("SWIFT_VERSION: \"5.0\"",
+                                      "SWIFT_VERSION: \"5.0\"\n        SWIFT_ACTIVE_COMPILATION_CONDITIONS: \"$(inherited) APPSTORE\"")
+              assert "APPSTORE" in text, name
+              open(name, "w", encoding="utf-8").write(text)
+          PYEOF
+          fi
 
           # MLX'siz proje: tam proje, indirilebilir model (MLX) paketleri olmadan. MLX derlenemezse
           # sesler ve Apple'in cihaz modeli bununla korunur.
@@ -461,8 +484,10 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Murekkep.app Payload/
-          zip -qry Murekkep.ipa Payload
-          ls -la Murekkep.ipa
+          IPA=Murekkep.ipa
+          if [ "$EDITION" = "appstore" ]; then IPA=Murekkep-AppStore.ipa; fi
+          zip -qry "$IPA" Payload
+          ls -la "$IPA"
 
       - name: Derleme Hatalarini Goster
         if: failure()
@@ -477,5 +502,5 @@ jobs:
       - name: IPA Dosyasini Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: Murekkep-IPA
-          path: Murekkep.ipa
+          name: ${{ inputs.edition == 'appstore' && 'Murekkep-AppStore' || 'Murekkep-IPA' }}
+          path: Murekkep*.ipa

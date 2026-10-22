@@ -8,6 +8,7 @@ struct TemplateGallery: View {
     let onPick: (PaperStyle) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var category: TemplateCategory?
+    @ObservedObject private var pro = ProStore.shared
 
     private let columns = [GridItem(.adaptive(minimum: 118, maximum: 168), spacing: 18)]
 
@@ -69,7 +70,12 @@ struct TemplateGallery: View {
     }
 
     private func tile(_ style: PaperStyle) -> some View {
-        Button {
+        let locked = ProPlan.isPremium(template: style.rawValue) && pro.locks
+        return Button {
+            if locked {
+                _ = pro.unlock(.premiumTemplate)
+                return
+            }
             onPick(style)
             dismiss()
         } label: {
@@ -80,6 +86,12 @@ struct TemplateGallery: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(Theme.ink, lineWidth: current == style ? 3 : 0)
                     )
+                    .overlay(alignment: .topTrailing) {
+                        if locked {
+                            ProLockBadge()
+                                .padding(6)
+                        }
+                    }
                 HStack(spacing: 5) {
                     Image(systemName: style.symbol)
                     Text(style.title)

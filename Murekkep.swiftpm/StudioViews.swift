@@ -391,6 +391,8 @@ struct StudioCreateSheet: View {
             UserDefaults.standard.set(data, forKey: Self.lastKey)
         }
         let picked = bookSource == nil ? [] : chapters.filter { chosenChapters.contains($0.id) }
+        // On the free plan each video counts; with too few left the Pro page opens over this sheet.
+        guard ProStore.shared.use(.overview, count: max(1, picked.count)) else { return }
         if picked.isEmpty {
             studio.start(options: options, sources: chosen, sectionID: request.sectionID, engine: engine,
                          library: library, settings: settings)

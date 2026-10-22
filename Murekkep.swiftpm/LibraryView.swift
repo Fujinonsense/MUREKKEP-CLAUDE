@@ -136,7 +136,7 @@ struct LibraryView: View {
                 }
             }
             .overlay(alignment: .bottom) { finishedBanner }
-            .background(Theme.libraryBackground.ignoresSafeArea())
+            .modifier(LibraryBackdrop())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: UUID.self) { id in
                 if let note = store.note(id) {

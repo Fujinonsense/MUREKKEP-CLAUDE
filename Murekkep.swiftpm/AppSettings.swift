@@ -158,6 +158,16 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(autoBrainDownload, forKey: "autoBrainDownload") }
     }
 
+    /// The background behind the library (AppBackgrounds); a Pro one shows only with Pro.
+    @Published var appBackground: AppBackground {
+        didSet { UserDefaults.standard.set(appBackground.rawValue, forKey: "appBackground") }
+    }
+
+    /// Pens given a heart in the pen panel: they always stand in the notebook's pen bar.
+    @Published var favoriteBrushes: [Brush] {
+        didSet { UserDefaults.standard.set(favoriteBrushes.map { Int($0.rawValue) }, forKey: "favoriteBrushes") }
+    }
+
     init() {
         let d = UserDefaults.standard
         d.register(defaults: [
@@ -189,6 +199,7 @@ final class AppSettings: ObservableObject {
             "flowerLevel": 1,
             "textOnlyPDF": false,
             "autoBrainDownload": true,
+            "appBackground": (ProPlan.sells ? AppBackground.paper : AppBackground.ruled).rawValue,
         ])
         language = AppLanguage.stored
         engine = AIEngine.migrated(AIEngine(rawValue: d.string(forKey: "engine") ?? ""))
@@ -245,7 +256,18 @@ final class AppSettings: ObservableObject {
         dryDuration = min(max(d.double(forKey: "dryDuration"), 1), 20)
         lavaCoolDuration = min(max(d.double(forKey: "lavaCoolDuration"), 2), 20)
         flowerLevel = min(max(d.integer(forKey: "flowerLevel"), 0), 2)
+        appBackground = AppBackground(rawValue: d.string(forKey: "appBackground") ?? "") ?? .paper
+        favoriteBrushes = (d.array(forKey: "favoriteBrushes") as? [Int] ?? []).compactMap { Brush(rawValue: UInt8(clamping: $0)) }
         hasAPIKey = (Keychain.read(account: Self.keyAccount) ?? d.string(forKey: Self.fallbackKey)) != nil
+    }
+
+    func toggleFavorite(_ brush: Brush) {
+        favoriteBrushes = PenStrip.toggled(brush, in: favoriteBrushes)
+    }
+
+    /// The background to draw: a Pro one falls back to paper while Pro is locked.
+    func shownBackground(locked: Bool) -> AppBackground {
+        appBackground.isPremium && locked ? .paper : appBackground
     }
 
     var apiKey: String? {
@@ -294,11 +316,13 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(Double(w), forKey: "width.\(brush.rawValue)")
     }
 
-    /// Pens picked most recently (newest first); a new user starts with the writing pens.
+    /// Pens picked most recently (newest first); a new user starts with the writing pens (in the App
+    /// Store edition the free ones).
     var recentBrushes: [Brush] {
         let raw = UserDefaults.standard.array(forKey: "recentBrushes") as? [Int] ?? []
         let list = raw.compactMap { Brush(rawValue: UInt8(clamping: $0)) }
-        return list.isEmpty ? [.pen, .pencil, .fountain, .highlighter] : list
+        guard list.isEmpty else { return list }
+        return ProPlan.sells ? [.pen, .pencil, .calligraphy, .highlighter] : [.pen, .pencil, .fountain, .highlighter]
     }
 
     func rememberBrush(_ brush: Brush) {

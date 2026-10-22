@@ -436,11 +436,10 @@ struct FloatingToolPalette: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: collapsed)
     }
 
-    /// The pens in the strip: the five used last, in the panel's order, so a pen keeps its place
-    /// when it is picked.
-    private var stripBrushes: [Brush] {
-        let recent = Set(settings.recentBrushes.prefix(5))
-        return Brush.paletteOrder.filter { recent.contains($0) }
+    /// The pens in the strip: the ones with a heart always, then the ones used last (PenStrip), each
+    /// in the panel's order so a pen keeps its place when it is picked.
+    private var strip: (favorites: [Brush], recent: [Brush]) {
+        PenStrip.pens(favorites: settings.favoriteBrushes, recent: settings.recentBrushes, order: Brush.paletteOrder)
     }
 
     /// Opens the panel with every pen.
@@ -502,7 +501,18 @@ struct FloatingToolPalette: View {
             allPensButton
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .bottom, spacing: 6) {
-                    ForEach(stripBrushes) { brush in
+                    let pens = strip
+                    ForEach(pens.favorites) { brush in
+                        penButton(brush)
+                    }
+                    if !pens.favorites.isEmpty && !pens.recent.isEmpty {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.14))
+                            .frame(width: 1.5, height: 28)
+                            .padding(.horizontal, 3)
+                            .padding(.bottom, 10)
+                    }
+                    ForEach(pens.recent) { brush in
                         penButton(brush)
                     }
                     textPenButton

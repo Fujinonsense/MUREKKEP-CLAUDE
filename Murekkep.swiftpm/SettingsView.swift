@@ -11,11 +11,15 @@ struct SettingsView: View {
     @State private var checkingServer = false
     @State private var showClaude = false
     @State private var showServer = false
+    @State private var showPrivacy = false
+    @ObservedObject private var pro = ProStore.shared
 
     var body: some View {
         NavigationStack {
             Form {
+                proSection
                 languageSection
+                backgroundSection
                 brainSection
                 engineSection
                 internetSection
@@ -26,11 +30,73 @@ struct SettingsView: View {
             }
             .navigationTitle(Loc.t("Ayarlar"))
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showPrivacy) {
+                PrivacyNote()
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(Loc.t("Bitti")) { dismiss() }
                 }
             }
+        }
+    }
+
+    // MARK: Mürekkep Pro (App Store edition)
+
+    @ViewBuilder
+    private var proSection: some View {
+        if ProStore.sells {
+            Section {
+                if pro.isPro {
+                    Label(Loc.t("Mürekkep Pro açık"), systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(Theme.ink)
+                    Button(Loc.t("Aboneliği yönet")) {
+                        Task { await pro.manageSubscription() }
+                    }
+                } else {
+                    Button {
+                        Paywall.present()
+                    } label: {
+                        Label(Loc.t("Mürekkep Pro'ya geç"), systemImage: "sparkles")
+                    }
+                    LabeledContent(Loc.t("Bugün kalan yapay zekâ cevabı"), value: "\(pro.remaining(.aiAnswer))")
+                    LabeledContent(Loc.t("Bu hafta kalan video ya da sesli özet"), value: "\(pro.remaining(.overview))")
+                    LabeledContent(Loc.t("Bu hafta kalan çalışma seti"), value: "\(pro.remaining(.studySet))")
+                }
+                Button(Loc.t("Satın alımları geri yükle")) {
+                    Task { await pro.restore() }
+                }
+                Button(Loc.t("Gizlilik")) {
+                    showPrivacy = true
+                }
+                if let message = pro.message {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text(verbatim: "Mürekkep Pro")
+            } footer: {
+                if !pro.isPro {
+                    Text(Loc.t("Ücretsiz planda günde {0} yapay zekâ cevabı, haftada {1} özet ve {2} çalışma seti var. Defterler, PDF'ler, kalemler ve metin kalemi hep ücretsiz.",
+                               "\(ProPlan.dailyAnswers)", "\(ProPlan.weeklyOverviews)", "\(ProPlan.weeklyStudySets)"))
+                }
+            }
+        }
+    }
+
+    // MARK: Background
+
+    private var backgroundSection: some View {
+        Section {
+            AppBackgroundPicker(selection: $settings.appBackground)
+                .padding(.vertical, 6)
+        } header: {
+            Text(Loc.t("Kitaplık arka planı"))
+        } footer: {
+            Text(ProStore.sells
+                 ? Loc.t("Düz renkler ücretsiz; ebru, defter ve hareketli arka planlar Mürekkep Pro'da. Hareketli olanlar animasyonlar kapalıyken, pil tasarrufunda ve Hareketi Azalt açıkken durur.")
+                 : Loc.t("Hareketli arka planlar animasyonlar kapalıyken, pil tasarrufunda ve Hareketi Azalt açıkken durur."))
         }
     }
 

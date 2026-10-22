@@ -372,6 +372,7 @@ struct StudyCreateSheet: View {
     private func create() {
         let chosen = candidates.filter { selected.contains($0.id) }
         guard !chosen.isEmpty else { return }
+        guard ProStore.shared.use(.studySet) else { return }
         study.start(options: StudyOptions(kind: kind, english: english, count: count), sources: chosen,
                     sectionID: request.sectionID, engine: engine, library: library, settings: settings)
         dismiss()

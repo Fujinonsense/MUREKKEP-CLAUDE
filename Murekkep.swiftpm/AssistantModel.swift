@@ -168,6 +168,9 @@ final class AssistantModel: ObservableObject {
                 return
             }
             apiKey = key
+        } else if !MainActor.assumeIsolated({ ProStore.shared.use(.aiAnswer) }) {
+            // The free plan's answers for today are used up; the Pro page is open.
+            return
         }
         if text == nil { draft = "" }
 

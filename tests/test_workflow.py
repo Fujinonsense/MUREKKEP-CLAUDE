@@ -122,3 +122,20 @@ def test_mlx_has_its_own_fallback(job):
     assert metal.get("continue-on-error") is True
     order = [s.get("id") or s.get("name") for s in job["steps"]]
     assert order.index("build") < order.index("nomlx")
+
+
+def test_app_store_edition_can_be_chosen(job):
+    """The App Store edition (APPSTORE flag) sells Mürekkep Pro; it comes out as Murekkep-AppStore."""
+    triggers = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))[True]
+    edition = triggers["workflow_dispatch"]["inputs"]["edition"]
+    assert edition["options"] == ["personal", "appstore"] and edition["default"] == "personal"
+    assert job["env"]["EDITION"] == "${{ inputs.edition || 'personal' }}"
+    script = runs(job)
+    assert 'SWIFT_ACTIVE_COMPILATION_CONDITIONS: \\"$(inherited) APPSTORE\\"' in script
+    assert "MUREKKEP_PLAIN APPSTORE" in script
+    # Patched before the MLX-less project is cut from project.yml, so all three builds get the flag.
+    assert script.index("MUREKKEP_PLAIN APPSTORE") < script.index('open("project-nomlx.yml", "w"')
+    assert "Murekkep-AppStore.ipa" in script
+    upload = step_with(job, "actions/upload-artifact@v4")
+    assert upload["with"]["name"] == "${{ inputs.edition == 'appstore' && 'Murekkep-AppStore' || 'Murekkep-IPA' }}"
+    assert upload["with"]["path"] == "Murekkep*.ipa"

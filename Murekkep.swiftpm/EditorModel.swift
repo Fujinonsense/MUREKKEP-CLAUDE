@@ -294,6 +294,11 @@ final class EditorModel: ObservableObject {
 
     /// Picks a tool from the palette and confirms it with a haptic tick.
     func select(_ newTool: ToolKind) {
+        // The 3D inks are Mürekkep Pro's in the App Store edition.
+        if case let .brush(brush) = newTool, brush.isPremium,
+           !MainActor.assumeIsolated({ ProStore.shared.unlock(.premiumInk) }) {
+            return
+        }
         tool = newTool
         onHaptic?(.selection)
     }

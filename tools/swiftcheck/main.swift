@@ -477,5 +477,52 @@ check(BrainDownloadPlan.merge(status: 200, rangeStart: nil, partSize: 0, receive
 check(BrainDownloadPlan.rangeStart("bytes 300-999/1000") == 300 && BrainDownloadPlan.rangeStart(nil) == nil
       && BrainDownloadPlan.rangeStart("bytes */1000") == nil, "brain download: Content-Range")
 
+// Mürekkep Pro: what the free plan allows (ProPlan).
+var proCalendar = Calendar(identifier: .iso8601)
+proCalendar.timeZone = TimeZone(identifier: "Europe/Istanbul")!
+func day(_ text: String) -> Date { ISO8601DateFormatter().date(from: text + "T12:00:00+03:00")! }
+var usage = ProPlan.Usage()
+let wednesday = day("2026-10-21")
+for _ in 0..<ProPlan.dailyAnswers { check(usage.consume(.aiAnswer, isPro: false, on: wednesday, calendar: proCalendar), "pro: free answers") }
+check(!usage.consume(.aiAnswer, isPro: false, on: wednesday, calendar: proCalendar), "pro: the 16th answer of a day waits")
+check(usage.remaining(.aiAnswer, on: wednesday, calendar: proCalendar) == 0
+      && usage.remaining(.aiAnswer, on: day("2026-10-22"), calendar: proCalendar) == ProPlan.dailyAnswers,
+      "pro: answers come back the next day")
+check(usage.consume(.aiAnswer, isPro: true, on: wednesday, calendar: proCalendar), "pro: Pro answers without a limit")
+check(usage.consume(.overview, isPro: false, on: wednesday, calendar: proCalendar)
+      && !usage.consume(.overview, isPro: false, on: day("2026-10-25"), calendar: proCalendar)
+      && usage.consume(.overview, isPro: false, on: day("2026-10-26"), calendar: proCalendar),
+      "pro: one overview a week (ISO weeks start on Monday)")
+var sets = ProPlan.Usage()
+for _ in 0..<ProPlan.weeklyStudySets { _ = sets.consume(.studySet, isPro: false, on: wednesday, calendar: proCalendar) }
+check(!sets.consume(.studySet, isPro: false, on: wednesday, calendar: proCalendar), "pro: three study sets a week")
+check(!ProPlan.Usage().allows(.premiumInk, isPro: false, on: wednesday, calendar: proCalendar)
+      && ProPlan.Usage().allows(.premiumInk, isPro: true, on: wednesday, calendar: proCalendar),
+      "pro: premium inks only with Pro")
+check(ProPlan.products.map(\.id) == ["murekkep.pro.monthly", "murekkep.pro.yearly", "murekkep.pro.lifetime"]
+      && ProPlan.products.allSatisfy { !$0.fallbackPriceTR.isEmpty && !$0.fallbackPriceUS.isEmpty },
+      "pro: the three plans")
+check(ProPlan.isPremium(template: "resume") && !ProPlan.isPremium(template: "cornell") && !ProPlan.isPremium(template: "lined"),
+      "pro: templates")
+check(ProPlan.yearlySaving(monthly: 129.99, yearly: 899.99) == 42 && ProPlan.yearlySaving(monthly: 3.99, yearly: 24.99) == 47
+      && ProPlan.yearlySaving(monthly: 0, yearly: 10) == 0 && ProPlan.yearlySaving(monthly: 1, yearly: 20) == 0,
+      "pro: the yearly plan's saving")
+check(ProPlan.products.allSatisfy { $0.fallbackAmountTR > 0 && $0.fallbackAmountUS > 0 }, "pro: planned amounts")
+
+// The notebook's pen bar: favourites first, then the pens used last.
+let order = ["pen", "pencil", "fountain", "marker", "highlighter", "lava", "gold", "brush"]
+let noFavourites = PenStrip.pens(favorites: [String](), recent: ["gold", "pen", "brush", "pencil", "lava", "marker"], order: order)
+check(noFavourites.favorites.isEmpty && noFavourites.recent == ["pen", "pencil", "lava", "gold", "brush"],
+      "pen bar: without favourites, the five used last in the panel's order")
+let withFavourites = PenStrip.pens(favorites: ["gold", "pencil"], recent: ["gold", "pen", "brush", "pencil", "lava"], order: order)
+check(withFavourites.favorites == ["pencil", "gold"] && withFavourites.recent == ["pen", "lava", "brush"],
+      "pen bar: favourites stay, recent pens fill up to five")
+let manyFavourites = PenStrip.pens(favorites: ["pen", "pencil", "fountain", "marker", "highlighter", "lava"],
+                                   recent: ["brush", "gold", "pen"], order: order)
+check(manyFavourites.favorites.count == 6 && manyFavourites.recent == ["gold", "brush"],
+      "pen bar: two recent pens stay beside many favourites")
+check(PenStrip.toggled("gold", in: ["pen"]) == ["pen", "gold"] && PenStrip.toggled("pen", in: ["pen", "gold"]) == ["gold"],
+      "pen bar: starring and unstarring")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)
