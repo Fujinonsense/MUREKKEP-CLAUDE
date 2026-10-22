@@ -35,8 +35,17 @@ enum StudyWriter {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                // Whatever went wrong, the keyless writer below still makes the set.
+                // Not on the iPad yet, or it failed: Apple's model, then the keyless writer below.
                 set.engine = Loc.t("Çevrimdışı")
+                #if canImport(FoundationModels) && !MUREKKEP_PLAIN
+                if #available(iOS 26.0, *), OnDeviceAI.isAvailable {
+                    do {
+                        try await onDevice(&set, options: options, parts: parts, progress: progress)
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {}
+                }
+                #endif
             }
         case .onDevice:
             #if canImport(FoundationModels) && !MUREKKEP_PLAIN

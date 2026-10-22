@@ -367,8 +367,8 @@ struct StudioCreateSheet: View {
     private var engineSection: some View {
         Section {
             Picker(Loc.t("Senaryoyu yazan"), selection: $engine) {
-                ForEach(StudioEngine.allCases) { e in
-                    Label(e.title + (e.isAvailable(settings: settings) ? "" : Loc.t(" (kullanılamıyor)")), systemImage: e.symbol).tag(e)
+                ForEach(StudioEngine.visible(settings: settings)) { e in
+                    Label(e.title, systemImage: e.symbol).tag(e)
                 }
             }
         } header: {
@@ -376,8 +376,8 @@ struct StudioCreateSheet: View {
         } footer: {
             if engine == .claude && !settings.hasAPIKey {
                 Text(Loc.t("Claude için Ayarlar › İsteğe bağlı bulut bölümünden API anahtarı ekle."))
-            } else if engine == .onDevice && !OnDeviceAI.isAvailable {
-                Text(OnDeviceAI.unavailableReason ?? "")
+            } else if engine == .deviceBrain, let reason = DeviceBrain.shared.unavailableReason {
+                Text(reason + Loc.t(" O zamana kadar cihazdaki yedek model yazar."))
             } else {
                 Text(engine.detail + (engine == .claude ? Loc.t(" Model: {0}.", "\(settings.model.title)") : ""))
             }

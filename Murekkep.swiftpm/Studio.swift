@@ -665,7 +665,7 @@ enum StudioEngine: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .claude: return "Claude"
-        case .deviceBrain: return Loc.t("İndirilen model")
+        case .deviceBrain: return "Qwen3.5"
         case .onDevice: return Loc.t("Cihazda")
         case .offline: return Loc.t("Çevrimdışı")
         }
@@ -689,13 +689,15 @@ enum StudioEngine: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The strongest brain on the iPad: the downloaded model, then Apple's (Claude only when chosen).
+    /// The downloaded model (Claude only when chosen). Until it is on the iPad, the writers fall back
+    /// to Apple's model and then the keyless writer by themselves.
     static func preferred(settings: AppSettings) -> StudioEngine {
-        if settings.hasAPIKey && settings.engine == .claude { return .claude }
-        if DeviceBrain.shared.isReady { return .deviceBrain }
-        if OnDeviceAI.isAvailable { return .onDevice }
-        if settings.hasAPIKey { return .claude }
-        return .offline
+        settings.hasAPIKey && settings.engine == .claude ? .claude : .deviceBrain
+    }
+
+    /// The writers the app lists: the downloaded model, and Claude once its key is saved.
+    static func visible(settings: AppSettings) -> [StudioEngine] {
+        [.deviceBrain] + (settings.hasAPIKey ? [.claude] : [])
     }
 
     func isAvailable(settings: AppSettings) -> Bool {

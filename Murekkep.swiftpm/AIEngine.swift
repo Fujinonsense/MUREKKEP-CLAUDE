@@ -12,15 +12,26 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    /// The engines Settings lists. The computer's server only shows while it is the choice.
-    static func listed(current: AIEngine) -> [AIEngine] {
-        allCases.filter { $0 != .localServer || current == .localServer }
+    /// The engines the app lists: the downloaded model (Qwen3.5), the strongest brain the iPad can
+    /// run, and Claude once its key is saved. Apple's model and the offline core are not listed;
+    /// they answer by themselves while Qwen is still downloading or on an iPad too small for it.
+    /// The computer's server only shows while it is the choice.
+    static func listed(current: AIEngine, hasKey: Bool) -> [AIEngine] {
+        [.deviceBrain] + (hasKey || current == .claude ? [.claude] : []) + (current == .localServer ? [.localServer] : [])
+    }
+
+    /// Choices of earlier versions that are no longer listed move to the downloaded model.
+    static func migrated(_ stored: AIEngine?) -> AIEngine {
+        switch stored {
+        case .claude, .localServer: return stored!
+        default: return .deviceBrain
+        }
     }
 
     var title: String {
         switch self {
         case .auto: return Loc.t("Otomatik")
-        case .deviceBrain: return Loc.t("İndirilen model (Qwen3.5)")
+        case .deviceBrain: return "Qwen3.5"
         case .onDevice: return Loc.t("Cihazda (Apple Intelligence)")
         case .localServer: return Loc.t("Yerel sunucu (Ollama / LM Studio)")
         case .offline: return Loc.t("Çevrimdışı çekirdek")

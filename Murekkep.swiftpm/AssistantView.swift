@@ -48,7 +48,7 @@ struct AssistantPanel: View {
                     .font(.headline)
                 Menu {
                     Picker(Loc.t("Motor"), selection: $settings.engine) {
-                        ForEach(AIEngine.listed(current: settings.engine)) { engine in
+                        ForEach(AIEngine.listed(current: settings.engine, hasKey: settings.hasAPIKey)) { engine in
                             Label(engine.title, systemImage: engine.symbol).tag(engine)
                         }
                     }

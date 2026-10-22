@@ -1076,6 +1076,13 @@ enum Translations {
     private static let part11: [String: String] = [
         "İndirilen model yazamadı, Apple modeliyle yazılıyor…": "The downloaded model couldn't write it; writing with Apple's model…",
         "{0} senaryoyu yazıyor…": "{0} is writing the script…",
+        "Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Wi‑Fi'de arka planda iner, uygulamayı kapatsan da sürer. Sorular ve notlar iPad'den çıkmaz.": "The model is chosen by the iPad's memory: Qwen3.5 9B with 16 GB, 4B with 8 GB, 2B with 6 GB. It downloads in the background on Wi‑Fi and keeps going when you close the app. Questions and notes never leave the iPad.",
+        "Wi‑Fi'de kendiliğinden indir": "Download by itself on Wi‑Fi",
+        "İndiriliyor: {0} / {1}. Wi‑Fi'de arka planda sürer; uygulamayı kapatabilirsin.": "Downloading: {0} / {1}. It goes on in the background on Wi‑Fi; you can close the app.",
+        "İndirme sunucusu yanıt vermedi.": "The download server did not answer.",
+        "Qwen3.5 iniyor · %{0}": "Qwen3.5 downloading · {0}%",
+        "Qwen3.5 hazırlanıyor": "Getting Qwen3.5 ready",
+        " O zamana kadar cihazdaki yedek model yazar.": " Until then the iPad's backup model writes it.",
         "Bağlantı zaman aşımına uğradı. \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "The connection timed out. Tap \"Download\" again; it continues where it stopped.",
         "Bilgisayardaki sunucu": "Server on your computer",
         "Bu derlemede indirilebilir model motoru (MLX) yok. Yeni derlemede gelir.": "This build has no engine for the downloadable model (MLX). It comes with a new build.",

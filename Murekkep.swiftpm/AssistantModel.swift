@@ -128,7 +128,10 @@ final class AssistantModel: ObservableObject {
             return (Loc.t("Otomatik · çevrimdışı"), AIEngine.offline.symbol)
         case .deviceBrain:
             if let brain = Self.readyBrain { return (ResolvedEngine.deviceBrain(title: brain.title).label, AIEngine.deviceBrain.symbol) }
-            return (Loc.t("Model indirilmedi"), AIEngine.deviceBrain.symbol)
+            if let fraction = DeviceBrain.shared.fraction {
+                return (Loc.t("Qwen3.5 iniyor · %{0}", "\(Int(fraction * 100))"), AIEngine.deviceBrain.symbol)
+            }
+            return (Loc.t("Qwen3.5 hazırlanıyor"), AIEngine.deviceBrain.symbol)
         case .onDevice:
             return (OnDeviceAI.isAvailable ? ResolvedEngine.onDevice.label : Loc.t("Apple Intelligence yok"), AIEngine.onDevice.symbol)
         case .localServer:

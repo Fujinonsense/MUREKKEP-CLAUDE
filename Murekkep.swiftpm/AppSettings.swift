@@ -153,10 +153,15 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var hasAPIKey: Bool
 
+    /// The AI model (Qwen3.5) downloads by itself on Wi-Fi, in the background.
+    @Published var autoBrainDownload: Bool {
+        didSet { UserDefaults.standard.set(autoBrainDownload, forKey: "autoBrainDownload") }
+    }
+
     init() {
         let d = UserDefaults.standard
         d.register(defaults: [
-            "engine": AIEngine.auto.rawValue,
+            "engine": AIEngine.deviceBrain.rawValue,
             "webSearch": true,
             "serverURL": "",
             "serverModel": "",
@@ -183,9 +188,10 @@ final class AppSettings: ObservableObject {
             "lavaCoolDuration": 6.0,
             "flowerLevel": 1,
             "textOnlyPDF": false,
+            "autoBrainDownload": true,
         ])
         language = AppLanguage.stored
-        engine = AIEngine(rawValue: d.string(forKey: "engine") ?? "") ?? .auto
+        engine = AIEngine.migrated(AIEngine(rawValue: d.string(forKey: "engine") ?? ""))
         webSearch = d.bool(forKey: "webSearch")
         serverURL = d.string(forKey: "serverURL") ?? ""
         serverModel = d.string(forKey: "serverModel") ?? ""
@@ -193,6 +199,7 @@ final class AppSettings: ObservableObject {
         model = ClaudeModel(rawValue: d.string(forKey: "model") ?? "") ?? .sonnet
         effort = ThinkingEffort(rawValue: d.string(forKey: "effort") ?? "") ?? .medium
         textOnlyPDF = d.bool(forKey: "textOnlyPDF")
+        autoBrainDownload = d.bool(forKey: "autoBrainDownload")
         pencilOnly = d.bool(forKey: "pencilOnly")
         straightLine = d.bool(forKey: "straightLine")
         hoverPreview = d.bool(forKey: "hoverPreview")

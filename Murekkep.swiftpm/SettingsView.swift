@@ -57,16 +57,17 @@ struct SettingsView: View {
         Section {
             BrainCard()
                 .padding(.vertical, 4)
+            Toggle(Loc.t("Wi‑Fi'de kendiliğinden indir"), isOn: $settings.autoBrainDownload)
         } header: {
             Text(Loc.t("Yapay zekâ beyni"))
         } footer: {
-            Text(Loc.t("Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Sorular ve notlar iPad'den çıkmaz."))
+            Text(Loc.t("Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Wi‑Fi'de arka planda iner, uygulamayı kapatsan da sürer. Sorular ve notlar iPad'den çıkmaz."))
         }
     }
 
     private var engineSection: some View {
         Section {
-            ForEach(AIEngine.listed(current: settings.engine)) { engine in
+            ForEach(AIEngine.listed(current: settings.engine, hasKey: settings.hasAPIKey)) { engine in
                 Button {
                     settings.engine = engine
                 } label: {
@@ -91,20 +92,6 @@ struct SettingsView: View {
                     }
                 }
                 .buttonStyle(.plain)
-            }
-            HStack {
-                Label("Apple Intelligence", systemImage: "cpu")
-                Spacer()
-                if let reason = OnDeviceAI.unavailableReason {
-                    Text(reason)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                } else {
-                    Label(Loc.t("Hazır"), systemImage: "checkmark.seal.fill")
-                        .labelStyle(.titleAndIcon)
-                        .foregroundStyle(.green)
-                }
             }
         } header: {
             Text(Loc.t("Yapay zekâ motoru"))

@@ -20,7 +20,8 @@ final class DeviceBrain: ObservableObject {
     /// The model on disk, or the strongest one this iPad can run (nil when it has too little memory).
     @Published private(set) var model: BrainModel?
 
-    private var download: Task<Void, Never>?
+    /// The file list is being fetched before the background download starts.
+    private var preparing = false
 
     private init() {
         let recommended = BrainModel.best(physicalMemory: ProcessInfo.processInfo.physicalMemory,
@@ -30,6 +31,11 @@ final class DeviceBrain: ObservableObject {
             phase = .ready
         } else {
             model = recommended
+            // A download started earlier goes on (iOS may have been running it while the app was closed).
+            if let recommended, BrainBackground.hasJob(for: recommended) {
+                phase = .downloading(done: 0, total: recommended.bytes)
+                BrainBackground.shared.resume(recommended)
+            }
         }
         let center = NotificationCenter.default
         // The GPU may not be used in the background: an answer in progress stops before the app goes.
@@ -79,43 +85,59 @@ final class DeviceBrain: ObservableObject {
         }
     }
 
+    /// Starts the download by itself when the app opens (and again after a failed try): Qwen is the
+    /// app's brain, and it comes down in the background on Wi-Fi. Not after the user stopped it.
+    @MainActor
+    func startIfNeeded(automatic: Bool) {
+        guard automatic, BrainRuntime.isCompiledIn, let model, !BrainBackground.isPaused(model) else { return }
+        switch phase {
+        case .absent, .failed: startDownload()
+        case .downloading, .ready: break
+        }
+    }
+
     @MainActor
     func startDownload() {
-        guard let model, download == nil, phase != .ready else { return }
+        guard let model, !preparing, !isDownloading, phase != .ready else { return }
+        preparing = true
         phase = .downloading(done: 0, total: model.bytes)
-        UIApplication.shared.isIdleTimerDisabled = true
-        let target = Self.folder(model)
-        download = Task { @MainActor [weak self] in
+        BrainBackground.setPaused(false, model)
+        Task { @MainActor [weak self] in
+            defer { self?.preparing = false }
             do {
-                try await BrainFetcher.fetch(model, into: target) { done, total in
-                    Task { @MainActor in
-                        guard let self, self.isDownloading else { return }
-                        self.phase = .downloading(done: done, total: total)
-                    }
+                let files = try await BrainFetcher.files(of: model.id)
+                guard files.contains(where: { $0.path == "config.json" }),
+                      files.contains(where: { $0.path.hasSuffix(".safetensors") }) else {
+                    throw LocalAIError(Loc.t("Model dosyaları sunucuda bulunamadı."))
                 }
-                try Self.markInstalled(model)
-                self?.phase = .ready
-            } catch is CancellationError {
-                self?.phase = .absent
-            } catch let error as URLError where error.code == .cancelled {
-                self?.phase = .absent
+                let plan = files.map { BrainDownloadPlan.File(path: $0.path, size: $0.size) }
+                let folder = Self.folder(model)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let (have, total) = BrainDownloadPlan.progress(plan, disk: { BrainBackground.disk(folder, $0) }, inFlight: [:])
+                if let free = BrainFetcher.freeSpace(folder), free < total - have + 300_000_000 {
+                    throw LocalAIError(Loc.t("iPad'de yeterli yer yok: {0} gerekiyor.",
+                                             BrainModel.sizeText(total - have + 300_000_000, english: Loc.isEnglish)))
+                }
+                self?.phase = .downloading(done: have, total: total)
+                try BrainBackground.shared.start(model, files: plan)
             } catch {
                 self?.phase = .failed(BrainFetcher.friendly(error))
             }
-            UIApplication.shared.isIdleTimerDisabled = false
-            self?.download = nil
         }
     }
 
     /// Stops the download; what came is kept and the next download goes on from there.
     @MainActor
     func cancelDownload() {
-        download?.cancel()
+        guard let model else { return }
+        BrainBackground.setPaused(true, model)
+        BrainBackground.shared.stop()
+        phase = .absent
     }
 
     @MainActor
     func delete() {
-        download?.cancel()
+        BrainBackground.shared.stop()
         guard let model else { return }
         Task {
             await BrainRuntime.unload()
@@ -124,6 +146,26 @@ final class DeviceBrain: ObservableObject {
         phase = .absent
         self.model = BrainModel.best(physicalMemory: ProcessInfo.processInfo.physicalMemory,
                                      available: Self.availableMemory())
+    }
+
+    // MARK: Reports from the background download (main thread)
+
+    @MainActor
+    func downloadProgress(done: Int64, total: Int64) {
+        guard phase != .ready, !BrainBackground.isPaused(model) else { return }
+        phase = .downloading(done: done, total: total)
+    }
+
+    @MainActor
+    func downloadFinished(_ finished: BrainModel) {
+        guard finished == model else { return }
+        phase = .ready
+    }
+
+    @MainActor
+    func downloadFailed(_ message: String) {
+        guard phase != .ready else { return }
+        phase = .failed(message)
     }
 
     // MARK: Disk
@@ -151,7 +193,7 @@ final class DeviceBrain: ObservableObject {
         FileManager.default.fileExists(atPath: marker(model).path)
     }
 
-    private static func markInstalled(_ model: BrainModel) throws {
+    static func markInstalled(_ model: BrainModel) throws {
         let info = ["model": model.id, "date": ISO8601DateFormatter().string(from: Date())]
         try JSONSerialization.data(withJSONObject: info).write(to: marker(model), options: .atomic)
     }
@@ -163,8 +205,7 @@ final class DeviceBrain: ObservableObject {
     }
 }
 
-/// Downloads a model's files from Hugging Face (public, no account). A file stops and goes on where
-/// it stopped (HTTP Range), so a cut connection or a closed app never starts a 3 GB file over.
+/// The list of a model's files on Hugging Face (public, no account).
 enum BrainFetcher {
     struct RemoteFile: Decodable {
         let type: String
@@ -187,63 +228,12 @@ enum BrainFetcher {
             .filter { $0.type == "file" && BrainModel.wanted($0.path) }
     }
 
-    static func fetch(_ model: BrainModel, into folder: URL,
-                      progress: @escaping @Sendable (Int64, Int64) -> Void) async throws {
-        let files = try await files(of: model.id)
-        guard files.contains(where: { $0.path == "config.json" }),
-              files.contains(where: { $0.path.hasSuffix(".safetensors") }) else {
-            throw LocalAIError(Loc.t("Model dosyaları sunucuda bulunamadı."))
-        }
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let total = files.reduce(Int64(0)) { $0 + ($1.size ?? 0) }
-        let have = files.reduce(Int64(0)) { sum, f in sum + min(f.size ?? 0, partialSize(folder, f.path)) }
-        if let free = freeSpace(folder), free < total - have + 300_000_000 {
-            throw LocalAIError(Loc.t("iPad'de yeterli yer yok: {0} gerekiyor.",
-                                     BrainModel.sizeText(total - have + 300_000_000, english: Loc.isEnglish)))
-        }
-        var finished: Int64 = 0
-        progress(have, total)
-        for file in files {
-            try Task.checkCancellation()
-            let destination = folder.appendingPathComponent(file.path)
-            if let size = file.size, fileSize(destination) == size {
-                finished += size
-                continue
-            }
-            guard let url = URL(string: "https://huggingface.co/\(model.id)/resolve/main/\(file.path)") else { continue }
-            var attempt = 0
-            while true {
-                do {
-                    let base = finished
-                    try await RangeDownload.run(url: url, to: destination, expected: file.size) { got in
-                        progress(base + got, total)
-                    }
-                    break
-                } catch {
-                    if error is CancellationError || Task.isCancelled { throw CancellationError() }
-                    attempt += 1
-                    if attempt > 5 { throw error }
-                    try await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
-                }
-            }
-            finished += file.size ?? fileSize(destination)
-            progress(finished, total)
-        }
-    }
-
     static func fileSize(_ url: URL) -> Int64 {
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
         return (attributes?[.size] as? NSNumber)?.int64Value ?? -1
     }
 
-    /// Bytes of a file already here, whole or partial.
-    private static func partialSize(_ folder: URL, _ path: String) -> Int64 {
-        let whole = fileSize(folder.appendingPathComponent(path))
-        if whole >= 0 { return whole }
-        return max(0, fileSize(folder.appendingPathComponent(path + ".part")))
-    }
-
-    private static func freeSpace(_ url: URL) -> Int64? {
+    static func freeSpace(_ url: URL) -> Int64? {
         let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return values?.volumeAvailableCapacityForImportantUsage
     }
@@ -263,135 +253,305 @@ enum BrainFetcher {
     }
 }
 
-/// One file over HTTP, appended to "<file>.part" as it arrives and moved into place when complete.
-private final class RangeDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
-    private let destination: URL
-    private let part: URL
-    private let expected: Int64?
-    private let onBytes: (Int64) -> Void
+/// The model's files come down in iOS's background download session: on Wi-Fi (not on mobile data
+/// or in Low Data Mode), while the app is closed or another app is in front, and each file goes on
+/// where it stopped (BrainDownloadPlan). iOS opens the app in the background to hand over files that
+/// finished while it was closed (AppDelegate).
+final class BrainBackground: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    static let shared = BrainBackground()
+    static let identifier = "com.murekkep.brain-download"
+
+    /// iOS's completion handler for events of downloads that ended while the app was not running.
+    var eventsDone: (() -> Void)?
+
+    private struct Job: Codable {
+        var modelID: String
+        var files: [BrainDownloadPlan.File]
+    }
+
     private let lock = NSLock()
-    private var handle: FileHandle?
-    private var received: Int64 = 0
-    private var failure: Error?
-    private var continuation: CheckedContinuation<Void, Error>?
+    private var job: Job?
+    private var inFlight: [String: Int64] = [:]
+    private var attempts: [String: Int] = [:]
+    private var stopped = false
     private var lastReport = Date.distantPast
 
-    private init(destination: URL, expected: Int64?, onBytes: @escaping (Int64) -> Void) {
-        self.destination = destination
-        self.part = destination.appendingPathExtension("part")
-        self.expected = expected
-        self.onBytes = onBytes
+    lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.background(withIdentifier: Self.identifier)
+        configuration.isDiscretionary = false
+        configuration.sessionSendsLaunchEvents = true
+        configuration.allowsExpensiveNetworkAccess = false
+        configuration.allowsConstrainedNetworkAccess = false
+        configuration.timeoutIntervalForResource = 7 * 24 * 60 * 60
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }()
+
+    // MARK: State on disk
+
+    private static func manifest(_ model: BrainModel) -> URL {
+        DeviceBrain.folder(model).appendingPathComponent("murekkep-download.json")
     }
 
-    static func run(url: URL, to destination: URL, expected: Int64?, onBytes: @escaping (Int64) -> Void) async throws {
-        let download = RangeDownload(destination: destination, expected: expected, onBytes: onBytes)
-        try await download.start(url)
+    private static func pausedMarker(_ model: BrainModel) -> URL {
+        DeviceBrain.folder(model).appendingPathComponent("murekkep-paused")
     }
 
-    private func start(_ url: URL) async throws {
+    static func hasJob(for model: BrainModel) -> Bool {
+        FileManager.default.fileExists(atPath: manifest(model).path) && !isPaused(model)
+    }
+
+    static func isPaused(_ model: BrainModel?) -> Bool {
+        guard let model else { return false }
+        return FileManager.default.fileExists(atPath: pausedMarker(model).path)
+    }
+
+    static func setPaused(_ paused: Bool, _ model: BrainModel) {
+        let url = pausedMarker(model)
+        if paused {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: url.path, contents: Data())
+        } else {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    static func disk(_ folder: URL, _ path: String) -> BrainDownloadPlan.OnDisk {
+        let file = folder.appendingPathComponent(path)
+        return .init(whole: BrainFetcher.fileSize(file), part: BrainFetcher.fileSize(file.appendingPathExtension("part")))
+    }
+
+    // MARK: Starting and stopping
+
+    func start(_ model: BrainModel, files: [BrainDownloadPlan.File]) throws {
+        let job = Job(modelID: model.id, files: files)
+        try JSONEncoder().encode(job).write(to: Self.manifest(model), options: .atomic)
+        lock.lock()
+        self.job = job
+        stopped = false
+        attempts = [:]
+        lock.unlock()
+        resume(model)
+    }
+
+    /// Picks up a download started earlier: the tasks iOS still runs stay, files with nothing running
+    /// get a task from where their part file ends.
+    func resume(_ model: BrainModel) {
+        guard let data = try? Data(contentsOf: Self.manifest(model)),
+              let saved = try? JSONDecoder().decode(Job.self, from: data) else { return }
+        lock.lock()
+        job = saved
+        stopped = false
+        lock.unlock()
+        let folder = DeviceBrain.folder(model)
+        session.getAllTasks { tasks in
+            let running = Set(tasks.filter { $0.state == .running || $0.state == .suspended }.compactMap(\.taskDescription))
+            for file in saved.files where !running.contains(file.path) {
+                self.next(file, model: model, folder: folder)
+            }
+            self.checkComplete(model)
+            self.report(model, force: true)
+        }
+    }
+
+    /// Stops every download; what came stays on disk (and as resume data) for the next start.
+    func stop() {
+        let current = currentJob()
+        lock.lock()
+        stopped = true
+        lock.unlock()
+        session.getAllTasks { tasks in
+            for task in tasks {
+                guard let download = task as? URLSessionDownloadTask, let path = task.taskDescription,
+                      let current, let model = BrainModel.all.first(where: { $0.id == current.modelID }) else {
+                    task.cancel()
+                    continue
+                }
+                let folder = DeviceBrain.folder(model)
+                download.cancel(byProducingResumeData: { data in
+                    if let data { try? data.write(to: folder.appendingPathComponent(path + ".resume")) }
+                })
+            }
+        }
+    }
+
+    // MARK: One file
+
+    /// The next thing a file needs: nothing, a move into place, or a download task.
+    private func next(_ file: BrainDownloadPlan.File, model: BrainModel, folder: URL) {
+        switch BrainDownloadPlan.step(file, Self.disk(folder, file.path)) {
+        case .done:
+            return
+        case .finish:
+            finish(file.path, folder: folder)
+        case let .fetch(from):
+            let resumeURL = folder.appendingPathComponent(file.path + ".resume")
+            let task: URLSessionDownloadTask
+            if let data = try? Data(contentsOf: resumeURL) {
+                try? FileManager.default.removeItem(at: resumeURL)
+                task = session.downloadTask(withResumeData: data)
+            } else {
+                guard let url = URL(string: "https://huggingface.co/\(model.id)/resolve/main/\(file.path)") else { return }
+                var request = URLRequest(url: url)
+                if from > 0 {
+                    request.setValue("bytes=\(from)-", forHTTPHeaderField: "Range")
+                }
+                task = session.downloadTask(with: request)
+            }
+            task.taskDescription = file.path
+            task.resume()
+        }
+    }
+
+    /// The part file is whole: it becomes the file.
+    private func finish(_ path: String, folder: URL) {
+        let file = folder.appendingPathComponent(path)
         let fm = FileManager.default
-        try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if !fm.fileExists(atPath: part.path) {
-            fm.createFile(atPath: part.path, contents: nil)
+        try? fm.removeItem(at: file)
+        try? fm.moveItem(at: file.appendingPathExtension("part"), to: file)
+    }
+
+    /// The download in hand; after iOS opened the app in the background for finished files, it is
+    /// read from the manifest first.
+    private func currentJob() -> Job? {
+        lock.lock()
+        defer { lock.unlock() }
+        if job == nil {
+            for model in BrainModel.all {
+                if let data = try? Data(contentsOf: Self.manifest(model)), let saved = try? JSONDecoder().decode(Job.self, from: data) {
+                    job = saved
+                    break
+                }
+            }
         }
-        received = max(0, BrainFetcher.fileSize(part))
-        if let expected, received > expected {
-            try Data().write(to: part)
-            received = 0
-        }
-        if let expected, received == expected {
-            try finish()
+        return job
+    }
+
+    /// The model and file a task belongs to.
+    private func lookup(_ path: String) -> (BrainModel, URL, BrainDownloadPlan.File)? {
+        guard let current = currentJob(), let model = BrainModel.all.first(where: { $0.id == current.modelID }),
+              let file = current.files.first(where: { $0.path == path }) else { return nil }
+        return (model, DeviceBrain.folder(model), file)
+    }
+
+    private func checkComplete(_ model: BrainModel) {
+        guard let current = currentJob() else { return }
+        let folder = DeviceBrain.folder(model)
+        guard current.files.allSatisfy({ BrainDownloadPlan.step($0, Self.disk(folder, $0.path)) == .done }) else { return }
+        try? DeviceBrain.markInstalled(model)
+        try? FileManager.default.removeItem(at: Self.manifest(model))
+        lock.lock()
+        job = nil
+        lock.unlock()
+        Task { @MainActor in DeviceBrain.shared.downloadFinished(model) }
+    }
+
+    private func report(_ model: BrainModel, force: Bool = false) {
+        guard let current = currentJob() else { return }
+        lock.lock()
+        let now = Date()
+        guard force || now.timeIntervalSince(lastReport) > 0.5 else {
+            lock.unlock()
             return
         }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 60
-        if received > 0 {
-            request.setValue("bytes=\(received)-", forHTTPHeaderField: "Range")
-        }
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForResource = 6 * 60 * 60
-        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        defer { session.finishTasksAndInvalidate() }
-        let task = session.dataTask(with: request)
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-                lock.lock()
-                continuation = c
-                lock.unlock()
-                task.resume()
-            }
-        } onCancel: {
-            task.cancel()
-        }
-        try finish()
-    }
-
-    /// The whole file is in the part file: it becomes the file.
-    private func finish() throws {
-        if let expected, BrainFetcher.fileSize(part) != expected {
-            throw LocalAIError(Loc.t("Dosya eksik indi; yeniden deneniyor."))
-        }
-        let fm = FileManager.default
-        if fm.fileExists(atPath: destination.path) {
-            try fm.removeItem(at: destination)
-        }
-        try fm.moveItem(at: part, to: destination)
-    }
-
-    private func resume(_ error: Error?) {
-        lock.lock()
-        let c = continuation
-        continuation = nil
+        lastReport = now
+        let flying = inFlight
         lock.unlock()
-        if let error { c?.resume(throwing: error) } else { c?.resume() }
+        let folder = DeviceBrain.folder(model)
+        let (done, total) = BrainDownloadPlan.progress(current.files, disk: { Self.disk(folder, $0) }, inFlight: flying)
+        Task { @MainActor in DeviceBrain.shared.downloadProgress(done: done, total: total) }
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
-                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        do {
-            switch status {
-            case 206:
-                let h = try FileHandle(forWritingTo: part)
-                try h.seekToEnd()
-                handle = h
-            case 200:
-                // The server sent the whole file: start the part over.
-                let h = try FileHandle(forWritingTo: part)
-                try h.truncate(atOffset: 0)
-                handle = h
-                received = 0
-            default:
-                failure = LocalAIError(Loc.t("İndirme sunucusu yanıt vermedi (HTTP {0}).", "\(status)"))
-                completionHandler(.cancel)
-                return
+    // MARK: URLSession
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard let path = downloadTask.taskDescription, let (model, _, _) = lookup(path) else { return }
+        lock.lock()
+        inFlight[path] = totalBytesWritten
+        lock.unlock()
+        report(model)
+    }
+
+    /// The downloaded bytes (the whole file, or the rest of it) go into the part file at once: iOS
+    /// removes `location` when this returns.
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let path = downloadTask.taskDescription, let (_, folder, file) = lookup(path) else { return }
+        let response = downloadTask.response as? HTTPURLResponse
+        let part = folder.appendingPathComponent(path + ".part")
+        let fm = FileManager.default
+        try? fm.createDirectory(at: part.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let merge = BrainDownloadPlan.merge(status: response?.statusCode ?? 0,
+                                            rangeStart: BrainDownloadPlan.rangeStart(response?.value(forHTTPHeaderField: "Content-Range")),
+                                            partSize: BrainFetcher.fileSize(part),
+                                            received: BrainFetcher.fileSize(location), expected: file.size)
+        switch merge {
+        case .replace:
+            try? fm.removeItem(at: part)
+            try? fm.moveItem(at: location, to: part)
+        case .append:
+            guard let input = try? FileHandle(forReadingFrom: location),
+                  let output = try? FileHandle(forWritingTo: part) else { return }
+            defer {
+                try? input.close()
+                try? output.close()
             }
-            completionHandler(.allow)
-        } catch {
-            failure = error
-            completionHandler(.cancel)
+            _ = try? output.seekToEnd()
+            while let chunk = try? input.read(upToCount: 8 << 20), !chunk.isEmpty {
+                try? output.write(contentsOf: chunk)
+            }
+        case .discard:
+            break
         }
-    }
-
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        do {
-            try handle?.write(contentsOf: data)
-            received += Int64(data.count)
-            let now = Date()
-            if now.timeIntervalSince(lastReport) > 0.25 {
-                lastReport = now
-                onBytes(received)
-            }
-        } catch {
-            failure = error
-            dataTask.cancel()
+        if BrainDownloadPlan.step(file, Self.disk(folder, path)) == .finish {
+            finish(path, folder: folder)
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        try? handle?.close()
-        handle = nil
-        onBytes(received)
-        resume(failure ?? error)
+        guard let path = task.taskDescription, let (model, folder, file) = lookup(path) else { return }
+        lock.lock()
+        inFlight[path] = nil
+        let halted = stopped
+        lock.unlock()
+        if let error, let data = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
+            try? data.write(to: folder.appendingPathComponent(path + ".resume"))
+        }
+        if !halted, BrainDownloadPlan.step(file, Self.disk(folder, path)) != .done {
+            // Not whole yet (a failure, or bytes that did not fit): again, a few times, a little later.
+            lock.lock()
+            let tries = (attempts[path] ?? 0) + 1
+            attempts[path] = tries
+            lock.unlock()
+            if tries <= 5 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + Double(tries) * 3) {
+                    self.next(file, model: model, folder: folder)
+                }
+            } else {
+                let message = error.map(BrainFetcher.friendly) ?? Loc.t("İndirme sunucusu yanıt vermedi.")
+                Task { @MainActor in DeviceBrain.shared.downloadFailed(message) }
+            }
+        }
+        checkComplete(model)
+        report(model, force: true)
+    }
+
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        DispatchQueue.main.async {
+            self.eventsDone?()
+            self.eventsDone = nil
+        }
+    }
+}
+
+/// Hands iOS's background download events to the model's download.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        guard identifier == BrainBackground.identifier else {
+            completionHandler()
+            return
+        }
+        BrainBackground.shared.eventsDone = completionHandler
+        _ = BrainBackground.shared.session
     }
 }

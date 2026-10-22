@@ -315,8 +315,8 @@ struct StudyCreateSheet: View {
                 }
                 Section {
                     Picker(Loc.t("Hazırlayan"), selection: $engine) {
-                        ForEach(StudioEngine.allCases) { e in
-                            Label(e.title + (e.isAvailable(settings: settings) ? "" : Loc.t(" (kullanılamıyor)")), systemImage: e.symbol).tag(e)
+                        ForEach(StudioEngine.visible(settings: settings)) { e in
+                            Label(e.title, systemImage: e.symbol).tag(e)
                         }
                     }
                 } header: {

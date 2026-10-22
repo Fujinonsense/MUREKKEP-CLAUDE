@@ -446,5 +446,36 @@ for (next, elapsed, want, name) in batchCases {
     check(TextPenBatch.continues(last: aga, next: next, elapsed: elapsed) == want, "text pen batch: \(name)")
 }
 
+// The model's background download picks up where it stopped (BrainDownloadPlan).
+let weights = BrainDownloadPlan.File(path: "model.safetensors", size: 1_000)
+let none = BrainDownloadPlan.OnDisk(whole: -1, part: -1)
+check(BrainDownloadPlan.step(weights, none) == .fetch(from: 0), "brain download: nothing yet starts at 0")
+check(BrainDownloadPlan.step(weights, .init(whole: -1, part: 400)) == .fetch(from: 400), "brain download: a part goes on")
+check(BrainDownloadPlan.step(weights, .init(whole: -1, part: 1_000)) == .finish, "brain download: a full part is finished")
+check(BrainDownloadPlan.step(weights, .init(whole: -1, part: 1_200)) == .fetch(from: 0), "brain download: a part too big starts over")
+check(BrainDownloadPlan.step(weights, .init(whole: 1_000, part: -1)) == .done, "brain download: the whole file is done")
+check(BrainDownloadPlan.step(weights, .init(whole: 900, part: -1)) == .fetch(from: 0), "brain download: a short file is fetched again")
+check(BrainDownloadPlan.step(.init(path: "config.json", size: nil), .init(whole: 12, part: -1)) == .done,
+      "brain download: a file of unknown size is done once there")
+let files = [weights, BrainDownloadPlan.File(path: "config.json", size: 100)]
+let disk: (String) -> BrainDownloadPlan.OnDisk = { $0 == "config.json" ? .init(whole: 100, part: -1) : .init(whole: -1, part: 300) }
+let shown = BrainDownloadPlan.progress(files, disk: disk, inFlight: ["model.safetensors": 200])
+check(shown.done == 600 && shown.total == 1_100, "brain download: progress \(shown)")
+check(BrainDownloadPlan.merge(status: 200, rangeStart: nil, partSize: 300, received: 1_000, expected: 1_000) == .replace
+      && BrainDownloadPlan.merge(status: 206, rangeStart: 300, partSize: 300, received: 700, expected: 1_000) == .append
+      && BrainDownloadPlan.merge(status: 206, rangeStart: 0, partSize: 300, received: 500, expected: 1_000) == .discard
+      && BrainDownloadPlan.merge(status: 404, rangeStart: nil, partSize: 0, received: 1_000, expected: 1_000) == .discard,
+      "brain download: merging a finished download")
+// Resumed downloads: the last response's Content-Range starts where iOS resumed, not where the part
+// ends, so the sizes decide.
+check(BrainDownloadPlan.merge(status: 206, rangeStart: 650, partSize: 300, received: 700, expected: 1_000) == .append
+      && BrainDownloadPlan.merge(status: 206, rangeStart: 650, partSize: 0, received: 1_000, expected: 1_000) == .replace,
+      "brain download: a resumed download is merged by its size")
+check(BrainDownloadPlan.merge(status: 200, rangeStart: nil, partSize: 0, received: 12, expected: nil) == .replace
+      && BrainDownloadPlan.merge(status: 206, rangeStart: 5, partSize: 5, received: 7, expected: nil) == .append,
+      "brain download: unknown sizes go by the response")
+check(BrainDownloadPlan.rangeStart("bytes 300-999/1000") == 300 && BrainDownloadPlan.rangeStart(nil) == nil
+      && BrainDownloadPlan.rangeStart("bytes */1000") == nil, "brain download: Content-Range")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)
