@@ -68,6 +68,14 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// The nature pens: free to try with a trial amount of ink in the App Store edition (ProPlan).
+    var isTrialInk: Bool {
+        switch self {
+        case .sea, .wave, .grass: return true
+        default: return false
+        }
+    }
+
     /// The 3D inks, marked with a star on the pen's barrel.
     var isPremium: Bool {
         switch self {

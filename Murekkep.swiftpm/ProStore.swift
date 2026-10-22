@@ -158,6 +158,31 @@ final class ProStore: ObservableObject {
         return true
     }
 
+    /// How much of the nature pens' trial ink is left, 0...1 (1 with Pro or in the personal build).
+    var trialInkLeft: Double {
+        guard locks else { return 1 }
+        return Double(usage.inkLeft()) / Double(ProPlan.trialInk)
+    }
+
+    /// Whether a nature pen may draw; with its trial ink gone the Pro page opens and the answer is false.
+    func allowsTrialInk() -> Bool {
+        guard locks, usage.inkLeft() == 0 else { return true }
+        Paywall.present(reason: .trialInk)
+        return false
+    }
+
+    /// Counts a finished nature-pen stroke against the trial; the stroke that empties it opens the Pro page.
+    func spendTrialInk(points length: Double) {
+        guard locks else { return }
+        _ = usage.spendInk(Int(length.rounded()), isPro: false)
+        if let data = try? JSONEncoder().encode(usage) {
+            UserDefaults.standard.set(data, forKey: Self.usageKey)
+        }
+        if usage.inkLeft() == 0 {
+            Paywall.present(reason: .trialInk)
+        }
+    }
+
     /// Whether a Pro-only thing may be used; without Pro the Pro page opens and the answer is false.
     func unlock(_ feature: ProPlan.Feature) -> Bool {
         guard Self.sells, !isPro else { return true }

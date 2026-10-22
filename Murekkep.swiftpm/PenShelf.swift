@@ -22,6 +22,14 @@ enum PenShelf: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The name in the panel's segmented control, short enough to never be cut.
+    var shortTitle: String {
+        switch self {
+        case .threeD: return "3B"
+        default: return title
+        }
+    }
+
     func brushes(favorites: [Brush]) -> [Brush] {
         switch self {
         case .favorites: return Brush.paletteOrder.filter { favorites.contains($0) }

@@ -299,6 +299,11 @@ final class EditorModel: ObservableObject {
            !MainActor.assumeIsolated({ ProStore.shared.unlock(.premiumInk) }) {
             return
         }
+        // The nature pens draw while their trial ink lasts.
+        if case let .brush(brush) = newTool, brush.isTrialInk,
+           !MainActor.assumeIsolated({ ProStore.shared.allowsTrialInk() }) {
+            return
+        }
         tool = newTool
         onHaptic?(.selection)
     }
@@ -360,6 +365,29 @@ final class EditorModel: ObservableObject {
         let before = pages[page].strokes
         pages[page].strokes.append(stroke)
         record(InkEdit(page: page, before: before, after: pages[page].strokes))
+        if stroke.brush.isTrialInk {
+            spendTrialInk(stroke)
+        }
+    }
+
+    /// A nature-pen stroke uses up trial ink by its length; once the trial is gone the pen goes back
+    /// to the plain pen (the Pro page is already open).
+    private func spendTrialInk(_ stroke: Stroke) {
+        let points = stroke.points
+        var length: Float = 0
+        for i in points.indices.dropFirst() {
+            let dx = points[i].x - points[i - 1].x
+            let dy = points[i].y - points[i - 1].y
+            length += (dx * dx + dy * dy).squareRoot()
+        }
+        let spent = Double(length)
+        let empty = MainActor.assumeIsolated { () -> Bool in
+            ProStore.shared.spendTrialInk(points: spent)
+            return ProStore.shared.trialInkLeft == 0
+        }
+        if empty, case let .brush(brush) = tool, brush.isTrialInk {
+            tool = .brush(.pen)
+        }
     }
 
     func strokes(on page: Int) -> [Stroke] {

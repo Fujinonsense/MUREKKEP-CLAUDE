@@ -1227,5 +1227,14 @@ enum Translations {
         "Ebru, İznik çinisi ve 10 sanat arka planı": "Ebru, Iznik tiles and 10 art backgrounds",
         "Düz renkler ücretsiz; ebru, İznik çinisi, Boğaz ve diğer sanat arka planları Mürekkep Pro'da.": "Plain colours are free; ebru, Iznik tiles, the Bosphorus and the other art backgrounds are in Mürekkep Pro.",
         "Sanat arka planları kitaplığın arkasında durur; yazılar her birinde okunacak renge geçer.": "Art backgrounds sit behind the library; the text switches to a colour that reads on each one.",
+        "Deneme mürekkebi": "Trial ink",
+        "Deneme mürekkebi: %{0} kaldı. Pro ile sınırsız.": "Trial ink: {0}% left. Unlimited with Pro.",
+        "Doğa kalemlerinin deneme mürekkebi bitti. Pro ile sınırsız çizersin.": "The nature pens' trial ink has run out. Draw without limits with Pro.",
+        "Raf": "Shelf",
+        "Kalbe dokun: o kalem defterin kalem çubuğunda hep durur.": "Tap the heart: that pen always stays in the notebook's pen bar.",
+        "Bir kalemin yanındaki kalbe dokun; o kalem burada ve defterin kalem çubuğunda hep durur.": "Tap the heart beside a pen; it stays here and in the notebook's pen bar.",
+        "Kalemlere göz at": "Browse pens",
+        "Sınırsız doğa kalemleri": "Unlimited nature pens",
+        "Ücretsiz planda deneme mürekkebi kadar": "A trial amount of ink on the free plan",
     ]
 }

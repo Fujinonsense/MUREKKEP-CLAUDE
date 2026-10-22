@@ -4,8 +4,9 @@ import Foundation
 ///
 /// The free plan keeps everything a student needs to take notes: notebooks, PDFs, the everyday pens,
 /// the text pen, shapes, the student templates, plain colour backgrounds. It also gets 15 AI answers
-/// a day, one video or audio overview a week and three study sets a week. Pro takes the limits off
-/// and opens the 3D inks, the special templates and the creative backgrounds.
+/// a day, one video or audio overview a week and three study sets a week. The nature pens come with
+/// a trial amount of ink, once. Pro takes the limits off and opens the 3D inks, the special templates
+/// and the creative backgrounds.
 ///
 /// The AI runs on the iPad, so there are no servers to pay for, and Pro costs less than the note
 /// apps that charge for theirs. App Store, Turkey, October 2026:
@@ -21,6 +22,7 @@ enum ProPlan {
         case premiumInk
         case premiumTemplate
         case premiumBackground
+        case trialInk
     }
 
     /// The App Store edition sells Pro; the personal build (without the APPSTORE flag) has it all.
@@ -34,6 +36,8 @@ enum ProPlan {
     static let weeklyOverviews = 1
     static let weeklyStudySets = 3
     static let freeTrialDays = 7
+    /// Points of stroke the nature pens draw for free, once: about 25 lines across a page.
+    static let trialInk = 15_000
 
     /// How many a free user may use, and whether the count starts again each week (else each day);
     /// nil for what only Pro opens.
@@ -42,13 +46,29 @@ enum ProPlan {
         case .aiAnswer: return (dailyAnswers, false)
         case .overview: return (weeklyOverviews, true)
         case .studySet: return (weeklyStudySets, true)
-        case .premiumInk, .premiumTemplate, .premiumBackground: return nil
+        case .premiumInk, .premiumTemplate, .premiumBackground, .trialInk: return nil
         }
     }
 
-    /// What the free plan has used, per day or per ISO week.
+    /// What the free plan has used, per day or per ISO week, and the nature pens' trial ink (once).
     struct Usage: Codable, Equatable {
         var counts: [String: Int] = [:]
+
+        private static let inkKey = "trialInk"
+
+        /// Trial ink the nature pens have left, in points of stroke.
+        func inkLeft() -> Int {
+            max(0, ProPlan.trialInk - (counts[Self.inkKey] ?? 0))
+        }
+
+        /// Spends the ink of a nature-pen stroke; false, with nothing spent, when none was left. The
+        /// stroke that empties the trial may run past its end.
+        mutating func spendInk(_ length: Int, isPro: Bool) -> Bool {
+            if isPro { return true }
+            guard inkLeft() > 0 else { return false }
+            counts[Self.inkKey, default: 0] += max(0, length)
+            return true
+        }
 
         static func key(_ feature: Feature, on date: Date, calendar: Calendar) -> String {
             guard let limit = ProPlan.limit(feature) else { return feature.rawValue }

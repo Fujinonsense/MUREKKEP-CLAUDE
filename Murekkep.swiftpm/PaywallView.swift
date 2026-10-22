@@ -93,6 +93,8 @@ struct PaywallView: View {
             return Loc.t("Bu şablon Mürekkep Pro'da.")
         case .premiumBackground:
             return Loc.t("Bu arka plan Mürekkep Pro'da.")
+        case .trialInk:
+            return Loc.t("Doğa kalemlerinin deneme mürekkebi bitti. Pro ile sınırsız çizersin.")
         }
     }
 
@@ -104,6 +106,8 @@ struct PaywallView: View {
                  Loc.t("Ücretsiz planda haftada {0}", "\(ProPlan.weeklyOverviews)"))
             perk("rectangle.stack", Loc.t("Sınırsız çalışma seti"),
                  Loc.t("Ücretsiz planda haftada {0}", "\(ProPlan.weeklyStudySets)"))
+            perk("leaf", Loc.t("Sınırsız doğa kalemleri"),
+                 Loc.t("Ücretsiz planda deneme mürekkebi kadar"))
             perk("paintbrush.pointed", Loc.t("10 adet 3D mürekkep"),
                  Loc.t("Lav, altın, krom, galaksi, yıldırım, inci ve fazlası"))
             perk("photo.artframe", Loc.t("Ebru, İznik çinisi ve 10 sanat arka planı"),

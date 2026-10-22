@@ -585,6 +585,14 @@ struct FloatingToolPalette: View {
             PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            let starred = settings.favoriteBrushes.contains(brush)
+            Button {
+                settings.toggleFavorite(brush)
+            } label: {
+                Label(starred ? Loc.t("Favorilerden çıkar") : Loc.t("Favorilere ekle"), systemImage: starred ? "heart.slash" : "heart")
+            }
+        }
         .accessibilityLabel(brush.title)
         .accessibilityHint(selected ? Loc.t("Ayarlarını açmak için tekrar dokun") : "")
         .popover(isPresented: Binding(get: { inspector == brush }, set: { if !$0 { inspector = nil } })) {
