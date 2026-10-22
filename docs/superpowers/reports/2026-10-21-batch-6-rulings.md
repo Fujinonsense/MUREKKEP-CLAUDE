@@ -293,3 +293,21 @@ The pen-motion reader matches Python on all 580 lines, and every parity check pa
 - SwiftUI, StoreKit and the paywall compile only in CI. They have not been seen on an iPad.
 - Purchases cannot be tested with an unsigned IPA. They need TestFlight and a sandbox account (`docs/appstore-yayin-rehberi.md`).
 - The moving backgrounds' smoothness on the iPad.
+
+## Build 26: ready for upload
+
+`tools/appstore_check.py` found 6 upload blockers in build 25's App Store IPA:
+- it had no privacy manifest;
+- UserDefaults, file timestamps, disk space and system boot time were used but not declared;
+- it was marked for iPhone too.
+
+Build 26 adds `PrivacyInfo.xcprivacy` with CA92.1, C617.1, E174.1 and 35F9.1. The App Store edition is now iPad only.
+
+The `systemUptime` selector comes from metal-cpp inside MLX, not from the app's code.
+
+Lifetime Pro rises to ₺2.999,99 / $79.99: 3.3 years of the yearly plan, still under one year of Notability Pro.
+
+### Rulings
+
+- **iPad only in the App Store edition.** The app is built for the Pencil. Marked for iPhone, it would need iPhone screenshots and an iPhone review pass. Cost if wrong: no iPhone users; the flag is one line in the workflow.
+- **System boot time is declared although the app never reads it.** metal-cpp registers the selector at load, and App Store Connect scans selector names. Cost if wrong: none; an extra declaration is allowed.
