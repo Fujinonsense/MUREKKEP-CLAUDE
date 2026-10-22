@@ -169,24 +169,36 @@ final class ProStore: ObservableObject {
     var locks: Bool { Self.sells && !isPro }
 }
 
-/// Opens the Pro page over whatever is on screen (the library, the editor, a sheet).
+/// Opens the Pro page over whatever is on screen (the library, the editor, a sheet, the pen panel).
+/// While a sheet or popover is still opening or closing, iOS refuses a new one without a word, so
+/// the page waits for the animation to end and tries again (for up to two seconds).
 enum Paywall {
     @MainActor
-    static func present(reason: ProPlan.Feature? = nil) {
+    static func present(reason: ProPlan.Feature? = nil, attempt: Int = 0) {
         guard ProStore.sells, let top = topViewController(), !(top is PaywallHost) else { return }
+        if top.isBeingPresented || top.isBeingDismissed || top.transitionCoordinator != nil
+            || top.presentedViewController?.isBeingDismissed == true {
+            guard attempt < 20 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                present(reason: reason, attempt: attempt + 1)
+            }
+            return
+        }
         let host = PaywallHost(reason: reason)
         host.modalPresentationStyle = .formSheet
         host.preferredContentSize = CGSize(width: 620, height: 860)
         top.present(host, animated: true)
     }
 
+    /// The controller in front: the last one presented that is not on its way out.
     @MainActor
     private static func topViewController() -> UIViewController? {
         let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive }
-        var top = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
-        while let next = top?.presentedViewController {
+        let window = scene?.windows.first(where: \.isKeyWindow) ?? scene?.windows.first
+        var top = window?.rootViewController
+        while let next = top?.presentedViewController, !next.isBeingDismissed {
             top = next
         }
         return top

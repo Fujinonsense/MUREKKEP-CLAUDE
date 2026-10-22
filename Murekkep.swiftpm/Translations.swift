@@ -5,7 +5,7 @@ enum Translations {
     static let english: [String: String] = {
         var all: [String: String] = [:]
         all.reserveCapacity(920)
-        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11, part12] {
+        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11, part12, part13] {
             all.merge(part) { first, _ in first }
         }
         return all
@@ -1210,5 +1210,22 @@ enum Translations {
         "Favoriler": "Favourites",
         "Favorilere ekle": "Add to favourites",
         "Favorilerden çıkar": "Remove from favourites",
+    ]
+
+    /// The pen panel's shelves and the artwork backgrounds.
+    private static let part13: [String: String] = [
+        "Boğaz": "Bosphorus",
+        "Ege": "Aegean",
+        "Favorileri düzenle": "Edit favourites",
+        "Henüz favori kalem yok": "No favourite pens yet",
+        "Kalemler": "Pens",
+        "Mürekkep Pro'da": "In Mürekkep Pro",
+        "Pamuk kâğıt": "Cotton paper",
+        "Pro'yu aç": "Get Pro",
+        "\"Favorileri düzenle\"ye bas ve sevdiğin kalemlerin kalbine dokun. Favoriler defterin kalem çubuğunda hep durur.": "Tap \"Edit favourites\" and touch the heart of the pens you love. Favourites always stay in the notebook's pen bar.",
+        "İznik çinisi": "Iznik tiles",
+        "Ebru, İznik çinisi ve 10 sanat arka planı": "Ebru, Iznik tiles and 10 art backgrounds",
+        "Düz renkler ücretsiz; ebru, İznik çinisi, Boğaz ve diğer sanat arka planları Mürekkep Pro'da.": "Plain colours are free; ebru, Iznik tiles, the Bosphorus and the other art backgrounds are in Mürekkep Pro.",
+        "Sanat arka planları kitaplığın arkasında durur; yazılar her birinde okunacak renge geçer.": "Art backgrounds sit behind the library; the text switches to a colour that reads on each one.",
     ]
 }

@@ -36,6 +36,7 @@ struct PaneHeader<Trailing: View>: View {
                 }
             }
             Spacer(minLength: 10)
+            ProCornerButton()
             trailing()
         }
         .padding(.top, 18)

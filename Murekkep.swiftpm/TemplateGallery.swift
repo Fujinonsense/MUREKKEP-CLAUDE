@@ -88,7 +88,7 @@ struct TemplateGallery: View {
                     )
                     .overlay(alignment: .topTrailing) {
                         if locked {
-                            ProLockBadge()
+                            ProBadge()
                                 .padding(6)
                         }
                     }

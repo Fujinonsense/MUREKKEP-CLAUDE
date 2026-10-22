@@ -95,8 +95,8 @@ struct SettingsView: View {
             Text(Loc.t("Kitaplık arka planı"))
         } footer: {
             Text(ProStore.sells
-                 ? Loc.t("Düz renkler ücretsiz; ebru, defter ve hareketli arka planlar Mürekkep Pro'da. Hareketli olanlar animasyonlar kapalıyken, pil tasarrufunda ve Hareketi Azalt açıkken durur.")
-                 : Loc.t("Hareketli arka planlar animasyonlar kapalıyken, pil tasarrufunda ve Hareketi Azalt açıkken durur."))
+                 ? Loc.t("Düz renkler ücretsiz; ebru, İznik çinisi, Boğaz ve diğer sanat arka planları Mürekkep Pro'da.")
+                 : Loc.t("Sanat arka planları kitaplığın arkasında durur; yazılar her birinde okunacak renge geçer."))
         }
     }
 

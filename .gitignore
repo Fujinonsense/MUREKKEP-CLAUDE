@@ -25,3 +25,7 @@ entities.json
 /ml/**/runs/
 /ml/**/*.pt
 /ml/**/*.onnx
+
+# Local secrets (Higgsfield API key and the like) never go to GitHub.
+.env.local
+.env*.local

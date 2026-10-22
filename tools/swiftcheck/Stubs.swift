@@ -11,3 +11,12 @@ enum AnswerLanguage {
 }
 
 enum SpeechText {}
+
+/// Brushes.swift's palettes name colours; only their existence matters here.
+struct InkColor: Equatable, Hashable {
+    var hex: UInt32
+
+    init(hex: UInt32) {
+        self.hex = hex
+    }
+}

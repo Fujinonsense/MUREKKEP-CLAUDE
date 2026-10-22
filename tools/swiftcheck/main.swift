@@ -527,5 +527,20 @@ check(manyFavourites.favorites.count == 6 && manyFavourites.recent == ["gold", "
 check(PenStrip.toggled("gold", in: ["pen"]) == ["pen", "gold"] && PenStrip.toggled("pen", in: ["pen", "gold"]) == ["gold"],
       "pen bar: starring and unstarring")
 
+// The pen panel's shelves (PenShelf): each pen on exactly one shelf, the 3D inks together.
+let shelved = PenShelf.allCases.filter { $0 != .favorites }.flatMap { $0.brushes(favorites: []) }
+check(shelved.count == Brush.allCases.count && Set(shelved) == Set(Brush.allCases), "pen shelves: every pen once")
+check(PenShelf.threeD.brushes(favorites: []).allSatisfy(\.isPremium)
+      && PenShelf.allCases.filter { $0 != .threeD && $0 != .favorites }.allSatisfy { $0.brushes(favorites: []).allSatisfy { !$0.isPremium } },
+      "pen shelves: the 3D inks have their own shelf")
+check(PenShelf.favorites.brushes(favorites: [.lava, .pen]) == [.pen, .lava], "pen shelves: favourites in the panel's order")
+check(PenShelf.shelf(of: .gold) == .threeD && PenShelf.shelf(of: .pencil) == .writing && PenShelf.shelf(of: .grass) == .nature
+      && PenShelf.shelf(of: .neon) == .paint, "pen shelves: a pen's own shelf")
+check(PenShelf.opening(saved: "", favorites: [], current: .neon) == .paint
+      && PenShelf.opening(saved: "", favorites: [.pen], current: .neon) == .favorites
+      && PenShelf.opening(saved: "nature", favorites: [.pen], current: .neon) == .nature
+      && PenShelf.opening(saved: "favorites", favorites: [], current: .lava) == .threeD,
+      "pen shelves: which shelf the panel opens on")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

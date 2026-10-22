@@ -256,7 +256,7 @@ final class AppSettings: ObservableObject {
         dryDuration = min(max(d.double(forKey: "dryDuration"), 1), 20)
         lavaCoolDuration = min(max(d.double(forKey: "lavaCoolDuration"), 2), 20)
         flowerLevel = min(max(d.integer(forKey: "flowerLevel"), 0), 2)
-        appBackground = AppBackground(rawValue: d.string(forKey: "appBackground") ?? "") ?? .paper
+        appBackground = AppBackground.migrated(d.string(forKey: "appBackground") ?? "") ?? .paper
         favoriteBrushes = (d.array(forKey: "favoriteBrushes") as? [Int] ?? []).compactMap { Brush(rawValue: UInt8(clamping: $0)) }
         hasAPIKey = (Keychain.read(account: Self.keyAccount) ?? d.string(forKey: Self.fallbackKey)) != nil
     }

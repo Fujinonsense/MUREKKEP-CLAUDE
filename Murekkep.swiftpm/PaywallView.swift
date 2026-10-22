@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The Mürekkep Pro page: what Pro adds beside the free plan, the three plans and the purchase.
 /// It opens when a free allowance runs out or a Pro-only thing is touched, and from Settings. The
-/// sheet of ebru at the top is the same marbling the Pro backgrounds use.
+/// sheet of ebru at the top is the same artwork as the Pro library background.
 struct PaywallView: View {
     let reason: ProPlan.Feature?
     let close: () -> Void
@@ -54,7 +54,7 @@ struct PaywallView: View {
 
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
-            EbruBackground()
+            AppBackgroundView(kind: .ebru)
             LinearGradient(colors: [.clear, Theme.paper], startPoint: .center, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: "Mürekkep Pro")
@@ -106,7 +106,7 @@ struct PaywallView: View {
                  Loc.t("Ücretsiz planda haftada {0}", "\(ProPlan.weeklyStudySets)"))
             perk("paintbrush.pointed", Loc.t("10 adet 3D mürekkep"),
                  Loc.t("Lav, altın, krom, galaksi, yıldırım, inci ve fazlası"))
-            perk("photo.artframe", Loc.t("Ebru ve hareketli arka planlar"),
+            perk("photo.artframe", Loc.t("Ebru, İznik çinisi ve 10 sanat arka planı"),
                  Loc.t("Ücretsiz planda düz renkler"))
             perk("doc.richtext", Loc.t("Planlayıcı, CV ve özel şablonlar"),
                  Loc.t("Haftalık, aylık, toplantı, nota kâğıdı ve fazlası"))
@@ -289,6 +289,47 @@ struct PaywallView: View {
         .foregroundStyle(.secondary)
         .tint(Color.secondary)
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// The small mark on Pro-only pens, templates and backgrounds: "Pro" in the app's ink gradient.
+struct ProBadge: View {
+    var body: some View {
+        Text(verbatim: "Pro")
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2.5)
+            .background(Theme.ai, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
+            .shadow(color: Theme.aiStart.opacity(0.35), radius: 3, y: 1)
+            .accessibilityLabel(Text(verbatim: "Mürekkep Pro"))
+    }
+}
+
+/// The quiet way to Mürekkep Pro at the top right of the library (App Store edition, until Pro is on).
+struct ProCornerButton: View {
+    @ObservedObject private var pro = ProStore.shared
+
+    var body: some View {
+        if pro.locks {
+            Button {
+                Paywall.present()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                    Text(verbatim: "Pro")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.ai)
+                .padding(.horizontal, 14)
+                .frame(height: 42)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.aiStart.opacity(0.35), lineWidth: 1))
+            }
+            .buttonStyle(PressableStyle())
+            .accessibilityLabel(Loc.t("Mürekkep Pro'ya geç"))
+        }
     }
 }
 
