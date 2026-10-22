@@ -237,3 +237,59 @@ The pen-motion reader matches Python on all 580 lines, and every parity check pa
 - **Step 1,500 over step 3,750.** It is better on the held-out real lines (5.0 % against 6.3 %); the later one was better on synthetic fonts (395 against 391). Cost if wrong: one character in 160 either way; the held-out set is small.
 - **Six held-out lines are few.** More pages from the user (a PDF export is enough) would make the measurement and the tuning stronger. Cost if wrong: the 4.1 % may not hold for words the lines do not contain.
 - **Merging "a letter with its accents" costs one case in 165 of two lines stacked at 1.1 line heights** (142 against 143). Lines that close are nearly touching. Cost if wrong: such tight lines merge a little more often.
+
+## Build 25: Qwen3.5 by default, the App Store edition, backgrounds and favourite pens
+
+**Qwen3.5 as the brain.**
+- Qwen3.5 is the only engine in the pickers. Claude stays listed only with a key; a local server only while it is chosen.
+- Old settings (auto, on-device, offline) move to it.
+- It downloads by itself on Wi‑Fi in a background `URLSession`. The download continues when the app closes and resumes with a Range request.
+- Apple's model and the offline core remain as silent fallbacks.
+
+**App Store edition (`APPSTORE` flag, CI input `edition=appstore`, `Murekkep-AppStore.ipa`).** Mürekkep Pro uses StoreKit 2.
+
+| Plan | Turkey | US |
+|---|---|---|
+| Monthly | ₺129,99 | $3.99 |
+| Yearly, with a 7-day trial | ₺899,99 | $24.99 |
+| Lifetime | ₺1.299,99 | $39.99 |
+
+- **Free plan:**
+  - Notebooks, PDFs, pens, the text pen and the student templates.
+  - 15 AI answers a day, 1 overview a week and 3 study sets a week.
+  - Plain colour backgrounds.
+- **Pro:** removes the limits and opens the 10 3D inks, planner/CV templates and creative backgrounds.
+- **Personal build:** sells nothing and has everything open.
+
+**Backgrounds.**
+- Free: paper, ivory, sand, sage, lavender, night.
+- Pro:
+  - Still: ruled, ebru, gold leaf.
+  - Moving: ink flow and aurora (mesh gradients on iPadOS 18), starlight, sea, sakura.
+- The moving ones stand still with animations off, battery saving, Low Power Mode or Reduce Motion.
+
+**Favourite pens.** A heart on each pen in the pen panel. Hearted pens always stand in the notebook's pen bar, before the recent ones.
+
+### Rulings
+
+- **Below-market prices.** Yearly Pro is 34 % under Goodnotes Pro's yearly price, which also leaves out AI. It is 10 % under Noteshelf. The AI runs on the iPad, so there are no server costs. Cost if wrong: less revenue per user; prices can be raised in App Store Connect without a new build.
+- **The free plan stays a full note app.** Only AI volume, 3D inks, special templates and creative backgrounds are paid. The user asked not to "kill the app". Cost if wrong: fewer upgrades.
+- **The free allowances are counted on the iPad** (UserDefaults). Reinstalling resets them. Cost if wrong: a determined user gets a few extra free answers; no server is needed.
+- **Ebru, not a photo.** The sheet is generated with Jaffer's mathematical marbling: 25 ring drops, then two back-and-forth combs. It is cached as a PNG in Caches. Cost if wrong: about 0.3 s once on first use.
+- **Claude with the user's own key is not counted** against the daily answers; the user pays Anthropic directly. Cost if wrong: none for the free plan.
+
+### Checks run here (build 25)
+
+- pytest: 248 passed, 1 skipped.
+- `tools/swiftcheck`: all passed. New checks cover:
+  - free allowances per day and per ISO week;
+  - the yearly saving (42 % in Turkey, 47 % in the US);
+  - the pen bar's favourites and recent pens.
+- Ebru: the Swift maths, compiled on Windows, matches the numpy twin on 160,000 of 160,000 pixels. It renders 1024 px in 0.08 s on this PC across all cores.
+- CI workflow: a dry run of the project step with `EDITION=appstore` puts `APPSTORE` in all three projects (full, MLX-less, plain).
+
+### Not verified here (build 25)
+
+- SwiftUI, StoreKit and the paywall compile only in CI. They have not been seen on an iPad.
+- Purchases cannot be tested with an unsigned IPA. They need TestFlight and a sandbox account (`docs/appstore-yayin-rehberi.md`).
+- The moving backgrounds' smoothness on the iPad.
