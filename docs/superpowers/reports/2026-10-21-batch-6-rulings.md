@@ -252,7 +252,7 @@ The pen-motion reader matches Python on all 580 lines, and every parity check pa
 |---|---|---|
 | Monthly | ₺129,99 | $3.99 |
 | Yearly, with a 7-day trial | ₺899,99 | $24.99 |
-| Lifetime | ₺1.299,99 | $39.99 |
+| Lifetime | ₺2.999,99 | $79.99 |
 
 - **Free plan:**
   - Notebooks, PDFs, pens, the text pen and the student templates.

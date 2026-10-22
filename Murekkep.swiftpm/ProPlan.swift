@@ -105,8 +105,8 @@ enum ProPlan {
                 fallbackAmountTR: 129.99, fallbackAmountUS: 3.99),
         Product(id: "murekkep.pro.yearly", kind: .yearly, fallbackPriceTR: "₺899,99", fallbackPriceUS: "$24.99",
                 fallbackAmountTR: 899.99, fallbackAmountUS: 24.99),
-        Product(id: "murekkep.pro.lifetime", kind: .lifetime, fallbackPriceTR: "₺1.299,99", fallbackPriceUS: "$39.99",
-                fallbackAmountTR: 1299.99, fallbackAmountUS: 39.99),
+        Product(id: "murekkep.pro.lifetime", kind: .lifetime, fallbackPriceTR: "₺2.999,99", fallbackPriceUS: "$79.99",
+                fallbackAmountTR: 2999.99, fallbackAmountUS: 79.99),
     ]
 
     static func product(_ kind: Product.Kind) -> Product {

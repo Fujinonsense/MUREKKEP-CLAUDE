@@ -54,7 +54,7 @@ Bu adımda anahtar oluşturuyorsun. Anahtarları bana yazma; yalnızca GitHub'a 
    | `murekkep.pro.yearly` | 1 yıl | ₺899,99 | $24.99 |
 
 3. Yıllık aboneliğe **Tanıtım Teklifi** ekle: "Ücretsiz", 1 hafta, yeni aboneler için. Ödeme ekranında "7 gün ücretsiz" bu teklife bağlı.
-4. Uygulama İçi Satın Almalar > **Tüketilemeyen** (Non-Consumable) ürün ekle: `murekkep.pro.lifetime`, ₺1.299,99 / $39.99.
+4. Uygulama İçi Satın Almalar > **Tüketilemeyen** (Non-Consumable) ürün ekle: `murekkep.pro.lifetime`, ₺2.999,99 / $79.99.
 5. Her ürüne Türkçe ve İngilizce görünen ad ve kısa açıklama yaz. Örnek ad: "Mürekkep Pro – Aylık". Örnek açıklama: "Sınırsız yapay zekâ, 3D mürekkepler, yaratıcı arka planlar."
 6. Her ürüne bir inceleme ekran görüntüsü ekle: TestFlight'taki ödeme ekranının fotoğrafı yeter.
 7. Apple'da tam bu fiyat yoksa en yakın fiyat basamağını seç. Uygulama App Store'un gösterdiği fiyatı kendiliğinden yazar.

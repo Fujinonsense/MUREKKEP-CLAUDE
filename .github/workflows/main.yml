@@ -285,8 +285,11 @@ jobs:
                     - "Package*.swift"
                     - "*_2.swift"
                     - "AppVoices/**"
+                    - "PrivacyInfo.xcprivacy"
                 - path: AppSource/AppVoices
                   type: folder
+                  buildPhase: resources
+                - path: AppSource/PrivacyInfo.xcprivacy
                   buildPhase: resources
               dependencies:
                 - framework: Frameworks/sherpa-onnx.xcframework
@@ -308,7 +311,7 @@ jobs:
                   INFOPLIST_FILE: AppSource/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
-                  CURRENT_PROJECT_VERSION: "25"
+                  CURRENT_PROJECT_VERSION: "26"
                   SWIFT_VERSION: "5.0"
                   TARGETED_DEVICE_FAMILY: "1,2"
                   ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -339,6 +342,9 @@ jobs:
                     - "Package*.swift"
                     - "*_2.swift"
                     - "AppVoices/**"
+                    - "PrivacyInfo.xcprivacy"
+                - path: AppSource/PrivacyInfo.xcprivacy
+                  buildPhase: resources
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
@@ -346,7 +352,7 @@ jobs:
                   INFOPLIST_FILE: AppSource/Info.plist
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
-                  CURRENT_PROJECT_VERSION: "25"
+                  CURRENT_PROJECT_VERSION: "26"
                   SWIFT_VERSION: "5.0"
                   SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MUREKKEP_PLAIN"
                   TARGETED_DEVICE_FAMILY: "1,2"
@@ -369,6 +375,9 @@ jobs:
                   text = text.replace("SWIFT_VERSION: \"5.0\"",
                                       "SWIFT_VERSION: \"5.0\"\n        SWIFT_ACTIVE_COMPILATION_CONDITIONS: \"$(inherited) APPSTORE\"")
               assert "APPSTORE" in text, name
+              # iPad only: marked for iPhone too, review would want iPhone screenshots and test it there.
+              text = text.replace("TARGETED_DEVICE_FAMILY: \"1,2\"", "TARGETED_DEVICE_FAMILY: \"2\"")
+              assert "TARGETED_DEVICE_FAMILY: \"2\"" in text, name
               open(name, "w", encoding="utf-8").write(text)
           PYEOF
           fi

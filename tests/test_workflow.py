@@ -139,3 +139,20 @@ def test_app_store_edition_can_be_chosen(job):
     upload = step_with(job, "actions/upload-artifact@v4")
     assert upload["with"]["name"] == "${{ inputs.edition == 'appstore' && 'Murekkep-AppStore' || 'Murekkep-IPA' }}"
     assert upload["with"]["path"] == "Murekkep*.ipa"
+
+
+def test_privacy_manifest_is_a_resource_in_every_project(job):
+    script = runs(job)
+    for name in ["project.yml", "project-plain.yml"]:
+        spec = script.split(f"cat << 'EOF' > {name}", 1)[1].split("EOF", 1)[0]
+        assert '- "PrivacyInfo.xcprivacy"' in spec, name
+        assert "- path: AppSource/PrivacyInfo.xcprivacy\n" in spec, name
+        entry = spec.split("- path: AppSource/PrivacyInfo.xcprivacy", 1)[1].split("- ", 1)[0]
+        assert "buildPhase: resources" in entry, name
+
+
+def test_app_store_edition_is_ipad_only(job):
+    # Marked for iPhone, review would want iPhone screenshots and test it there.
+    script = runs(job)
+    patch = script.split('if [ "$EDITION" = "appstore" ]; then', 1)[1].split("fi\n", 1)[0]
+    assert 'TARGETED_DEVICE_FAMILY: \\"1,2\\"' in patch and 'TARGETED_DEVICE_FAMILY: \\"2\\"' in patch

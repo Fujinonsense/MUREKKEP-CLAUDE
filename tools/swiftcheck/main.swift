@@ -508,6 +508,9 @@ check(ProPlan.yearlySaving(monthly: 129.99, yearly: 899.99) == 42 && ProPlan.yea
       && ProPlan.yearlySaving(monthly: 0, yearly: 10) == 0 && ProPlan.yearlySaving(monthly: 1, yearly: 20) == 0,
       "pro: the yearly plan's saving")
 check(ProPlan.products.allSatisfy { $0.fallbackAmountTR > 0 && $0.fallbackAmountUS > 0 }, "pro: planned amounts")
+check(ProPlan.product(.lifetime).fallbackAmountTR >= 3 * ProPlan.product(.yearly).fallbackAmountTR
+      && ProPlan.product(.lifetime).fallbackAmountUS >= 3 * ProPlan.product(.yearly).fallbackAmountUS,
+      "pro: lifetime costs more than three years of the yearly plan")
 
 // The notebook's pen bar: favourites first, then the pens used last.
 let order = ["pen", "pencil", "fountain", "marker", "highlighter", "lava", "gold", "brush"]
