@@ -1,6 +1,7 @@
 """The app's privacy manifest: App Store Connect refuses uploads whose binary uses a required-reason
 API without a declared reason (ITMS-91053). The build-25 binary uses UserDefaults, file dates
-(stat, fstat, NSURLContentModificationDateKey) and free disk space (NSURLVolumeAvailableCapacity...)."""
+(stat, fstat, NSURLContentModificationDateKey), free disk space (NSURLVolumeAvailableCapacity...) and,
+through metal-cpp in MLX, the systemUptime selector (tools/appstore_check.py finds these)."""
 import plistlib
 from pathlib import Path
 
@@ -25,4 +26,5 @@ def test_required_reason_apis_declared():
         "NSPrivacyAccessedAPICategoryUserDefaults": ["CA92.1"],
         "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
         "NSPrivacyAccessedAPICategoryDiskSpace": ["E174.1"],
+        "NSPrivacyAccessedAPICategorySystemBootTime": ["35F9.1"],
     }
