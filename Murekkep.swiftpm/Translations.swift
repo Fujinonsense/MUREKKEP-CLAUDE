@@ -1076,9 +1076,9 @@ enum Translations {
     private static let part11: [String: String] = [
         "İndirilen model yazamadı, Apple modeliyle yazılıyor…": "The downloaded model couldn't write it; writing with Apple's model…",
         "{0} senaryoyu yazıyor…": "{0} is writing the script…",
-        "Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Wi‑Fi'de arka planda iner, uygulamayı kapatsan da sürer. Sorular ve notlar iPad'den çıkmaz.": "The model is chosen by the iPad's memory: Qwen3.5 9B with 16 GB, 4B with 8 GB, 2B with 6 GB. It downloads in the background on Wi‑Fi and keeps going when you close the app. Questions and notes never leave the iPad.",
-        "Wi‑Fi'de kendiliğinden indir": "Download by itself on Wi‑Fi",
-        "İndiriliyor: {0} / {1}. Wi‑Fi'de arka planda sürer; uygulamayı kapatabilirsin.": "Downloading: {0} / {1}. It goes on in the background on Wi‑Fi; you can close the app.",
+        "Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Her internette (Wi‑Fi, mobil veri, paylaşılan internet) arka planda iner, uygulamayı kapatsan da sürer. Mobil veride 2–6 GB harcar. Sorular ve notlar iPad'den çıkmaz.": "The model is chosen by the iPad's memory: Qwen3.5 9B with 16 GB, 4B with 8 GB, 2B with 6 GB. It downloads in the background on any internet (Wi‑Fi, mobile data, a hotspot) and keeps going when you close the app. On mobile data it uses 2–6 GB. Questions and notes never leave the iPad.",
+        "Kendiliğinden indir": "Download by itself",
+        "İndiriliyor: {0} / {1}. Arka planda sürer; uygulamayı kapatabilirsin.": "Downloading: {0} / {1}. It goes on in the background; you can close the app.",
         "İndirme sunucusu yanıt vermedi.": "The download server did not answer.",
         "Qwen3.5 iniyor · %{0}": "Qwen3.5 downloading · {0}%",
         "Qwen3.5 hazırlanıyor": "Getting Qwen3.5 ready",
@@ -1086,7 +1086,7 @@ enum Translations {
         "Bağlantı zaman aşımına uğradı. \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "The connection timed out. Tap \"Download\" again; it continues where it stopped.",
         "Bilgisayardaki sunucu": "Server on your computer",
         "Bu derlemede indirilebilir model motoru (MLX) yok. Yeni derlemede gelir.": "This build has no engine for the downloadable model (MLX). It comes with a new build.",
-        "Bu iPad için en güçlü model. Bir kez indirilir ({0}, Wi‑Fi önerilir), sonra tamamen cihazda ve internetsiz çalışır.": "The strongest model for this iPad. Downloaded once ({0}, Wi‑Fi recommended), then it runs entirely on the device, offline.",
+        "Bu iPad için en güçlü model. Bir kez indirilir ({0}), sonra tamamen cihazda ve internetsiz çalışır.": "The strongest model for this iPad. Downloaded once ({0}), then it runs entirely on the device, offline.",
         "Bu iPad'deki en güçlü beyin seçilir: indirilen model, yoksa Apple Intelligence, o da yoksa çevrimdışı çekirdek. Hepsi cihazda çalışır.": "The strongest brain on this iPad is used: the downloaded model, otherwise Apple Intelligence, otherwise the offline core. All run on the device.",
         "Bu iPad'in belleği indirilebilir model için yetmiyor (en az 6 GB gerekir).": "This iPad doesn't have enough memory for the downloadable model (at least 6 GB is needed).",
         "Cihazda · {0}": "On device · {0}",
@@ -1129,7 +1129,7 @@ enum Translations {
         "İndirilen model kullanılamadı: {0} Şimdilik çevrimdışı çekirdekle yanıtlıyorum.": "The downloaded model couldn't be used: {0} Answering with the offline core for now.",
         "İndiriliyor: {0} / {1}. Uygulama açık kalsın; kapanırsa kaldığı yerden sürer.": "Downloading: {0} / {1}. Keep the app open; if it closes, the download continues where it stopped.",
         "İndirme sunucusu yanıt vermedi (HTTP {0}).": "The download server didn't answer (HTTP {0}).",
-        "İnternet bağlantısı yok. Wi-Fi'ye bağlanınca \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "No internet connection. Once on Wi-Fi, tap \"Download\" again; it continues where it stopped.",
+        "İnternet bağlantısı yok. İnternete bağlanınca \"İndir\"e yeniden bas; kaldığı yerden devam eder.": "No internet connection. Once you're online, tap \"Download\" again; it continues where it stopped.",
     ]
 
     /// Mürekkep Pro, the backgrounds and favourite pens.

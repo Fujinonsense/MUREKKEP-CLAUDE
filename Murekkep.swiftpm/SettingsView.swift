@@ -123,11 +123,11 @@ struct SettingsView: View {
         Section {
             BrainCard()
                 .padding(.vertical, 4)
-            Toggle(Loc.t("Wi‑Fi'de kendiliğinden indir"), isOn: $settings.autoBrainDownload)
+            Toggle(Loc.t("Kendiliğinden indir"), isOn: $settings.autoBrainDownload)
         } header: {
             Text(Loc.t("Yapay zekâ beyni"))
         } footer: {
-            Text(Loc.t("Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Wi‑Fi'de arka planda iner, uygulamayı kapatsan da sürer. Sorular ve notlar iPad'den çıkmaz."))
+            Text(Loc.t("Model iPad'in belleğine göre seçilir: 16 GB'ta Qwen3.5 9B, 8 GB'ta 4B, 6 GB'ta 2B. Her internette (Wi‑Fi, mobil veri, paylaşılan internet) arka planda iner, uygulamayı kapatsan da sürer. Mobil veride 2–6 GB harcar. Sorular ve notlar iPad'den çıkmaz."))
         }
     }
 

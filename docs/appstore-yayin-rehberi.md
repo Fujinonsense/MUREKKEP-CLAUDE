@@ -146,7 +146,7 @@ Ekim 2026 App Store Türkiye fiyatlarıyla karşılaştırma:
    - Önerilen ekranlar: kitaplık (ebru arka planla), el yazısıyla not, metin kalemi, yapay zekâ cevabı, video özet.
 2. **Altyazı** (en fazla 30 karakter): "El yazısı not, PDF ve yapay zekâ".
 3. **Anahtar kelimeler**: not,pdf,el yazısı,ders,yks,öğrenci,kalem,ipad,çalışma.
-4. **İnceleme notu** (Apple'ın incelemecisine): "Giriş yok. Yapay zekâ modeli (Qwen3.5, 2–6 GB) ilk açılışta Wi‑Fi'de Hugging Face'ten indirilir ve iPad'de çalışır. Ücretsiz planda günde 15 cevap var; Pro'yu test etmek için yıllık plandaki 7 günlük deneme kullanılabilir. Arka planda ses: ders kaydı ve sesli özetler uygulama arka plandayken de sürer."
+4. **İnceleme notu** (Apple'ın incelemecisine): "Giriş yok. Yapay zekâ modeli (Qwen3.5, 2–6 GB) ilk açılışta internetten (Wi‑Fi ya da mobil veri) Hugging Face'ten indirilir ve iPad'de çalışır. Ücretsiz planda günde 15 cevap var; Pro'yu test etmek için yıllık plandaki 7 günlük deneme kullanılabilir. Arka planda ses: ders kaydı ve sesli özetler uygulama arka plandayken de sürer."
 
 ## Aşama 3: Yükleme ve gönderme
 

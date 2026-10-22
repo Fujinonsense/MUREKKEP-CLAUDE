@@ -86,7 +86,7 @@ final class DeviceBrain: ObservableObject {
     }
 
     /// Starts the download by itself when the app opens (and again after a failed try): Qwen is the
-    /// app's brain, and it comes down in the background on Wi-Fi. Not after the user stopped it.
+    /// app's brain, and it comes down in the background on any internet. Not after the user stopped it.
     @MainActor
     func startIfNeeded(automatic: Bool) {
         guard automatic, BrainRuntime.isCompiledIn, let model, !BrainBackground.isPaused(model) else { return }
@@ -242,7 +242,7 @@ enum BrainFetcher {
         if let error = error as? URLError {
             switch error.code {
             case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
-                return Loc.t("İnternet bağlantısı yok. Wi-Fi'ye bağlanınca \"İndir\"e yeniden bas; kaldığı yerden devam eder.")
+                return Loc.t("İnternet bağlantısı yok. İnternete bağlanınca \"İndir\"e yeniden bas; kaldığı yerden devam eder.")
             case .timedOut:
                 return Loc.t("Bağlantı zaman aşımına uğradı. \"İndir\"e yeniden bas; kaldığı yerden devam eder.")
             default:
@@ -253,8 +253,8 @@ enum BrainFetcher {
     }
 }
 
-/// The model's files come down in iOS's background download session: on Wi-Fi (not on mobile data
-/// or in Low Data Mode), while the app is closed or another app is in front, and each file goes on
+/// The model's files come down in iOS's background download session: on any internet (Wi-Fi, mobile
+/// data, a hotspot), while the app is closed or another app is in front, and each file goes on
 /// where it stopped (BrainDownloadPlan). iOS opens the app in the background to hand over files that
 /// finished while it was closed (AppDelegate).
 final class BrainBackground: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
@@ -280,8 +280,9 @@ final class BrainBackground: NSObject, URLSessionDownloadDelegate, @unchecked Se
         let configuration = URLSessionConfiguration.background(withIdentifier: Self.identifier)
         configuration.isDiscretionary = false
         configuration.sessionSendsLaunchEvents = true
-        configuration.allowsExpensiveNetworkAccess = false
-        configuration.allowsConstrainedNetworkAccess = false
+        // Any internet: Wi-Fi, mobile data, a phone's hotspot and Low Data Mode (the user's choice).
+        configuration.allowsExpensiveNetworkAccess = true
+        configuration.allowsConstrainedNetworkAccess = true
         configuration.timeoutIntervalForResource = 7 * 24 * 60 * 60
         return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }()

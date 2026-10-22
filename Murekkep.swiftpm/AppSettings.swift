@@ -153,7 +153,7 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var hasAPIKey: Bool
 
-    /// The AI model (Qwen3.5) downloads by itself on Wi-Fi, in the background.
+    /// The AI model (Qwen3.5) downloads by itself on any internet, in the background.
     @Published var autoBrainDownload: Bool {
         didSet { UserDefaults.standard.set(autoBrainDownload, forKey: "autoBrainDownload") }
     }

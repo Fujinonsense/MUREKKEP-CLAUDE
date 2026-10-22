@@ -61,12 +61,12 @@ struct BrainCard: View {
         case .ready:
             return Loc.t("Hazır. Asistan otomatik olarak bunu kullanıyor; internetsiz çalışır.")
         case let .downloading(done, total):
-            return Loc.t("İndiriliyor: {0} / {1}. Wi‑Fi'de arka planda sürer; uygulamayı kapatabilirsin.",
+            return Loc.t("İndiriliyor: {0} / {1}. Arka planda sürer; uygulamayı kapatabilirsin.",
                          BrainModel.sizeText(done, english: Loc.isEnglish), BrainModel.sizeText(total, english: Loc.isEnglish))
         case .absent, .failed:
             return compact
                 ? Loc.t("Soruları adım adım düşünerek çözer. Bir kez indir ({0}), sonra internetsiz çalışır.", size)
-                : Loc.t("Bu iPad için en güçlü model. Bir kez indirilir ({0}, Wi‑Fi önerilir), sonra tamamen cihazda ve internetsiz çalışır.", size)
+                : Loc.t("Bu iPad için en güçlü model. Bir kez indirilir ({0}), sonra tamamen cihazda ve internetsiz çalışır.", size)
         }
     }
 
