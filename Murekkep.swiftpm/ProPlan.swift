@@ -36,8 +36,9 @@ enum ProPlan {
     static let weeklyOverviews = 1
     static let weeklyStudySets = 3
     static let freeTrialDays = 7
-    /// Points of stroke the nature pens draw for free, once: about 25 lines across a page.
-    static let trialInk = 15_000
+    /// Points of stroke the nature pens draw for free, once: about 5 lines across a page, enough to
+    /// see what they do.
+    static let trialInk = 3_000
 
     /// How many a free user may use, and whether the count starts again each week (else each day);
     /// nil for what only Pro opens.

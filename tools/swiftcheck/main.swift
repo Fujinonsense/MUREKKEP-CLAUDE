@@ -529,9 +529,9 @@ check(PenStrip.toggled("gold", in: ["pen"]) == ["pen", "gold"] && PenStrip.toggl
 
 // Trial ink: the nature pens draw a fixed amount for free, once; Pro draws without a limit.
 var ink = ProPlan.Usage()
-check(ink.inkLeft() == ProPlan.trialInk && ProPlan.trialInk == 15_000, "trial ink: a full trial to start")
-check(ink.spendInk(9_000, isPro: false) && ink.inkLeft() == 6_000, "trial ink: a stroke spends its length")
-check(ink.spendInk(8_000, isPro: false) && ink.inkLeft() == 0, "trial ink: the last stroke may run past the end")
+check(ink.inkLeft() == ProPlan.trialInk && ProPlan.trialInk == 3_000, "trial ink: a full trial to start (about 5 lines)")
+check(ink.spendInk(2_000, isPro: false) && ink.inkLeft() == 1_000, "trial ink: a stroke spends its length")
+check(ink.spendInk(1_500, isPro: false) && ink.inkLeft() == 0, "trial ink: the last stroke may run past the end")
 check(!ink.spendInk(10, isPro: false) && ink.inkLeft() == 0, "trial ink: none left, nothing drawn")
 check(ink.spendInk(10, isPro: true) && ink.inkLeft() == 0, "trial ink: Pro draws on")
 check(ink.consume(.aiAnswer, isPro: false, on: wednesday, calendar: proCalendar) && ink.inkLeft() == 0,
