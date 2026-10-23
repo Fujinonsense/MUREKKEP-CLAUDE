@@ -19,6 +19,10 @@ final class LectureAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var rate: Float = 1 {
         didSet { player?.rate = rate }
     }
+    /// The take's loudness, 0…1 of the iPad's own volume (the keyboard's up and down arrows).
+    @Published var volume: Float = 1 {
+        didSet { player?.volume = volume }
+    }
     /// Hide the take's ink until the playhead reaches it.
     @Published var replayInk = true {
         didSet { updateReplay() }
@@ -188,6 +192,7 @@ final class LectureAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if time >= take.duration - 0.05 { time = 0 }
         p.currentTime = time
         p.rate = rate
+        p.volume = volume
         p.play()
         isPlaying = true
         updateTimer()
@@ -208,6 +213,17 @@ final class LectureAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
         time = min(max(seconds, 0), duration)
         player?.currentTime = time
         updateReplay()
+    }
+
+    /// The keyboard's left and right arrows: the playhead some seconds back or on.
+    func skip(by seconds: Double) {
+        guard !isRecording, let take = current else { return }
+        seek(to: RecordingSync.skip(time: time, by: seconds, duration: take.duration))
+    }
+
+    /// The keyboard's up and down arrows: the volume a tenth up or down.
+    func nudgeVolume(by step: Float) {
+        volume = RecordingSync.volume(volume, step: step)
     }
 
     /// A tap on ink: plays its take from a little before it was written. False when the ink was not
@@ -293,7 +309,10 @@ final class LectureAudio: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     private func tick() {
         if let r = recorder {
-            elapsed = r.currentTime
+            // The top bar's clock shows whole seconds; publishing more often would redraw the editor
+            // twenty times a second for nothing.
+            let t = r.currentTime
+            if Int(t) != Int(elapsed) { elapsed = t }
         }
         if let p = player, isPlaying {
             time = p.currentTime

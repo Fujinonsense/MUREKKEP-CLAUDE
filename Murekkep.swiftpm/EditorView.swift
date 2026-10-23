@@ -117,8 +117,7 @@ struct EditorContent: View {
                     Spacer()
                     if showLecture {
                         LectureBar(lecture: lecture) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showLecture = false }
-                            lecture.closePlayback()
+                            setLecturePlayer(false)
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
@@ -203,19 +202,45 @@ struct EditorContent: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                if !lecture.takes.isEmpty, !lecture.isRecording {
+                    Button {
+                        setLecturePlayer(!showLecture)
+                    } label: {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(showLecture ? Theme.ink : Color.accentColor)
+                            .padding(4)
+                            .background(Circle().fill(showLecture ? Theme.ink.opacity(0.15) : Color.clear))
+                    }
+                    .accessibilityLabel(showLecture ? Loc.t("Oynatıcıyı kapat") : Loc.t("Kayıtları dinle"))
+                }
+                // One tap starts the lecture recording, one tap stops it; the take then opens in the player.
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showLecture.toggle() }
-                    if showLecture {
-                        lecture.openPlayback()
+                    if lecture.isRecording {
+                        let before = lecture.takes.count
+                        lecture.stopRecording()
+                        if lecture.takes.count > before {
+                            setLecturePlayer(true)
+                            editor.banner = Loc.t("Kaydedildi. Dinlerken mürekkebe dokun, o ana gider.")
+                        }
                     } else {
-                        lecture.closePlayback()
+                        setLecturePlayer(false)
+                        lecture.toggleRecording()
                     }
                 } label: {
-                    Image(systemName: lecture.isRecording ? "record.circle.fill" : "mic")
-                        .foregroundStyle(lecture.isRecording ? Color.red : Color.accentColor)
-                        .symbolEffect(.pulse, isActive: lecture.isRecording)
+                    if lecture.isRecording {
+                        HStack(spacing: 5) {
+                            Image(systemName: "stop.circle.fill")
+                                .symbolEffect(.pulse, isActive: true)
+                            Text(LectureBar.clock(lecture.elapsed))
+                                .font(.subheadline.monospacedDigit().weight(.semibold))
+                        }
+                        .foregroundStyle(Color.red)
+                    } else {
+                        Image(systemName: "mic")
+                            .foregroundStyle(Color.accentColor)
+                    }
                 }
-                .accessibilityLabel(Loc.t("Ders kaydı"))
+                .accessibilityLabel(lecture.isRecording ? Loc.t("Kaydı durdur") : Loc.t("Dersi kaydet"))
                 Button {
                     editor.zoomWindowOn.toggle()
                 } label: {
@@ -316,6 +341,14 @@ struct EditorContent: View {
         } message: {
             Text(exportError ?? "")
         }
+        .alert(Loc.t("Ders kaydı"), isPresented: Binding(get: { lecture.message != nil }, set: { if !$0 { lecture.message = nil } })) {
+            Button(Loc.t("Tamam"), role: .cancel) { lecture.message = nil }
+        } message: {
+            Text(lecture.message ?? "")
+        }
+        .onChange(of: lecture.takes.isEmpty) { _, empty in
+            if empty { setLecturePlayer(false) }
+        }
         .onDisappear {
             assistant.cancel()
             lecture.finish()
@@ -345,6 +378,18 @@ struct EditorContent: View {
             PageAnglePanel()
                 .environmentObject(settings)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// Opens or closes the lecture player: open, a finger tap on ink plays from that moment; closed,
+    /// all ink shows and taps write again.
+    private func setLecturePlayer(_ open: Bool) {
+        guard open != showLecture else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showLecture = open }
+        if open {
+            lecture.openPlayback()
+        } else {
+            lecture.closePlayback()
         }
     }
 

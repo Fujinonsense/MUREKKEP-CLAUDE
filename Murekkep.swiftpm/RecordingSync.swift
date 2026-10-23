@@ -34,6 +34,16 @@ enum RecordingSync {
         return out
     }
 
+    /// The playhead after an arrow key's jump, kept inside the take.
+    static func skip(time: Double, by seconds: Double, duration: Double) -> Double {
+        min(max(time + seconds, 0), duration)
+    }
+
+    /// The player's volume one step up or down, in tenths between silent and full.
+    static func volume(_ volume: Float, step: Float) -> Float {
+        min(1, max(0, ((volume + step) * 10).rounded() / 10))
+    }
+
     /// The take a stroke was written in and the seconds into it to play from, or nil.
     static func seek(birth: Double, recordings: [Recording]) -> (id: UUID, time: Double)? {
         for r in recordings where contains(r, birth) {

@@ -256,6 +256,10 @@ let seekB = RecordingSync.seek(birth: 5020, recordings: [takeA, takeB])
 check(seekA?.id == takeA.id && seekA?.time == 10.5 && seekB?.id == takeB.id && seekB?.time == 18.5, "recording: tap seeks before the line")
 check(RecordingSync.seek(birth: 1000.5, recordings: [takeA])?.time == 0, "recording: first line seeks to zero")
 check(RecordingSync.seek(birth: 3000, recordings: [takeA, takeB]) == nil, "recording: ink outside takes does not seek")
+check(RecordingSync.skip(time: 10, by: -5, duration: 60) == 5 && RecordingSync.skip(time: 3, by: -5, duration: 60) == 0
+      && RecordingSync.skip(time: 58, by: 5, duration: 60) == 60, "recording: arrow keys jump within the take")
+check(RecordingSync.volume(1, step: 0.1) == 1 && RecordingSync.volume(1, step: -0.1) == 0.9
+      && RecordingSync.volume(0.9, step: -0.1) == 0.8 && RecordingSync.volume(0.05, step: -0.1) == 0, "recording: volume in tenths")
 
 // MARK: Zoom window (ZoomBox)
 
