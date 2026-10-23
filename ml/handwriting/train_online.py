@@ -46,7 +46,7 @@ def item(rng, pool, trail_share=TRAIL_SHARE, real=None, real_share=0.0):
     """(features, text) or None when the line is too short for its text."""
     if real and rng.random() < real_share:
         text, strokes = real[int(rng.integers(len(real)))]
-        got = [s.tolist() for s in real_lines.augment(rng, strokes)], text
+        got = [s.tolist() for s in real_lines.augment(rng, strokes, text.count(" "))], text
     elif rng.random() < trail_share:
         got = trail_sample(rng, pool)
     else:

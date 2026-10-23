@@ -28,8 +28,45 @@ def _height(strokes):
     return max(float(p95 - p5), 1.0)
 
 
-def augment(rng, strokes):
-    """A changed copy of a line's strokes."""
+def _runs(strokes):
+    """The line's ink runs left to right: stroke x-ranges merged where they overlap."""
+    spans = sorted((float(s[:, 0].min()), float(s[:, 0].max())) for s in strokes)
+    out = [list(spans[0])]
+    for a, b in spans[1:]:
+        if a <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return out
+
+
+def squeeze_gaps(rng, strokes, spaces, low=0.35, high=1.0):
+    """The words written closer together: the line's `spaces` widest gaps between ink runs (its word
+    gaps) shrink to a random 35-100 %, never below 0.6 of the letters' height. The reader lost
+    spaces when a hand left 40 % of its usual gap."""
+    if spaces <= 0 or len(strokes) < 2:
+        return [s.copy() for s in strokes]
+    h = _height(strokes)
+    r = _runs(strokes)
+    widest = sorted(range(len(r) - 1), key=lambda i: r[i + 1][0] - r[i][1], reverse=True)[:spaces]
+    shifts = []
+    for i in widest:
+        gap = r[i + 1][0] - r[i][1]
+        new = max(gap * rng.uniform(low, high), min(gap, 0.6 * h))
+        shifts.append((r[i + 1][0], gap - new))
+    out = []
+    for s in strokes:
+        q = s.copy()
+        x0 = float(s[:, 0].min())
+        q[:, 0] -= sum(d for start, d in shifts if x0 >= start - 1e-9)
+        out.append(q)
+    return out
+
+
+def augment(rng, strokes, spaces=0):
+    """A changed copy of a line's strokes; half the time with its words written closer together."""
+    if spaces and rng.random() < 0.5:
+        strokes = squeeze_gaps(rng, strokes, spaces)
     h = _height(strokes)
     pts = np.concatenate(strokes)
     centre = pts.mean(axis=0)
@@ -55,7 +92,7 @@ def augment(rng, strokes):
 def make_line(rng, lines):
     """(image 48×W, text) of one changed copy of a random real line."""
     text, strokes = lines[int(rng.integers(len(lines)))]
-    return render_line(augment(rng, strokes), line_px=rng.uniform(1.8, 3.2)), text
+    return render_line(augment(rng, strokes, text.count(" ")), line_px=rng.uniform(1.8, 3.2)), text
 
 
 def images(lines):
