@@ -1259,5 +1259,10 @@ enum Translations {
         "Kalemlere göz at": "Browse pens",
         "Sınırsız doğa kalemleri": "Unlimited nature pens",
         "Ücretsiz planda deneme mürekkebi kadar": "A trial amount of ink on the free plan",
+        "Kalem çubuğunu taşı": "Move the pen bar",
+        "Sürükle: üste, alta ya da sağa yerleşir": "Drag it: it settles at the top, the bottom or the right",
+        "Üste taşı": "Move to the top",
+        "Alta taşı": "Move to the bottom",
+        "Sağa taşı": "Move to the right",
     ]
 }

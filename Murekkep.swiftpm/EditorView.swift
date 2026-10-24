@@ -42,6 +42,10 @@ struct EditorContent: View {
     @State private var shareItem: ShareItem?
     @State private var exportError: String?
     @State private var paletteCollapsed = false
+    /// The pen bar on its grip: how far the finger has carried it, and the edge it would go to.
+    @State private var paletteDrag: CGSize = .zero
+    @State private var paletteTarget: PaletteEdge?
+    @State private var canvasSize: CGSize = .zero
     @State private var showTemplates = false
     @State private var showEngineering = false
     @State private var showAngle = false
@@ -50,13 +54,19 @@ struct EditorContent: View {
 
     private var sidePanel: Bool { horizontalSizeClass == .regular }
 
+    private var dock: PaletteEdge { settings.paletteEdge }
+    /// What stands along the bottom (the page badge, the bars, the writing sound's switch) moves up over the pen bar.
+    private var bottomClearance: CGFloat { dock == .bottom ? 76 : 0 }
+
     var body: some View {
         HStack(spacing: 0) {
             ZStack(alignment: .top) {
                 CanvasRepresentable(editor: editor, pencilOnly: settings.pencilOnly,
                                     animations: settings.animations, batterySaver: settings.batterySaver,
                                     pageAngle: settings.pageAngle, pageAngleLocked: settings.pageAngleLocked,
-                                    singlePage: editor.singlePage, zoomWindow: editor.zoomWindowOn)
+                                    singlePage: editor.singlePage, zoomWindow: editor.zoomWindowOn,
+                                    paletteClearance: UIEdgeInsets(top: 0, left: 0, bottom: bottomClearance,
+                                                                   right: dock == .trailing ? 78 : 0))
                     .overlay {
                         GeometryReader { geo in
                             if let request = editor.palette {
@@ -82,9 +92,19 @@ struct EditorContent: View {
                     }
                     .ignoresSafeArea(.container, edges: .bottom)
 
-                FloatingToolPalette(editor: editor, collapsed: $paletteCollapsed)
-                    .padding(.top, 10)
-                    .padding(.horizontal, 12)
+                if let target = paletteTarget {
+                    PaletteDockHint(edge: target)
+                        .padding(paletteInsets(target))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: paletteAlignment(target))
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+
+                FloatingToolPalette(editor: editor, collapsed: $paletteCollapsed, edge: dock,
+                                    onGripMove: movePalette, onGripDrop: dropPalette)
+                    .offset(paletteDrag)
+                    .padding(paletteInsets(dock))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: paletteAlignment(dock))
 
                 // The engineering rail hides with the palette for a clean page.
                 if !paletteCollapsed {
@@ -94,7 +114,8 @@ struct EditorContent: View {
                         Spacer(minLength: 0)
                     }
                     .frame(maxHeight: .infinity)
-                    .padding(.top, 70)
+                    .padding(.top, dock == .top ? 70 : 10)
+                    .padding(.bottom, bottomClearance)
                     .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
@@ -109,7 +130,7 @@ struct EditorContent: View {
                             .transition(.opacity)
                     }
                 }
-                .padding(.top, 88)
+                .padding(.top, dock == .top ? 88 : 18)
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: editor.banner)
                 .animation(.easeInOut(duration: 0.2), value: editor.isConverting || editor.isTypesetting)
 
@@ -138,7 +159,7 @@ struct EditorContent: View {
                         Spacer(minLength: 8)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 52)
+                    .padding(.bottom, 52 + bottomClearance)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.selection != nil)
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showLecture)
@@ -153,7 +174,7 @@ struct EditorContent: View {
                     }
                 }
                 .padding(.leading, 6)
-                .padding(.bottom, 6)
+                .padding(.bottom, 6 + bottomClearance)
 
                 VStack {
                     Spacer()
@@ -178,6 +199,7 @@ struct EditorContent: View {
                         }
                     }
                     .padding(16)
+                    .padding(.bottom, bottomClearance)
                 }
 
                 if let error = editor.loadError {
@@ -188,6 +210,16 @@ struct EditorContent: View {
                 }
             }
             .background(Color(uiColor: .systemGray6))
+            .coordinateSpace(.named(FloatingToolPalette.space))
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { canvasSize = geo.size }
+                    .onChange(of: geo.size) { _, size in canvasSize = size }
+            })
+            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: dock)
+            .animation(.easeInOut(duration: 0.18), value: paletteTarget)
+            .sensoryFeedback(.selection, trigger: paletteTarget) { old, new in old != nil && new != nil }
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: dock)
             if showAssistant && sidePanel {
                 Divider()
                 AssistantPanel(assistant: assistant, editor: editor) {
@@ -403,6 +435,55 @@ struct EditorContent: View {
     }
 }
 
+private extension EditorContent {
+    /// The pen bar's room along each edge; down the right side it keeps clear of the page badge.
+    func paletteInsets(_ edge: PaletteEdge) -> EdgeInsets {
+        switch edge {
+        case .top: return EdgeInsets(top: 10, leading: 12, bottom: 0, trailing: 12)
+        case .bottom: return EdgeInsets(top: 0, leading: 12, bottom: 10, trailing: 12)
+        case .trailing: return EdgeInsets(top: 60, leading: 0, bottom: 60, trailing: 12)
+        }
+    }
+
+    func paletteAlignment(_ edge: PaletteEdge) -> Alignment {
+        switch edge {
+        case .top: return .top
+        case .bottom: return .bottom
+        case .trailing: return .trailing
+        }
+    }
+
+    /// The bar follows its grip; the edge it would go to shows beneath the finger.
+    func movePalette(_ drag: DragGesture.Value) {
+        paletteDrag = drag.translation
+        paletteTarget = PaletteEdge.nearest(x: drag.location.x, y: drag.location.y, width: canvasSize.width,
+                                            height: canvasSize.height, current: dock)
+    }
+
+    /// Where the finger lets go, the nearest of the top, the bottom and the right side takes the bar.
+    func dropPalette(_ drag: DragGesture.Value) {
+        let target = PaletteEdge.nearest(x: drag.location.x, y: drag.location.y, width: canvasSize.width,
+                                         height: canvasSize.height, current: dock)
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            settings.paletteEdge = target
+            paletteDrag = .zero
+            paletteTarget = nil
+        }
+    }
+}
+
+/// Where the pen bar lands when the finger lets go of its grip.
+private struct PaletteDockHint: View {
+    let edge: PaletteEdge
+
+    var body: some View {
+        Capsule(style: .continuous)
+            .fill(Theme.ink.opacity(0.08))
+            .overlay(Capsule(style: .continuous).strokeBorder(Theme.ink.opacity(0.35), lineWidth: 1.5))
+            .frame(width: edge.isVertical ? 66 : 420, height: edge.isVertical ? 360 : 66)
+    }
+}
+
 struct CanvasRepresentable: UIViewRepresentable {
     let editor: EditorModel
     let pencilOnly: Bool
@@ -412,6 +493,7 @@ struct CanvasRepresentable: UIViewRepresentable {
     let pageAngleLocked: Bool
     let singlePage: Bool
     let zoomWindow: Bool
+    let paletteClearance: UIEdgeInsets
 
     func makeUIView(context: Context) -> CanvasView {
         CanvasView(model: editor)
@@ -423,6 +505,7 @@ struct CanvasRepresentable: UIViewRepresentable {
         view.applyRotation(degrees: pageAngle, locked: pageAngleLocked)
         view.applyPageMode(single: singlePage)
         view.applyZoomWindow(on: zoomWindow)
+        view.applyPaletteClearance(paletteClearance)
     }
 }
 

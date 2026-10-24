@@ -715,5 +715,17 @@ if case let .claim(_, holds, left, _, _)? = PageMath.question("3+3=33 doğru mu?
     check(false, "page math: the engine finds 3+3=33 wrong (left side 6)")
 }
 
+// The pen bar moves to the top, the bottom or the right side, wherever the finger lets go of its grip;
+// never to the left, which holds the drafting rail.
+check(PaletteEdge.nearest(x: 600, y: 900, width: 1_200, height: 1_000, current: .top) == .bottom, "pen bar dock: let go low, it goes to the bottom")
+check(PaletteEdge.nearest(x: 1_150, y: 500, width: 1_200, height: 1_000, current: .top) == .trailing, "pen bar dock: let go on the right, it goes right")
+check(PaletteEdge.nearest(x: 600, y: 80, width: 1_200, height: 1_000, current: .bottom) == .top, "pen bar dock: let go high, it goes to the top")
+check(PaletteEdge.nearest(x: 30, y: 300, width: 1_200, height: 1_000, current: .trailing) == .top
+      && PaletteEdge.nearest(x: 30, y: 700, width: 1_200, height: 1_000, current: .top) == .bottom,
+      "pen bar dock: let go on the left, it goes to the nearer of top and bottom")
+check(PaletteEdge.nearest(x: 30, y: 500, width: 1_200, height: 1_000, current: .bottom) == .bottom,
+      "pen bar dock: a tie keeps the edge it stands on")
+check(!PaletteEdge.allCases.contains { "\($0)".contains("leading") || "\($0)".contains("left") }, "pen bar dock: no left edge")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

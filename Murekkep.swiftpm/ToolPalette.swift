@@ -413,14 +413,24 @@ struct PenBodyView: View {
 // MARK: - Floating palette
 
 struct FloatingToolPalette: View {
+    /// The editor's coordinate space: the grip's drag reports its points in it.
+    static let space = "paletteDock"
+
     @ObservedObject var editor: EditorModel
     @EnvironmentObject private var settings: AppSettings
     @Binding var collapsed: Bool
+    /// The edge the bar stands on; down the right side it stands upright.
+    var edge: PaletteEdge = .top
+    /// The grip's drag, while the finger moves and once when it lifts.
+    var onGripMove: (DragGesture.Value) -> Void = { _ in }
+    var onGripDrop: (DragGesture.Value) -> Void = { _ in }
     @State private var inspector: Brush?
     @State private var showEraserOptions = false
     @State private var showTextPenOptions = false
     @State private var showColors = false
     @State private var showPens = false
+
+    private var vertical: Bool { edge.isVertical }
 
     var body: some View {
         Group {
@@ -430,10 +440,85 @@ struct FloatingToolPalette: View {
                 full
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 66)
+        .padding(vertical ? .vertical : .horizontal, 12)
+        .frame(width: vertical ? 66 : nil, height: vertical ? nil : 66)
         .glassCapsule()
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: collapsed)
+    }
+
+    /// A row along the top or the bottom, a column down the right side.
+    private func line<Content: View>(spacing: CGFloat, @ViewBuilder _ content: () -> Content) -> some View {
+        let layout = vertical ? AnyLayout(VStackLayout(spacing: spacing)) : AnyLayout(HStackLayout(spacing: spacing))
+        return layout { content() }
+    }
+
+    private func divider(_ length: CGFloat) -> some View {
+        Divider().frame(width: vertical ? length : nil, height: vertical ? nil : length)
+    }
+
+    /// Down the right side a pen lies with its tip toward the page, so a picked pen slides out to the left.
+    @ViewBuilder
+    private func oriented<Pen: View>(_ pen: Pen, width: CGFloat = 30) -> some View {
+        if vertical {
+            pen.rotationEffect(.degrees(-90))
+                .frame(width: 68, height: width)
+                .contentShape(Rectangle())
+        } else {
+            pen
+        }
+    }
+
+    /// Folding points at the bar's edge, opening at the page.
+    private var foldSymbol: String {
+        switch edge {
+        case .top: return "chevron.up"
+        case .bottom: return "chevron.down"
+        case .trailing: return "chevron.right"
+        }
+    }
+
+    private var unfoldSymbol: String {
+        switch edge {
+        case .top: return "chevron.down"
+        case .bottom: return "chevron.up"
+        case .trailing: return "chevron.left"
+        }
+    }
+
+    /// The grip: drag it to the top, the bottom or the right side; a long press offers the three.
+    private var grip: some View {
+        Capsule()
+            .fill(Color.secondary.opacity(0.45))
+            .frame(width: vertical ? 22 : 4, height: vertical ? 4 : 22)
+            .frame(width: vertical ? 44 : 16, height: vertical ? 16 : 44)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 6, coordinateSpace: .named(Self.space))
+                .onChanged { onGripMove($0) }
+                .onEnded { onGripDrop($0) })
+            .contextMenu {
+                ForEach(PaletteEdge.allCases, id: \.self) { place in
+                    Button {
+                        dock(place)
+                    } label: {
+                        Label(place.title, systemImage: place.symbol)
+                    }
+                    .disabled(place == edge)
+                }
+            }
+            .accessibilityElement()
+            .accessibilityLabel(Loc.t("Kalem çubuğunu taşı"))
+            .accessibilityHint(Loc.t("Sürükle: üste, alta ya da sağa yerleşir"))
+            .accessibilityActions {
+                ForEach(PaletteEdge.allCases.filter { $0 != edge }, id: \.self) { place in
+                    Button(place.title) { dock(place) }
+                }
+            }
+    }
+
+    private func dock(_ place: PaletteEdge) {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            settings.paletteEdge = place
+        }
     }
 
     /// The pens in the strip: the ones with a heart always, then the ones used last (PenStrip), each
@@ -463,13 +548,14 @@ struct FloatingToolPalette: View {
     }
 
     private var compact: some View {
-        HStack(spacing: 10) {
+        line(spacing: 10) {
+            grip
             undoRedo
-            Divider().frame(height: 30)
+            divider(30)
             Button {
                 collapsed = false
             } label: {
-                HStack(spacing: 8) {
+                line(spacing: 8) {
                     Circle()
                         .fill(editor.color(for: editor.activeBrush).swiftUIColor)
                         .frame(width: 20, height: 20)
@@ -484,7 +570,7 @@ struct FloatingToolPalette: View {
                             .font(.system(size: 17, weight: .medium))
                             .frame(width: 30, height: 30)
                     }
-                    Image(systemName: "chevron.down")
+                    Image(systemName: unfoldSymbol)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
                 }
@@ -495,35 +581,26 @@ struct FloatingToolPalette: View {
     }
 
     private var full: some View {
-        HStack(spacing: 8) {
+        line(spacing: 8) {
+            grip
             undoRedo
-            Divider().frame(height: 34)
+            divider(34)
             allPensButton
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .bottom, spacing: 6) {
-                    let pens = strip
-                    ForEach(pens.favorites) { brush in
-                        penButton(brush)
+            Group {
+                if vertical {
+                    // Upright the column holds its pens snugly and scrolls only when the side runs short.
+                    ViewThatFits(in: .vertical) {
+                        pens
+                        ScrollView(.vertical, showsIndicators: false) { pens }
                     }
-                    if !pens.favorites.isEmpty && !pens.recent.isEmpty {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.14))
-                            .frame(width: 1.5, height: 28)
-                            .padding(.horizontal, 3)
-                            .padding(.bottom, 10)
-                    }
-                    ForEach(pens.recent) { brush in
-                        penButton(brush)
-                    }
-                    textPenButton
-                    eraserButton
+                    .frame(maxHeight: 440)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) { pens }
+                        .frame(maxWidth: 560)
                 }
-                .padding(.horizontal, 4)
-                .frame(height: 66, alignment: .bottom)
             }
-            .frame(maxWidth: 560)
             .clipped()
-            Divider().frame(height: 34)
+            divider(34)
             colorWell
             if !editor.isPDF {
                 Button {
@@ -539,18 +616,44 @@ struct FloatingToolPalette: View {
             Button {
                 collapsed = true
             } label: {
-                Image(systemName: "chevron.up")
+                Image(systemName: foldSymbol)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 26, height: 34)
+                    .frame(width: vertical ? 34 : 26, height: vertical ? 26 : 34)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Araçları gizle"))
         }
     }
 
+    /// The pens of the strip, then the text pen and the eraser; a picked pen stands out toward the page.
+    private var pens: some View {
+        let shown = strip
+        let layout = vertical ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 6))
+                              : AnyLayout(HStackLayout(alignment: .bottom, spacing: 6))
+        return layout {
+            ForEach(shown.favorites) { brush in
+                penButton(brush)
+            }
+            if !shown.favorites.isEmpty && !shown.recent.isEmpty {
+                Capsule()
+                    .fill(Color.primary.opacity(0.14))
+                    .frame(width: vertical ? 28 : 1.5, height: vertical ? 1.5 : 28)
+                    .padding(vertical ? .vertical : .horizontal, 3)
+                    .padding(vertical ? .trailing : .bottom, 10)
+            }
+            ForEach(shown.recent) { brush in
+                penButton(brush)
+            }
+            textPenButton
+            eraserButton
+        }
+        .padding(vertical ? .vertical : .horizontal, 4)
+        .frame(width: vertical ? 66 : nil, height: vertical ? nil : 66, alignment: vertical ? .trailing : .bottom)
+    }
+
     private var undoRedo: some View {
-        HStack(spacing: 2) {
+        line(spacing: 2) {
             Button {
                 editor.undo()
             } label: {
@@ -582,7 +685,7 @@ struct FloatingToolPalette: View {
                 editor.select(.brush(brush))
             }
         } label: {
-            PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected)
+            oriented(PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected))
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -613,9 +716,10 @@ struct FloatingToolPalette: View {
                 editor.select(.textPen)
             }
         } label: {
-            ZStack(alignment: .bottom) {
+            oriented(ZStack(alignment: .bottom) {
                 PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected)
-                // A quiet monochrome badge in the system's material, like the tool marks in Apple's apps.
+                // A quiet monochrome badge in the system's material, like the tool marks in Apple's apps;
+                // it stays upright on a pen lying down the right side.
                 Image(systemName: "character.cursor.ibeam")
                     .font(.system(size: 9.5, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(0.75))
@@ -623,9 +727,10 @@ struct FloatingToolPalette: View {
                     .padding(.vertical, 3)
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+                    .rotationEffect(.degrees(vertical ? 90 : 0))
                     .offset(y: -3)
             }
-            .frame(width: 36)
+            .frame(width: 36), width: 36)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Metin kalemi"))
@@ -646,7 +751,7 @@ struct FloatingToolPalette: View {
                 editor.select(.eraser)
             }
         } label: {
-            PenBodyView(brush: nil, ink: .clear, selected: selected)
+            oriented(PenBodyView(brush: nil, ink: .clear, selected: selected))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Silgi"))
@@ -678,6 +783,25 @@ struct FloatingToolPalette: View {
             BrushInspector(editor: editor, brush: brush)
                 .environmentObject(settings)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+extension PaletteEdge {
+    /// The grip's menu item that moves the bar here.
+    var title: String {
+        switch self {
+        case .top: return Loc.t("Üste taşı")
+        case .bottom: return Loc.t("Alta taşı")
+        case .trailing: return Loc.t("Sağa taşı")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .top: return "rectangle.topthird.inset.filled"
+        case .bottom: return "rectangle.bottomthird.inset.filled"
+        case .trailing: return "rectangle.rightthird.inset.filled"
         }
     }
 }

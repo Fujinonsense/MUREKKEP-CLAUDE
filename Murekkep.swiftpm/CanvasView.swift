@@ -129,6 +129,8 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     // Zoom window (see ZoomPanelView)
     private var zoomPanel: ZoomPanelView?
+    /// Room the pen bar takes along the bottom or the right side (applyPaletteClearance).
+    private var paletteClearance = UIEdgeInsets.zero
     private var zoomBox: ZoomBox?
     /// The touch being handled came from the zoom panel: its points map through the box.
     private var zoomInput = false
@@ -2489,11 +2491,21 @@ extension CanvasView {
         setNeedsRender()
     }
 
+    /// Keeps the zoom window clear of the pen bar when the bar stands along the bottom or the right side.
+    func applyPaletteClearance(_ insets: UIEdgeInsets) {
+        guard insets != paletteClearance else { return }
+        paletteClearance = insets
+        layoutZoomPanel()
+        setNeedsRender()
+    }
+
     /// The panel along the bottom, a third of the canvas tall, clear of the page badge below it.
     private func layoutZoomPanel() {
         guard let panel = zoomPanel else { return }
         let height = min(max(bounds.height * 0.3, 180), 320)
-        panel.frame = CGRect(x: 12, y: bounds.height - height - 64, width: bounds.width - 24, height: height)
+        let clear = paletteClearance
+        panel.frame = CGRect(x: 12, y: bounds.height - height - 64 - clear.bottom,
+                             width: bounds.width - 24 - clear.right, height: height)
         // The box keeps the panel's shape (its height follows a new width or turn of the iPad).
         if var box = zoomBox {
             box.rect.size.height = (box.rect.width / max(panel.aspect, 1)).rounded()

@@ -168,6 +168,11 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(favoriteBrushes.map { Int($0.rawValue) }, forKey: "favoriteBrushes") }
     }
 
+    /// Where the notebook's pen bar stands: along the top, along the bottom or down the right side.
+    @Published var paletteEdge: PaletteEdge {
+        didSet { UserDefaults.standard.set(paletteEdge.rawValue, forKey: "paletteEdge") }
+    }
+
     init() {
         let d = UserDefaults.standard
         d.register(defaults: [
@@ -258,6 +263,7 @@ final class AppSettings: ObservableObject {
         flowerLevel = min(max(d.integer(forKey: "flowerLevel"), 0), 2)
         appBackground = AppBackground.migrated(d.string(forKey: "appBackground") ?? "") ?? .paper
         favoriteBrushes = (d.array(forKey: "favoriteBrushes") as? [Int] ?? []).compactMap { Brush(rawValue: UInt8(clamping: $0)) }
+        paletteEdge = PaletteEdge(rawValue: d.string(forKey: "paletteEdge") ?? "") ?? .top
         hasAPIKey = (Keychain.read(account: Self.keyAccount) ?? d.string(forKey: Self.fallbackKey)) != nil
     }
 
