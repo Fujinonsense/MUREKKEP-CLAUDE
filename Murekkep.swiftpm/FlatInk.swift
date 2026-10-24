@@ -84,6 +84,9 @@ enum FlatInk {
         case .grass:
             drawGrass(s, in: ctx)
             return
+        case .bloom:
+            drawBloom(s, in: ctx)
+            return
         case .neon:
             ctx.saveGState()
             ctx.setShadow(offset: .zero, blur: CGFloat(s.width) * 2.2, color: color(s.color))
@@ -271,11 +274,24 @@ enum FlatInk {
 
     /// Fully grown grass with open flowers.
     private static func drawGrass(_ s: Stroke, in ctx: CGContext) {
-        let field = GrassGenerator.field(points: s.points, width: s.width, color: s.color, seed: s.seed)
-        ctx.saveGState()
         // Soil line under the blades.
         drawPolyline(s.points, color: CGColor(red: CGFloat(s.color.r * 0.45), green: CGFloat(s.color.g * 0.45),
                                               blue: CGFloat(s.color.b * 0.45), alpha: 0.85), widthScale: 0.7, in: ctx)
+        drawField(GrassGenerator.field(points: s.points, width: s.width, color: s.color, seed: s.seed), alpha: s.color.a, in: ctx)
+    }
+
+    /// The flowering water: the glossy line, then its flowers on their stems.
+    private static func drawBloom(_ s: Stroke, in ctx: CGContext) {
+        var c = s.color
+        c.a *= 0.85
+        drawPolyline(s.points, color: color(c), widthScale: 1, in: ctx)
+        drawHighlight(s, alpha: 0.6, in: ctx)
+        drawField(GrassGenerator.blooms(points: s.points, width: s.width, color: s.color, seed: s.seed), alpha: s.color.a, in: ctx)
+    }
+
+    /// Blades and stems, then the flowers at their tips.
+    private static func drawField(_ field: GrassField, alpha: Float, in ctx: CGContext) {
+        ctx.saveGState()
         for b in field.blades {
             let tip = GrassGenerator.point(on: b, at: 1)
             let mid = GrassGenerator.point(on: b, at: 0.5)
@@ -289,7 +305,7 @@ enum FlatInk {
             path.closeSubpath()
             let shade: Float = b.isStem ? 0.9 : 1.0
             ctx.setFillColor(CGColor(red: CGFloat(min(1, b.color.x * shade)), green: CGFloat(min(1, b.color.y * shade)),
-                                     blue: CGFloat(min(1, b.color.z * shade)), alpha: CGFloat(s.color.a)))
+                                     blue: CGFloat(min(1, b.color.z * shade)), alpha: CGFloat(alpha)))
             ctx.addPath(path)
             ctx.fillPath()
         }

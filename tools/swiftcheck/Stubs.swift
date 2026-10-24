@@ -26,4 +26,23 @@ struct InkColor: Equatable, Hashable {
     init(hex: UInt32) {
         self.hex = hex
     }
+
+    // GrassGenerator reads the channels.
+    var r: Float { Float((hex >> 16) & 0xFF) / 255 }
+    var g: Float { Float((hex >> 8) & 0xFF) / 255 }
+    var b: Float { Float(hex & 0xFF) / 255 }
 }
+
+/// InkModel.swift's point and vector helpers, as GrassGenerator uses them.
+struct InkPoint: Equatable {
+    var x: Float
+    var y: Float
+    var r: Float
+    var ink: Float
+
+    var position: SIMD2<Float> { SIMD2<Float>(x, y) }
+}
+
+func vdot(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { (a * b).sum() }
+func vlength(_ v: SIMD2<Float>) -> Float { vdot(v, v).squareRoot() }
+func clampf(_ v: Float, _ lo: Float, _ hi: Float) -> Float { min(max(v, lo), hi) }

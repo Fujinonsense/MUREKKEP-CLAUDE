@@ -65,6 +65,14 @@ enum GrassGenerator {
         FlowerKind(petal: SIMD3(0.86, 0.22, 0.62), core: SIMD3(1.00, 0.90, 0.50), style: 0, petals: 10...12, scale: 1.0),
     ]
 
+    /// The flowering water pen's glassy flowers: blue and violet petals around a pale, icy centre.
+    private static let crystals: [FlowerKind] = [
+        FlowerKind(petal: SIMD3(0.56, 0.66, 1.00), core: SIMD3(0.92, 0.96, 1.00), style: 1, petals: 5...5, scale: 1.0),
+        FlowerKind(petal: SIMD3(0.70, 0.62, 1.00), core: SIMD3(0.95, 0.93, 1.00), style: 1, petals: 5...6, scale: 0.9),
+        FlowerKind(petal: SIMD3(0.45, 0.72, 0.98), core: SIMD3(0.88, 0.97, 1.00), style: 1, petals: 5...5, scale: 1.1),
+        FlowerKind(petal: SIMD3(0.62, 0.55, 0.96), core: SIMD3(0.98, 0.95, 1.00), style: 0, petals: 8...10, scale: 0.85),
+    ]
+
     @inline(__always)
     private static func hash(_ x: UInt32) -> UInt32 {
         var h = x &* 0x9E37_79B1
@@ -190,17 +198,94 @@ enum GrassGenerator {
             }
         }
 
-        // Back to front: blades further up the page are behind.
+        return backToFront(blades, flowers)
+    }
+
+    /// The stroke's field: grass (with its flowers) for the grass pen, flowers on stems for the
+    /// flowering water.
+    static func field(for brush: Brush, points: [InkPoint], width: Float, color: InkColor, seed: Float) -> GrassField {
+        brush == .bloom ? blooms(points: points, width: width, color: color, seed: seed)
+                        : field(points: points, width: width, color: color, seed: seed)
+    }
+
+    /// The flowering water pen (as in the ads): no grass, only thin stems rising from the line, each
+    /// with a glassy blue or violet flower that opens a moment after the pen lifts.
+    static func blooms(points: [InkPoint], width: Float, color: InkColor, seed: Float) -> GrassField {
+        let n = points.count
+        guard n > 0, width > 0 else { return GrassField() }
+        let salt = UInt32(truncatingIfNeeded: Int((seed - seed.rounded(.down)) * 1_000_000)) &+ 29
+        var cum = [Float](repeating: 0, count: n)
+        for i in 1..<n {
+            cum[i] = cum[i - 1] + vlength(points[i].position - points[i - 1].position)
+        }
+        let total = cum[n - 1]
+        func sample(_ s: Float) -> (p: SIMD2<Float>, r: Float, tangent: SIMD2<Float>) {
+            guard n > 1 else { return (points[0].position, points[0].r, SIMD2<Float>(1, 0)) }
+            var k = 0
+            while k < n - 2 && cum[k + 1] < s {
+                k += 1
+            }
+            let a = points[k]
+            let b = points[k + 1]
+            let len = cum[k + 1] - cum[k]
+            let t = len > 1e-5 ? clampf((s - cum[k]) / len, 0, 1) : 0
+            let d = b.position - a.position
+            let dl = vlength(d)
+            return (a.position + d * t, a.r + (b.r - a.r) * t, dl > 1e-5 ? d / dl : SIMD2<Float>(1, 0))
+        }
+
+        // A flower every two to three line widths; the stems in the ink's own colour, darker.
+        let gap = max(width * 2.4, 12)
+        let count = total < gap ? 1 : min(300, Int(total / gap))
+        let stemColor = SIMD3<Float>(color.r, color.g, color.b) * 0.72
+        var blades: [GrassBlade] = []
+        var flowers: [GrassFlower] = []
+        for m in 0..<count {
+            let key = 70_000 + m
+            let s = count == 1 ? total * 0.5 : (Float(m) + 0.2 + 0.6 * rand(key, 1, salt)) * total / Float(count)
+            let (p, r, tangent) = sample(s)
+            let normal = SIMD2<Float>(-tangent.y, tangent.x)
+            var base = p + normal * ((rand(key, 2, salt) - 0.5) * r * 0.6)
+            if n == 1 {
+                base.x += (rand(key, 3, salt) - 0.5) * width * 0.6
+            }
+            let stemHeight = width * (1.3 + 0.9 * rand(key, 4, salt))
+            blades.append(GrassBlade(base: base,
+                                     height: stemHeight,
+                                     width: max(0.45, width * 0.06),
+                                     lean: (rand(key, 5, salt) - 0.5) * stemHeight * 0.4,
+                                     phase: rand(key, 6, salt) * 6.283,
+                                     stiffness: rand(key, 7, salt),
+                                     color: stemColor,
+                                     isStem: true,
+                                     arc: total > 0 ? s / total : 0))
+            let kind = crystals[min(crystals.count - 1, Int(rand(key, 8, salt) * Float(crystals.count)))]
+            let petalCount = min(kind.petals.upperBound,
+                                 kind.petals.lowerBound + Int(rand(key, 9, salt) * Float(kind.petals.count)))
+            flowers.append(GrassFlower(stem: blades.count - 1,
+                                       radius: max(1.6, width * (0.5 + 0.25 * rand(key, 10, salt))) * kind.scale,
+                                       petals: Float(petalCount),
+                                       style: kind.style,
+                                       spin: rand(key, 11, salt) * 6.283,
+                                       petal: kind.petal,
+                                       core: kind.core,
+                                       delay: 0.6 + 0.9 * rand(key, 12, salt)))
+        }
+        return backToFront(blades, flowers)
+    }
+
+    /// Back to front: blades further up the page are behind.
+    private static func backToFront(_ blades: [GrassBlade], _ flowers: [GrassFlower]) -> GrassField {
         let order = blades.indices.sorted { blades[$0].base.y < blades[$1].base.y }
         var remap = [Int](repeating: 0, count: blades.count)
         for (newIndex, old) in order.enumerated() {
             remap[old] = newIndex
         }
-        let sorted = order.map { blades[$0] }
+        var flowers = flowers
         for i in flowers.indices {
             flowers[i].stem = remap[flowers[i].stem]
         }
-        return GrassField(blades: sorted, flowers: flowers)
+        return GrassField(blades: order.map { blades[$0] }, flowers: flowers)
     }
 
     /// Point along a blade, matching `bladeAt` in the shader (s = 0 base, 1 tip).

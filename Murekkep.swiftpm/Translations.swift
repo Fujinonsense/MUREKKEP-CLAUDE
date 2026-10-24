@@ -1264,5 +1264,7 @@ enum Translations {
         "Üste taşı": "Move to the top",
         "Alta taşı": "Move to the bottom",
         "Sağa taşı": "Move to the right",
+        "Çiçekli su": "Flowering water",
+        "Parlak turkuaz su çizgisi. Kalemi kaldırınca üstünde cam gibi mavi ve mor çiçekler açar.": "A glossy turquoise water line. When you lift the pen, glassy blue and violet flowers open on it.",
     ]
 }

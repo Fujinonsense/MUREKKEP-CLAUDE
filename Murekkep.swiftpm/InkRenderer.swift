@@ -450,7 +450,7 @@ final class InkRenderer {
             }
             if nowTime - gpu.latestWetBirth < input.dryDuration + 0.3 { animationFPS = max(animationFPS, 30) }
             if nowTime - gpu.latestLavaBirth < input.coolDuration + 0.5 { animationFPS = 60 }
-            if nowTime - gpu.latestGrassBirth < 3.4 || activeHere?.brush == .grass || activeHere?.brush == .lava {
+            if nowTime - gpu.latestGrassBirth < 3.4 || activeHere?.brush.growsFlowers == true || activeHere?.brush == .lava {
                 animationFPS = 60
             }
         }
@@ -728,7 +728,7 @@ final class InkRenderer {
             drawRibbon(enc, pipeline: inkPipeline, frame: &frame, seg: &su, indices: buffer, first: firstIndex, count: count)
         }
 
-        if a.brush == .grass {
+        if a.brush.growsFlowers {
             drawActiveGrass(enc, frame: &frame, seg: &su, stroke: a)
         }
     }
@@ -741,7 +741,7 @@ final class InkRenderer {
         var idx: [UInt32] = []
         RibbonBuilder.append(a.points, stroke: 0, relax: a.brush.relaxesCorners, vertices: &verts, indices: &idx)
         guard !verts.isEmpty, !idx.isEmpty else { return nil }
-        var info = StrokeGPU(color: a.color.simd, brush: UInt32(a.brush.rawValue), birth: time, width: a.width, seed: a.seed)
+        var info = StrokeGPU(color: a.color.simd, brush: UInt32(a.brush.shading), birth: time, width: a.width, seed: a.seed)
         let vertexBytes = verts.count * MemoryLayout<RibbonVertexGPU>.stride
         let indexOffset = Self.strokeSlot + (vertexBytes + 255) / 256 * 256
         let indexBytes = idx.count * MemoryLayout<UInt32>.stride
@@ -763,7 +763,7 @@ final class InkRenderer {
     /// Blades of the stroke being drawn sprout where the pencil passed; flowers stay buds until it lifts.
     private func drawActiveGrass(_ enc: MTLRenderCommandEncoder, frame: inout FrameUniforms,
                                  seg su: inout SegUniforms, stroke a: ActiveStroke) {
-        let field = GrassGenerator.field(points: a.points, width: a.width, color: a.color, seed: a.seed)
+        let field = GrassGenerator.field(for: a.brush, points: a.points, width: a.width, color: a.color, seed: a.seed)
         guard !field.blades.isEmpty else { return }
         let start = Float(a.startTime - epoch)
         let elapsed = max(frame.time - start, 0)
@@ -895,7 +895,7 @@ final class InkRenderer {
             pageCache[index] = gpu
         }
         if gpu.version != page.version {
-            let strokes = page.strokes.map { (id: $0.id, highlighter: $0.brush.isHighlighter, grass: $0.brush == .grass) }
+            let strokes = page.strokes.map { (id: $0.id, highlighter: $0.brush.isHighlighter, grass: $0.brush.growsFlowers) }
             switch InkMeshPlan.plan(old: gpu.order, new: strokes) {
             case .same:
                 gpu.version = page.version
@@ -932,7 +932,7 @@ final class InkRenderer {
             let mesh = RibbonMesh(vertices: v, indices: i)
             meshes.append((s.id, mesh))
             let info = UInt32(firstInfo + infos.count)
-            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.rawValue),
+            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.shading),
                                    birth: Float(s.birth - epoch), width: s.width, seed: s.seed))
             let base = UInt32(gpu.vertexCount + verts.count)
             let start = firstIndex + idxs.count
@@ -1034,7 +1034,7 @@ final class InkRenderer {
 
         func append(_ s: Stroke) -> UInt32 {
             let idx = UInt32(infos.count)
-            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.rawValue),
+            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.shading),
                                    birth: Float(s.birth - epoch), width: s.width, seed: s.seed))
             let mesh: RibbonMesh
             if let known = previous[s.id] {
@@ -1084,14 +1084,14 @@ final class InkRenderer {
                 latestLava = max(latestLava, Self.lavaCoolEnd(s))
             case .wet:
                 latestWet = max(latestWet, s.birth)
-            case .grass:
+            case .grass, .bloom:
                 latestGrass = max(latestGrass, s.birth)
                 usedGrass.insert(s.id)
                 let field: GrassField
                 if let cached = grassCache[s.id] {
                     field = cached
                 } else {
-                    field = GrassGenerator.field(points: s.points, width: s.width, color: s.color, seed: s.seed)
+                    field = GrassGenerator.field(for: s.brush, points: s.points, width: s.width, color: s.color, seed: s.seed)
                     grassCache[s.id] = field
                 }
                 let end = Float(s.birth - epoch)

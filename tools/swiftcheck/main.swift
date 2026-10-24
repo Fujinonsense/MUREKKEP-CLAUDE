@@ -715,6 +715,28 @@ if case let .claim(_, holds, left, _, _)? = PageMath.question("3+3=33 doğru mu?
     check(false, "page math: the engine finds 3+3=33 wrong (left side 6)")
 }
 
+// The flowering water pen (as in the ad's hook): a glossy turquoise line that grows glassy blue and
+// violet flowers on thin stems once the pen lifts; no grass.
+let waterLine = (0...40).map { InkPoint(x: Float($0) * 5, y: 300, r: 4, ink: 0) }
+let blooms = GrassGenerator.blooms(points: waterLine, width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
+check(blooms.flowers.count >= 8 && blooms.blades.allSatisfy(\.isStem) && blooms.blades.count == blooms.flowers.count,
+      "flowering water: flowers on stems along the line, no grass blades")
+check(blooms.flowers.allSatisfy { $0.petal.z >= $0.petal.x && $0.petal.z >= $0.petal.y },
+      "flowering water: the petals are blue and violet")
+check(blooms.flowers.allSatisfy { (0.5...1.6).contains($0.delay) }, "flowering water: the flowers open after the pen lifts")
+check(blooms.blades.allSatisfy { $0.height >= 8 } && blooms.blades.allSatisfy { abs($0.base.y - 300) <= 4 },
+      "flowering water: the stems rise from the line itself")
+let bloomsAgain = GrassGenerator.blooms(points: waterLine, width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
+check(bloomsAgain.flowers.map(\.radius) == blooms.flowers.map(\.radius) && bloomsAgain.blades.map(\.base) == blooms.blades.map(\.base),
+      "flowering water: the same stroke always grows the same flowers")
+let dot = GrassGenerator.blooms(points: [InkPoint(x: 50, y: 50, r: 4, ink: 0)], width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.5)
+check(!dot.flowers.isEmpty, "flowering water: a dot grows a flower too")
+check(Brush.bloom.group == .nature && Brush.bloom.isTrialInk && !Brush.bloom.isPremium && Brush.bloom.growsFlowers
+      && Brush.grass.growsFlowers && !Brush.sea.growsFlowers,
+      "flowering water: a nature pen with trial ink, growing flowers like the grass")
+check(Brush.bloom.shading == Brush.jelly.rawValue && Brush.sea.shading == Brush.sea.rawValue,
+      "flowering water: drawn with the glossy gel shading")
+
 // The pen bar moves to the top, the bottom or the right side, wherever the finger lets go of its grip;
 // never to the left, which holds the drafting rail.
 check(PaletteEdge.nearest(x: 600, y: 900, width: 1_200, height: 1_000, current: .top) == .bottom, "pen bar dock: let go low, it goes to the bottom")

@@ -48,6 +48,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
     case lightning = 19
     case pearl = 20
     case impasto = 21
+    case bloom = 22
 
     var id: UInt8 { rawValue }
 
@@ -55,7 +56,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
     static let paletteOrder: [Brush] = [
         .pen, .pencil, .fountain, .calligraphy, .highlighter,
         .watercolor, .impasto, .wet, .neon, .rainbow, .glitter,
-        .sea, .wave, .grass, .lava, .ice, .lightning, .galaxy,
+        .sea, .wave, .grass, .bloom, .lava, .ice, .lightning, .galaxy,
         .gold, .chrome, .pearl, .jelly,
     ]
 
@@ -63,7 +64,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         switch self {
         case .pen, .pencil, .fountain, .calligraphy, .highlighter: return .writing
         case .watercolor, .impasto, .wet, .neon, .rainbow, .glitter: return .paint
-        case .sea, .wave, .grass, .lava, .ice, .lightning, .galaxy: return .nature
+        case .sea, .wave, .grass, .bloom, .lava, .ice, .lightning, .galaxy: return .nature
         case .gold, .chrome, .pearl, .jelly: return .shine
         }
     }
@@ -71,7 +72,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
     /// The nature pens: free to try with a trial amount of ink in the App Store edition (ProPlan).
     var isTrialInk: Bool {
         switch self {
-        case .sea, .wave, .grass: return true
+        case .sea, .wave, .grass, .bloom: return true
         default: return false
         }
     }
@@ -108,6 +109,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return Loc.t("Şimşek")
         case .pearl: return Loc.t("İnci dizisi")
         case .impasto: return Loc.t("Yağlı boya")
+        case .bloom: return Loc.t("Çiçekli su")
         }
     }
 
@@ -135,6 +137,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return Loc.t("Çıtırdayan, parlayan elektrik arkı.")
         case .pearl: return Loc.t("Çizgi boyunca dizilen sedef parıltılı inciler.")
         case .impasto: return Loc.t("Fırça izleri görünen kalın, kabarık yağlı boya.")
+        case .bloom: return Loc.t("Parlak turkuaz su çizgisi. Kalemi kaldırınca üstünde cam gibi mavi ve mor çiçekler açar.")
         }
     }
 
@@ -162,6 +165,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return "bolt.fill"
         case .pearl: return "circle.grid.2x1.fill"
         case .impasto: return "paintpalette.fill"
+        case .bloom: return "camera.macro.circle.fill"
         }
     }
 
@@ -190,6 +194,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return 4
         case .pearl: return 7
         case .impasto: return 12
+        case .bloom: return 7
         }
     }
 
@@ -217,6 +222,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return 1.5...16
         case .pearl: return 3...30
         case .impasto: return 3...48
+        case .bloom: return 2...30
         }
     }
 
@@ -245,13 +251,14 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return 0.2
         case .pearl: return 0.25
         case .impasto: return 0.5
+        case .bloom: return 0.35
         }
     }
 
     /// Drawn every frame while the animation setting is on.
     var isAnimated: Bool {
         switch self {
-        case .wave, .glitter, .grass, .sea, .lava, .ice, .jelly, .galaxy, .lightning: return true
+        case .wave, .glitter, .grass, .bloom, .sea, .lava, .ice, .jelly, .galaxy, .lightning: return true
         default: return false
         }
     }
@@ -275,10 +282,14 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
     /// tight turn it gets a depth pass first and is blended only once.
     var blendsOnce: Bool {
         switch self {
-        case .neon, .ice, .jelly, .lava, .lightning: return true
+        case .neon, .ice, .jelly, .bloom, .lava, .lightning: return true
         default: return false
         }
     }
+    /// Grows blades or flowers over its line (GrassGenerator).
+    var growsFlowers: Bool { self == .grass || self == .bloom }
+    /// The look the GPU draws the line with: the flowering water is the glossy gel.
+    var shading: UInt8 { self == .bloom ? Brush.jelly.rawValue : rawValue }
     /// Thick, shaded ink bends smoothly through sharp corners instead of creasing like a pipe joint.
     var relaxesCorners: Bool {
         switch self {
@@ -312,6 +323,7 @@ enum Brush: UInt8, CaseIterable, Identifiable, Codable {
         case .lightning: return p([0x7FD4FF, 0xC08BFF, 0xFFE45C, 0x6BFF9E, 0xFF6BD0, 0xFFFFFF])
         case .pearl: return p([0xF4EFE6, 0xF2D0D9, 0x2C2F3A, 0xE8D59E, 0xBFD7EA, 0xD8C8F0])
         case .impasto: return p([0xD7263D, 0x1B998B, 0xF46036, 0x2E294E, 0xF2C14E, 0x3D5A80])
+        case .bloom: return p([0x22B8CF, 0x2EC4B6, 0x3A8DFF, 0x7FD3F7, 0x6C7BFF, 0x14A3A3])
         }
     }
 }

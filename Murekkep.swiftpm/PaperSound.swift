@@ -104,7 +104,7 @@ extension Brush {
         case .highlighter, .neon: return .felt
         case .watercolor, .wet, .impasto, .rainbow: return .brush
         case .jelly: return .gel
-        case .sea, .wave: return .water
+        case .sea, .wave, .bloom: return .water
         case .lava: return .lava
         case .grass: return .grass
         case .lightning: return .spark

@@ -17,7 +17,7 @@ extension Brush {
         switch self {
         case .highlighter: return .chisel
         case .calligraphy, .fountain: return .flat
-        case .watercolor, .wave, .sea, .impasto: return .brush
+        case .watercolor, .wave, .sea, .impasto, .bloom: return .brush
         case .grass: return .leaf
         default: return .cone
         }
@@ -48,6 +48,7 @@ extension Brush {
         case .lightning: return [Color(white: 0.22), Color(white: 0.05)]
         case .pearl: return [Color(white: 0.99), Color(red: 0.90, green: 0.86, blue: 0.82)]
         case .impasto: return [Color(red: 0.82, green: 0.62, blue: 0.42), Color(red: 0.55, green: 0.36, blue: 0.20)]
+        case .bloom: return [Color(red: 0.62, green: 0.90, blue: 0.96), Color(red: 0.12, green: 0.56, blue: 0.72)]
         }
     }
 
@@ -908,7 +909,7 @@ struct BrushInspector: View {
                   systemImage: "applepencil")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        case .wave, .glitter, .sea, .ice, .jelly, .galaxy, .lightning:
+        case .wave, .glitter, .sea, .ice, .jelly, .bloom, .galaxy, .lightning:
             Toggle(Loc.t("Animasyon"), isOn: $settings.animations)
                 .font(.subheadline)
         case .pencil:
@@ -1181,6 +1182,38 @@ struct StrokePreview: View {
                     ctx.fill(Path(ellipseIn: CGRect(x: px - r, y: py - r, width: r * 2, height: r * 2)),
                              with: .radialGradient(Gradient(colors: [.white, color, color.opacity(0.85)]),
                                                    center: CGPoint(x: px - r * 0.35, y: py - r * 0.4), startRadius: 0, endRadius: r * 1.2))
+                }
+            case .bloom:
+                // The glossy water line, three glassy flowers on thin stems above it.
+                ctx.stroke(path, with: .color(color.opacity(0.85)), style: round)
+                var shine = ctx
+                shine.translateBy(x: -lw * 0.12, y: -lw * 0.18)
+                shine.stroke(path, with: .color(.white.opacity(0.55)), style: StrokeStyle(lineWidth: lw * 0.22, lineCap: .round))
+                let w = size.width
+                let h = size.height
+                func on(_ t: CGFloat) -> CGPoint {
+                    let u = 1 - t
+                    let (a, b, c, d) = (u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t)
+                    return CGPoint(x: a * 16 + b * w * 0.35 + c * w * 0.62 + d * (w - 16),
+                                   y: a * mid + b * (mid - h * 0.55) + c * (mid + h * 0.35) + d * mid)
+                }
+                let petals = [Color(red: 0.56, green: 0.66, blue: 1.0), Color(red: 0.70, green: 0.62, blue: 1.0),
+                              Color(red: 0.45, green: 0.72, blue: 0.98)]
+                for (k, t) in [CGFloat(0.22), 0.5, 0.8].enumerated() {
+                    let base = on(t)
+                    let top = CGPoint(x: base.x + CGFloat(k - 1) * 2, y: base.y - lw * 1.6 - 6)
+                    var stem = Path()
+                    stem.move(to: base)
+                    stem.addLine(to: top)
+                    ctx.stroke(stem, with: .color(color.opacity(0.8)), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+                    let r = max(4, lw * 0.6)
+                    for p in 0..<5 {
+                        let a = CGFloat(p) * 2 * .pi / 5 + CGFloat(k)
+                        ctx.fill(Path(ellipseIn: CGRect(x: top.x + cos(a) * r * 0.75 - r * 0.55, y: top.y + sin(a) * r * 0.75 - r * 0.55,
+                                                        width: r * 1.1, height: r * 1.1)), with: .color(petals[k].opacity(0.85)))
+                    }
+                    ctx.fill(Path(ellipseIn: CGRect(x: top.x - r * 0.3, y: top.y - r * 0.3, width: r * 0.6, height: r * 0.6)),
+                             with: .color(.white.opacity(0.9)))
                 }
             case .ice, .jelly, .fountain, .impasto:
                 let opacity: Double = brush == .ice ? 0.6 : (brush == .jelly ? 0.82 : 1)
