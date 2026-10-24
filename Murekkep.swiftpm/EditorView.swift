@@ -92,16 +92,19 @@ struct EditorContent: View {
                     }
                     .ignoresSafeArea(.container, edges: .bottom)
 
-                if let target = paletteTarget {
-                    PaletteDockHint(edge: target)
-                        .padding(paletteInsets(target))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: paletteAlignment(target))
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
+                ZStack {
+                    if let target = paletteTarget {
+                        PaletteDockHint(edge: target)
+                            .padding(paletteInsets(target))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: paletteAlignment(target))
+                            .transition(.opacity)
+                    }
                 }
+                .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.18), value: paletteTarget)
 
                 FloatingToolPalette(editor: editor, collapsed: $paletteCollapsed, edge: dock,
-                                    onGripMove: movePalette, onGripDrop: dropPalette)
+                                    onGripMove: movePalette, onGripDrop: dropPalette, onGripCancel: cancelPaletteDrag)
                     .offset(paletteDrag)
                     .padding(paletteInsets(dock))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: paletteAlignment(dock))
@@ -216,8 +219,6 @@ struct EditorContent: View {
                     .onAppear { canvasSize = geo.size }
                     .onChange(of: geo.size) { _, size in canvasSize = size }
             })
-            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: dock)
-            .animation(.easeInOut(duration: 0.18), value: paletteTarget)
             .sensoryFeedback(.selection, trigger: paletteTarget) { old, new in old != nil && new != nil }
             .sensoryFeedback(.impact(flexibility: .soft), trigger: dock)
             if showAssistant && sidePanel {
@@ -460,6 +461,15 @@ private extension EditorContent {
                                             height: canvasSize.height, current: dock)
     }
 
+    /// A drag that ended without a drop: the bar goes back where it stands.
+    func cancelPaletteDrag() {
+        guard paletteDrag != .zero || paletteTarget != nil else { return }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            paletteDrag = .zero
+            paletteTarget = nil
+        }
+    }
+
     /// Where the finger lets go, the nearest of the top, the bottom and the right side takes the bar.
     func dropPalette(_ drag: DragGesture.Value) {
         let target = PaletteEdge.nearest(x: drag.location.x, y: drag.location.y, width: canvasSize.width,
@@ -504,8 +514,8 @@ struct CanvasRepresentable: UIViewRepresentable {
         view.applyRenderSettings(animations: animations, batterySaver: batterySaver)
         view.applyRotation(degrees: pageAngle, locked: pageAngleLocked)
         view.applyPageMode(single: singlePage)
-        view.applyZoomWindow(on: zoomWindow)
         view.applyPaletteClearance(paletteClearance)
+        view.applyZoomWindow(on: zoomWindow)
     }
 }
 

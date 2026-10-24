@@ -729,6 +729,11 @@ check(blooms.blades.allSatisfy { $0.height >= 8 } && blooms.blades.allSatisfy { 
 let bloomsAgain = GrassGenerator.blooms(points: waterLine, width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
 check(bloomsAgain.flowers.map(\.radius) == blooms.flowers.map(\.radius) && bloomsAgain.blades.map(\.base) == blooms.blades.map(\.base),
       "flowering water: the same stroke always grows the same flowers")
+// The live stroke's flowers are made again every frame from the growing line: a stem must stay where
+// the pen passed, not slide along as the line gets longer.
+let halfway = GrassGenerator.blooms(points: Array(waterLine.prefix(24)), width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
+check(!halfway.blades.isEmpty && Set(halfway.blades.map(\.base)).isSubset(of: Set(blooms.blades.map(\.base))),
+      "flowering water: stems stay put while the line grows")
 let dot = GrassGenerator.blooms(points: [InkPoint(x: 50, y: 50, r: 4, ink: 0)], width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.5)
 check(!dot.flowers.isEmpty, "flowering water: a dot grows a flower too")
 check(Brush.bloom.group == .nature && Brush.bloom.isTrialInk && !Brush.bloom.isPremium && Brush.bloom.growsFlowers

@@ -425,6 +425,9 @@ struct FloatingToolPalette: View {
     /// The grip's drag, while the finger moves and once when it lifts.
     var onGripMove: (DragGesture.Value) -> Void = { _ in }
     var onGripDrop: (DragGesture.Value) -> Void = { _ in }
+    /// The drag stopped without a drop (cancelled); after a drop it changes nothing.
+    var onGripCancel: () -> Void = {}
+    @GestureState private var gripping = false
     @State private var inspector: Brush?
     @State private var showEraserOptions = false
     @State private var showTextPenOptions = false
@@ -454,7 +457,9 @@ struct FloatingToolPalette: View {
     }
 
     private func divider(_ length: CGFloat) -> some View {
-        Divider().frame(width: vertical ? length : nil, height: vertical ? nil : length)
+        Rectangle()
+            .fill(Color(uiColor: .separator))
+            .frame(width: vertical ? length : 0.5, height: vertical ? 0.5 : length)
     }
 
     /// Down the right side a pen lies with its tip toward the page, so a picked pen slides out to the left.
@@ -494,8 +499,12 @@ struct FloatingToolPalette: View {
             .frame(width: vertical ? 44 : 16, height: vertical ? 16 : 44)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 6, coordinateSpace: .named(Self.space))
+                .updating($gripping) { _, state, _ in state = true }
                 .onChanged { onGripMove($0) }
                 .onEnded { onGripDrop($0) })
+            .onChange(of: gripping) { _, held in
+                if !held { onGripCancel() }
+            }
             .contextMenu {
                 ForEach(PaletteEdge.allCases, id: \.self) { place in
                     Button {
@@ -590,11 +599,9 @@ struct FloatingToolPalette: View {
             Group {
                 if vertical {
                     // Upright the column holds its pens snugly and scrolls only when the side runs short.
-                    ViewThatFits(in: .vertical) {
-                        pens
-                        ScrollView(.vertical, showsIndicators: false) { pens }
-                    }
-                    .frame(maxHeight: 440)
+                    ScrollView(.vertical, showsIndicators: false) { pens }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .frame(maxHeight: min(columnLength, 440))
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) { pens }
                         .frame(maxWidth: 560)
@@ -625,6 +632,15 @@ struct FloatingToolPalette: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Araçları gizle"))
         }
+    }
+
+    /// The upright column's natural height: pens 30 pt, the text pen 36, 6 between, the heart
+    /// divider 7.5, padding 8 (the sizes `pens` lays out).
+    private var columnLength: CGFloat {
+        let shown = strip
+        let items = shown.favorites.count + shown.recent.count + 2
+        let divider: CGFloat = !shown.favorites.isEmpty && !shown.recent.isEmpty ? 7.5 + 6 : 0
+        return CGFloat(items) * 30 + 6 + CGFloat(items - 1) * 6 + divider + 8
     }
 
     /// The pens of the strip, then the text pen and the eraser; a picked pen stands out toward the page.
@@ -1201,12 +1217,14 @@ struct StrokePreview: View {
                               Color(red: 0.45, green: 0.72, blue: 0.98)]
                 for (k, t) in [CGFloat(0.22), 0.5, 0.8].enumerated() {
                     let base = on(t)
-                    let top = CGPoint(x: base.x + CGFloat(k - 1) * 2, y: base.y - lw * 1.6 - 6)
+                    // Small enough, and low enough, to stay inside the pen panel's 28-pt sample too.
+                    let r = min(max(4, lw * 0.6), h * 0.15)
+                    let rise = min(lw * 1.6 + 6, max(r, base.y - r * 1.35))
+                    let top = CGPoint(x: base.x + CGFloat(k - 1) * 2, y: base.y - rise)
                     var stem = Path()
                     stem.move(to: base)
                     stem.addLine(to: top)
                     ctx.stroke(stem, with: .color(color.opacity(0.8)), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-                    let r = max(4, lw * 0.6)
                     for p in 0..<5 {
                         let a = CGFloat(p) * 2 * .pi / 5 + CGFloat(k)
                         ctx.fill(Path(ellipseIn: CGRect(x: top.x + cos(a) * r * 0.75 - r * 0.55, y: top.y + sin(a) * r * 0.75 - r * 0.55,

@@ -219,9 +219,10 @@ enum GrassGenerator {
             cum[i] = cum[i - 1] + vlength(points[i].position - points[i - 1].position)
         }
         let total = cum[n - 1]
+        var k = 0
         func sample(_ s: Float) -> (p: SIMD2<Float>, r: Float, tangent: SIMD2<Float>) {
             guard n > 1 else { return (points[0].position, points[0].r, SIMD2<Float>(1, 0)) }
-            var k = 0
+            if s < cum[k] { k = 0 }
             while k < n - 2 && cum[k + 1] < s {
                 k += 1
             }
@@ -234,15 +235,16 @@ enum GrassGenerator {
             return (a.position + d * t, a.r + (b.r - a.r) * t, dl > 1e-5 ? d / dl : SIMD2<Float>(1, 0))
         }
 
-        // A flower every two to three line widths; the stems in the ink's own colour, darker.
+        // A flower every two to three line widths, at fixed distances along the line so a stem stays
+        // where the pen passed while the line grows; the stems in the ink's own colour, darker.
         let gap = max(width * 2.4, 12)
-        let count = total < gap ? 1 : min(300, Int(total / gap))
+        let count = max(1, min(300, Int(total / gap)))
         let stemColor = SIMD3<Float>(color.r, color.g, color.b) * 0.72
         var blades: [GrassBlade] = []
         var flowers: [GrassFlower] = []
         for m in 0..<count {
             let key = 70_000 + m
-            let s = count == 1 ? total * 0.5 : (Float(m) + 0.2 + 0.6 * rand(key, 1, salt)) * total / Float(count)
+            let s = min(total, (Float(m) + 0.2 + 0.6 * rand(key, 1, salt)) * gap)
             let (p, r, tangent) = sample(s)
             let normal = SIMD2<Float>(-tangent.y, tangent.x)
             var base = p + normal * ((rand(key, 2, salt) - 0.5) * r * 0.6)

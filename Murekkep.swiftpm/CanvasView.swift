@@ -2496,6 +2496,7 @@ extension CanvasView {
         guard insets != paletteClearance else { return }
         paletteClearance = insets
         layoutZoomPanel()
+        refreshOverlay()
         setNeedsRender()
     }
 
@@ -2506,6 +2507,7 @@ extension CanvasView {
         let clear = paletteClearance
         panel.frame = CGRect(x: 12, y: bounds.height - height - 64 - clear.bottom,
                              width: bounds.width - 24 - clear.right, height: height)
+        panel.layoutIfNeeded()
         // The box keeps the panel's shape (its height follows a new width or turn of the iPad).
         if var box = zoomBox {
             box.rect.size.height = (box.rect.width / max(panel.aspect, 1)).rounded()
