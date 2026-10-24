@@ -698,6 +698,19 @@ check(PageMath.reading(vision: "343=33", pen: "3+3=33") == "3+3=33", "page math:
 check(PageMath.reading(vision: "3+3=33", pen: nil) == "3+3=33", "page math: without the text pen Vision's line stays")
 check(PageMath.reading(vision: "3+3=33", pen: "3+3=3)") == "3+3=33", "page math: a reading the engine cannot work out loses")
 check(PageMath.reading(vision: "3+3=33", pen: "  ") == "3+3=33", "page math: an empty reading loses")
+// A calculation typed into the chat with only question words around it is the engine's, at once.
+for q in ["3+3=33 doğru mu?", "3+4×2 kaç eder?", "2x+3=7 ise x kaçtır?", "√49 nedir", "Is 12*12=144 correct?"] {
+    check(PageMath.question(q) != nil, "page math: \"\(q)\" is answered by the engine")
+}
+for q in ["Ali'nin 3 elması var, 2 tane daha alırsa kaç elması olur?", "türev nedir?", "f(x)=3x+2 ise f(4) kaçtır?",
+          "Bu sayfadaki 3. soruyu çöz", "2023 yılında ne oldu?"] {
+    check(PageMath.question(q) == nil, "page math: \"\(q)\" goes to the model")
+}
+if case let .claim(_, holds, left, _, _)? = PageMath.question("3+3=33 doğru mu?") {
+    check(!holds && left == 6, "page math: the engine finds 3+3=33 wrong (left side 6)")
+} else {
+    check(false, "page math: the engine finds 3+3=33 wrong (left side 6)")
+}
 
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

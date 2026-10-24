@@ -271,6 +271,17 @@ final class AssistantModel: ObservableObject {
         }
         guard let editor else { return }
         do {
+            // A calculation typed into the chat ("3+3=33 doğru mu?"): the math engine answers at once,
+            // without reading the page or waiting for a model.
+            if action == nil, let finding = PageMath.question(question) {
+                setEngine(Loc.t("Cihazda · hesap motoru"))
+                let language = Self.answerLanguage(question: question, action: nil, pages: [])
+                let answer = AnswerLanguage.$bound.withValue(language) {
+                    L("## Hesap", "## Calculation") + "\n" + MathFormat.describe(finding)
+                }
+                try await reveal(answer)
+                return
+            }
             let (resolved, warning) = await resolveEngine()
             try Task.checkCancellation()
             setEngine(resolved.label + (warning == nil ? "" : Loc.t(" (yedek)")))
