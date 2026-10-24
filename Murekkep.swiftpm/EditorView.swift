@@ -116,7 +116,7 @@ struct EditorContent: View {
                 VStack {
                     Spacer()
                     if showLecture {
-                        LectureBar(lecture: lecture) {
+                        LectureBar(lecture: lecture, keyboard: editor.tool != .text && editor.tool != .textPen) {
                             setLecturePlayer(false)
                         }
                         .padding(.horizontal, 16)

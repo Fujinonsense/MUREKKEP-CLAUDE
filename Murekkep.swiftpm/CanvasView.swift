@@ -390,6 +390,8 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             pencilGestures.isEnabled = true
             updateDrawableScale()
             setNeedsRender()
+            // A keyboard case types on the page from the start.
+            becomeFirstResponder()
         }
     }
 
@@ -956,6 +958,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         // Writing or drawing with another tool sets the open text box on the page first.
         if textBox != nil && model.tool != .text {
             finishTextBox()
+        }
+        // The page takes the keyboard back (from the assistant's field, say) once it is touched.
+        if textBox == nil, !isFirstResponder {
+            becomeFirstResponder()
         }
         let docPoint = docLocation(touch)
         let zoom = docTransform.zoom
@@ -1738,6 +1744,66 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         box.resignFirstResponder()
         box.removeFromSuperview()
         model.insertText(text, request: request)
+        // The keyboard comes back to the page: the next key starts a box under this text.
+        if window != nil {
+            becomeFirstResponder()
+        }
+    }
+
+    // MARK: - Keyboard
+
+    /// The page takes a keyboard case's keys (it is no text field, so no on-screen keyboard shows).
+    /// With the Aa tool or the text pen, typing opens a box by itself (KeyboardSpot); in the box,
+    /// Esc, ⌘. or ⌘↩ writes it on the page.
+    override var canBecomeFirstResponder: Bool { true }
+
+    override var keyCommands: [UIKeyCommand]? {
+        guard textBox != nil else { return nil }
+        let write = UIKeyCommand(title: Loc.t("Yazıyı sayfaya koy"), action: #selector(writeTextBox), input: "\r", modifierFlags: .command)
+        let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(writeTextBox))
+        escape.wantsPriorityOverSystemBehavior = true
+        return [write, escape, UIKeyCommand(input: ".", modifierFlags: .command, action: #selector(writeTextBox))]
+    }
+
+    @objc private func writeTextBox() {
+        finishTextBox()
+    }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        guard model.tool == .text || model.tool == .textPen, textBox == nil,
+              let key = presses.first?.key, Self.types(key), let request = keyboardRequest() else {
+            super.pressesBegan(presses, with: event)
+            return
+        }
+        openTextBox(request)
+        textBox?.insertText(key.characters)
+    }
+
+    /// A key that writes something: not a shortcut, not Return, Tab, Esc, an arrow or a function key
+    /// (those come as control or private-use characters), and not a lone space.
+    private static func types(_ key: UIKey) -> Bool {
+        guard key.modifierFlags.isDisjoint(with: [.command, .control]) else { return false }
+        let text = key.characters
+        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        return text.unicodeScalars.allSatisfy { s in
+            !CharacterSet.controlCharacters.contains(s) && s.properties.generalCategory != .privateUse
+        }
+    }
+
+    /// Where a box opened from the keyboard goes: on the page in view, under its ink (KeyboardSpot).
+    private func keyboardRequest() -> TextRequest? {
+        let (origin, zoom) = docTransform
+        let visible = visibleDocRect(origin: origin, zoom: zoom)
+        let page = model.layout.dominantPage(in: visible)
+        guard model.layout.pageRects.indices.contains(page),
+              let lines = model.typedLayout(page: page, at: .zero) else { return nil }
+        let rect = model.layout.pageRects[page]
+        let view = visible.offsetBy(dx: -rect.minX, dy: -rect.minY)
+        let ink = model.strokes(on: page).filter { !$0.points.isEmpty }.map { CGRect(ink: $0.bounds) }
+        let last = model.lastTyped.flatMap { $0.page == page ? $0.rect : nil }
+        let point = KeyboardSpot.start(lastTyped: last, ink: ink, viewTop: max(view.minY, 0), viewBottom: min(view.maxY, rect.height),
+                                       left: lines.left > 0 ? lines.left : 40, spacing: lines.spacing)
+        return TextRequest(page: page, point: point)
     }
 
     /// Keeps the box on its lines at the current zoom, its capitals as tall as the written ones.

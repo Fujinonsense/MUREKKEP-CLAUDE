@@ -6,6 +6,8 @@ import SwiftUI
 /// the moment it was written.
 struct LectureBar: View {
     @ObservedObject var lecture: LectureAudio
+    /// Off while the page takes typing (the Aa tool, the text pen): space and the arrows write there.
+    var keyboard = true
     let onClose: () -> Void
 
     var body: some View {
@@ -21,7 +23,7 @@ struct LectureBar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(.space, modifiers: [])
+                .keyboardShortcut(keyboard ? KeyboardShortcut(.space, modifiers: []) : nil)
                 .accessibilityLabel(lecture.isPlaying ? Loc.t("Duraklat") : Loc.t("Oynat"))
                 Slider(value: Binding(get: { lecture.time }, set: { lecture.seek(to: $0) }), in: 0...max(take.duration, 0.1))
                     .tint(Theme.ink)
@@ -66,7 +68,7 @@ struct LectureBar: View {
         .glassCapsule()
         .background {
             // The keyboard case: space plays and pauses (the play button), the arrows jump and set the volume.
-            if lecture.current != nil {
+            if lecture.current != nil, keyboard {
                 Group {
                     Button(Loc.t("5 sn geri")) { lecture.skip(by: -5) }
                         .keyboardShortcut(.leftArrow, modifiers: [])

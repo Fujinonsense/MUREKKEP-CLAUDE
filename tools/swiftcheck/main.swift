@@ -261,6 +261,25 @@ check(RecordingSync.skip(time: 10, by: -5, duration: 60) == 5 && RecordingSync.s
 check(RecordingSync.volume(1, step: 0.1) == 1 && RecordingSync.volume(1, step: -0.1) == 0.9
       && RecordingSync.volume(0.9, step: -0.1) == 0.8 && RecordingSync.volume(0.05, step: -0.1) == 0, "recording: volume in tenths")
 
+// MARK: Typing from a keyboard (KeyboardSpot)
+
+// Page lines 28 apart; the view shows y 0…600; the margin is at 60.
+let notes = [CGRect(x: 60, y: 90, width: 300, height: 20), CGRect(x: 60, y: 118, width: 200, height: 22)]
+let underNotes = KeyboardSpot.start(lastTyped: nil, ink: notes, viewTop: 0, viewBottom: 600, left: 60, spacing: 28)
+check(underNotes.x == 60 && abs(underNotes.y - (140 + 0.2 * 28)) < 0.001, "keyboard: typing starts under the notes in view")
+let typed = CGRect(x: 120, y: 118, width: 200, height: 22)
+let underTyped = KeyboardSpot.start(lastTyped: typed, ink: [notes[0], typed], viewTop: 0, viewBottom: 600, left: 60, spacing: 28)
+check(underTyped.x == 120 && abs(underTyped.y - (140 + 0.2 * 28)) < 0.001, "keyboard: typing goes on under the last typed text, at its left")
+let inkBelow = [typed, CGRect(x: 60, y: 200, width: 300, height: 20)]
+check(KeyboardSpot.start(lastTyped: typed, ink: inkBelow, viewTop: 0, viewBottom: 600, left: 60, spacing: 28).x == 60,
+      "keyboard: handwriting under the typed text comes first")
+check(KeyboardSpot.start(lastTyped: nil, ink: [], viewTop: 300, viewBottom: 900, left: 60, spacing: 28) == CGPoint(x: 60, y: 328),
+      "keyboard: an empty view starts a line under its top")
+// Ink down to the bottom of the view: the first free line in view.
+let full = [CGRect(x: 60, y: 300, width: 400, height: 60), CGRect(x: 60, y: 420, width: 400, height: 200)]
+let free = KeyboardSpot.start(lastTyped: nil, ink: full, viewTop: 300, viewBottom: 600, left: 60, spacing: 28)
+check(free.y > 360 && free.y + 28 <= 420, "keyboard: ink to the bottom of the view: the first free line")
+
 // MARK: Zoom window (ZoomBox)
 
 let zoomPage = CGSize(width: 600, height: 800)

@@ -1013,6 +1013,7 @@ enum Translations {
         "Kayıt seçenekleri": "Recording options",
         "Oynatıcıyı kapat": "Close the player",
         "5 sn geri": "Back 5 s",
+        "Yazıyı sayfaya koy": "Put the text on the page",
         "5 sn ileri": "Forward 5 s",
         "Sesi aç": "Volume up",
         "Sesi kıs": "Volume down",

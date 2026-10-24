@@ -134,6 +134,8 @@ final class EditorModel: ObservableObject {
     private var textWork: DispatchWorkItem?
     /// Where the text pen last wrote text, for the dots and accents that come after a word.
     private var lastTypeset: (page: Int, rect: CGRect, time: Date)?
+    /// The text typed or typeset last (Aa box or text pen): typing from a keyboard goes on under it.
+    private(set) var lastTyped: (page: Int, rect: CGRect)?
     /// Where the text pen's last word ended: the next words on that line follow it with one space.
     private var lastTextEnd: (page: Int, end: TextEnd)?
     /// The handwriting the text pen read last and the text that replaced it: writing that goes on
@@ -985,6 +987,9 @@ final class EditorModel: ObservableObject {
             let written = (handwriting + result.added)
                 .map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
             self.lastTypeset = (batch.page, written, Date())
+            if !result.added.isEmpty {
+                self.lastTyped = (batch.page, result.added.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) })
+            }
             if let end = result.end {
                 self.lastTextEnd = (batch.page, end)
             }
@@ -1011,6 +1016,9 @@ final class EditorModel: ObservableObject {
                                              pageSize: layout.pageSizes[request.page], style: style,
                                              flowerLevel: settings.flowerLevel, scale: settings.textPenScale)
         addStrokes(new, toPage: request.page)
+        if !new.isEmpty {
+            lastTyped = (request.page, new.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) })
+        }
     }
 
     /// The lines typed text at `point` will sit on (for the Aa text box).
