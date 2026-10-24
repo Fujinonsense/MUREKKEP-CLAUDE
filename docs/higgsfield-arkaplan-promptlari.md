@@ -1,80 +1,103 @@
 # Higgsfield arka plan promptları
 
-Kitaplığın 10 Pro arka planı için. Her promptu Higgsfield'da (Image sekmesi) aynı ayarlarla üret.
+Kitaplığın Pro arka planları: konu değil, malzeme ve ışık. Stüdyo makro fotoğrafı ve 3B render arası soyut görseller. 12 konseptten en iyi 10'u uygulamaya girer.
 
 ## Ayarlar
 
 | Ayar | Değer |
 |---|---|
-| Model | GPT Image 2.5 Sunburst |
-| Oran | 1:1 ("Auto" yerine) |
-| Çözünürlük | En yüksek (4K varsa 4K, yoksa 2K) |
-| Adet | 2 (iyisini seçeriz) |
+| Model | GPT Image 2.5, Sunburst |
+| Oran | 1:1 |
+| Çözünürlük | 4K (2880 px) |
+| Kalite | max |
+| Adet | 2 varyant (iyisini seçeriz) |
 
-## Kaydetme
+## Üretme
 
-İyi olanı indir ve `İndirilenler\Murekkep-arkaplan` klasörüne başlıktaki adla kaydet (ör. `ebru.png`).
+Higgsfield CLI girişliyken hepsini birden üretmek için:
 
-Komut satırından (Higgsfield CLI girişliyken) hepsi birden: `python tools/higgsfield/backgrounds.py <klasör>` (4K = 2880 px, max kalite, Sunburst; tek tek yeniden üretmek için adlarını ekle). Sonra `python tools/make_backgrounds.py <klasör>` uygulamaya 2752 px olarak koyar.
+```
+python tools/higgsfield/backgrounds.py <klasör> --variants 2
+```
+
+Tek tek yeniden üretmek için konseptin adını ekle. Sonra `python tools/make_backgrounds.py <klasör>` seçilenleri uygulamaya 2752 px olarak koyar.
+
+Her promptun sonuna aynı kapanış eklenir:
+
+```
+Ultra high-end abstract wallpaper, award-winning, extraordinary fine detail, physically accurate light and materials, rich depth, flawless and clean. Leave one calm, uncluttered area so interface text can sit on it. No text, no letters, no numbers, no logos, no watermark, no people, no frame, edge to edge.
+```
 
 ## Promptlar
 
-### 1. ebru.png
+### 1. glass.png
 
 ```
-A real piece of traditional Turkish ebru marbled paper, scanned flat from above: flowing combed gel-git patterns of indigo, ochre, crimson and turquoise pigment on warm cream paper, fine feathered detail, slightly muted museum colours. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Sculptural ribbons of clear liquid glass twisting through the frame, thick and glossy, with prismatic dispersion splitting light into delicate rainbow edges, bright caustics falling on a pale warm grey seamless studio backdrop, macro lens, shallow depth of field, high-end 3D render.
 ```
 
-### 2. ink.png
+### 2. silk.png
 
 ```
-Macro photograph of deep indigo and turquoise ink slowly blooming in clear water, soft billowing clouds and fine wisps of ink, deep navy background fading to near black. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Monumental flowing folds of champagne and pearl silk satin sweeping diagonally across the frame, soft directional window light, deep luminous shadows inside the folds, visible fine weave, editorial luxury fashion photography.
 ```
 
-### 3. goldleaf.png
+### 3. molten.png
 
 ```
-Delicate fragments of real gold leaf scattered sparsely across deep navy handmade paper, visible paper fibres, soft raking studio light, top-down, luxurious and restrained. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Molten liquid gold and glossy obsidian black swirling into each other in slow marbled currents, mirror-like reflective surface, dramatic rim light catching the gold, macro fluid art photography, deep dark background.
 ```
 
-### 4. watercolor.png
+### 4. prism.png
 
 ```
-Soft abstract watercolour wash on cold-press cotton paper, pale sky blue, lavender and warm peach bleeding into each other, visible paper grain, airy and light. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Sunlight refracted through a crystal prism casting spectral rainbow beams and sharp caustic patterns across a textured warm white plaster wall, soft natural shadows, minimal architectural composition, serene morning light.
 ```
 
-### 5. iznik.png
+### 5. paperwave.png
 
 ```
-Ottoman Iznik ceramic tile pattern seen from above, cobalt blue, turquoise and coral tulips, carnations and saz leaves on white glaze, slightly faded and softened like an old museum wall, seamless repeating pattern. Calm, soft light, low contrast, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Layered sculpted paper waves cut from thick paper, a gradient from coral to soft blush to warm cream, gentle soft shadows between the layers, top-down soft light, elegant paper art, tactile and precise.
 ```
 
-### 6. aurora.png
+### 6. reeded.png
 
 ```
-Quiet northern lights over a still snowy mountain lake at night, soft green and violet aurora reflected in the water, faint stars, dark sky, minimal wide landscape. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Vivid glowing colour fields of tangerine, magenta and cobalt seen through fluted reeded glass, vertical ribbed refraction stretching and bending the colours, soft luminous haze, modern architectural glass, premium and calm.
 ```
 
-### 7. sakura.png
+### 7. ferro.png
 
 ```
-A single cherry blossom branch with pale pink flowers resting on handmade Japanese washi paper, soft natural shadows, minimal composition with most of the paper left empty. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Ferrofluid sculpture: a field of black magnetic fluid spikes rising in a smooth wave, glossy surface with iridescent oil-slick sheen of violet, teal and gold, dramatic studio lighting on a deep black background, macro photography.
 ```
 
-### 8. aegean.png
+### 8. holo.png
 
 ```
-Aerial top-down photograph of the Aegean sea, clear turquoise water over pale sand and smooth white rocks, gentle ripples catching sunlight, serene. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no boats, no frame, edge to edge.
+Macro of softly crumpled holographic foil, iridescent reflections shifting from pink to cyan to pale gold along sharp delicate creases, soft studio light, glossy and luminous, pastel overall.
 ```
 
-### 9. bosphorus.png
+### 9. dunes.png
 
 ```
-The Bosphorus in Istanbul at dawn in soft fog, distant skyline silhouette with mosque domes and slender minarets far away, pastel pink and blue sky, glassy calm water, minimal. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Abstract aerial view of desert sand dunes at golden hour, sweeping sculptural curves of warm light and long violet shadows, fine wind ripples in the sand, terracotta, apricot and dusk violet, minimal and majestic.
 ```
 
-### 10. cotton.png
+### 10. orbs.png
 
 ```
-Close-up of thick handmade cotton rag paper, warm off-white with subtle fibres and deckled texture, soft raking light from the side, minimal and tactile. Calm, soft light, low contrast, generous empty space, made to sit behind an app interface. No text, no letters, no logos, no watermark, no people, no frame, edge to edge.
+Floating glossy glass spheres of different sizes suspended in soft air, pastel refractions and gentle reflections inside each sphere, over a smooth gradient backdrop of lilac, peach and pale aqua, dreamy depth of field, high-end 3D render.
+```
+
+### 11. lightpaint.png
+
+```
+Long-exposure light painting: silky luminous arcs and ribbons of warm gold and cool electric blue sweeping across a deep black background, fine glowing filaments, elegant motion, high-end abstract photography.
+```
+
+### 12. pearl.png
+
+```
+Extreme macro of mother-of-pearl nacre surface, iridescent rainbow sheen of soft pink, mint, lilac and silver flowing in fine layered waves, polished and luminous, soft diffused light.
 ```

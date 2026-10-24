@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// The backgrounds behind the library: plain colours for everyone, and in Mürekkep Pro artwork made
-/// for the app with Higgsfield — Turkish ebru, indigo ink in water, gold leaf, a watercolour wash,
-/// Iznik tiles, the northern lights, cherry blossom, the Aegean, the Bosphorus at dawn and cotton
-/// paper — plus the ruled notebook. Each artwork comes full size for the library and as a small
+/// The backgrounds behind the library: plain colours for everyone, and in Mürekkep Pro abstract
+/// artwork made for the app with Higgsfield (material and light: liquid glass, silk, molten gold,
+/// paper waves, reeded glass, magnetic fluid, holographic foil, glass orbs, light trails and mother
+/// of pearl) plus the ruled notebook. Each artwork comes full size for the library and as a small
 /// thumbnail ("-thumb") for Settings, so the picker does not decode ten large images.
 enum AppBackground: String, CaseIterable, Identifiable, Codable {
     case paper
@@ -14,16 +14,16 @@ enum AppBackground: String, CaseIterable, Identifiable, Codable {
     case lavender
     case night
     case ruled
-    case ebru
-    case ink
-    case goldLeaf
-    case watercolor
-    case iznik
-    case aurora
-    case sakura
-    case aegean
-    case bosphorus
-    case cotton
+    case glass
+    case silk
+    case molten
+    case paperWave
+    case reeded
+    case ferro
+    case holo
+    case orbs
+    case lightPaint
+    case pearl
 
     var id: String { rawValue }
 
@@ -43,56 +43,66 @@ enum AppBackground: String, CaseIterable, Identifiable, Codable {
         case .lavender: return Loc.t("Lavanta")
         case .night: return Loc.t("Gece")
         case .ruled: return Loc.t("Defter")
-        case .ebru: return Loc.t("Ebru")
-        case .ink: return Loc.t("Mürekkep")
-        case .goldLeaf: return Loc.t("Altın varak")
-        case .watercolor: return Loc.t("Sulu boya")
-        case .iznik: return Loc.t("İznik çinisi")
-        case .aurora: return Loc.t("Kuzey ışıkları")
-        case .sakura: return "Sakura"
-        case .aegean: return Loc.t("Ege")
-        case .bosphorus: return Loc.t("Boğaz")
-        case .cotton: return Loc.t("Pamuk kâğıt")
+        case .glass: return Loc.t("Sıvı cam")
+        case .silk: return Loc.t("İpek")
+        case .molten: return Loc.t("Erimiş altın")
+        case .paperWave: return Loc.t("Kâğıt dalga")
+        case .reeded: return Loc.t("Buzlu cam")
+        case .ferro: return Loc.t("Manyetik sıvı")
+        case .holo: return Loc.t("Hologram")
+        case .orbs: return Loc.t("Cam küreler")
+        case .lightPaint: return Loc.t("Işık izi")
+        case .pearl: return Loc.t("Sedef")
         }
     }
 
-    /// The artwork in Assets.xcassets ("bg-ebru", thumbnail "bg-ebru-thumb"); nil for colours and
-    /// the ruled paper.
+    /// The artwork in Assets.xcassets ("bg-paperwave", thumbnail "bg-paperwave-thumb"); nil for
+    /// colours and the ruled paper.
     var imageName: String? {
         switch self {
         case .paper, .ivory, .sand, .sage, .lavender, .night, .ruled: return nil
-        case .goldLeaf: return "bg-goldleaf"
-        default: return "bg-" + rawValue
+        default: return "bg-" + rawValue.lowercased()
         }
     }
 
     /// Dark backgrounds turn the library's text and controls light; light artwork keeps them dark.
     var isDark: Bool {
         switch self {
-        case .night, .ink, .goldLeaf, .aurora: return true
+        case .night, .molten, .reeded, .ferro, .lightPaint: return true
         default: return false
         }
     }
 
     /// How much paper (or, on dark artwork, night) lies over the artwork so the library reads on it.
+    /// The bright reeded glass takes the most, so light text stays clear on its orange and pink.
     var wash: Double {
         switch self {
-        case .ebru: return 0.38
-        case .iznik: return 0.45
-        case .aegean: return 0.22
-        case .watercolor, .sakura, .bosphorus: return 0.12
-        case .ink, .goldLeaf, .aurora: return 0.22
+        case .reeded: return 0.28
+        case .molten: return 0.18
+        case .silk: return 0.16
+        case .ferro: return 0.15
+        case .lightPaint: return 0.12
+        case .glass, .paperWave, .holo, .pearl: return 0.10
+        case .orbs: return 0.08
         default: return 0
         }
     }
 
-    /// Choices from earlier test builds, mapped to today's.
+    /// Choices from earlier builds, mapped to today's: each old artwork to the new one closest in
+    /// light and colour.
     static func migrated(_ raw: String) -> AppBackground? {
         if let kind = AppBackground(rawValue: raw) { return kind }
         switch raw {
-        case "inkFlow": return .ink
-        case "starlight": return .aurora
-        case "sea": return .aegean
+        case "ebru": return .holo
+        case "ink", "inkFlow": return .ferro
+        case "goldLeaf": return .molten
+        case "watercolor": return .orbs
+        case "iznik": return .paperWave
+        case "aurora", "starlight": return .lightPaint
+        case "sakura": return .pearl
+        case "aegean", "sea": return .glass
+        case "bosphorus": return .reeded
+        case "cotton": return .silk
         default: return nil
         }
     }

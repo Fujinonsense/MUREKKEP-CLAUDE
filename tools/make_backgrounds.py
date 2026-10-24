@@ -1,9 +1,10 @@
 """Turns the generated background artwork (one square PNG per background) into the app's asset
 catalog entries: bg-<name> (2752 px JPEG for the library: the long side of a 13-inch iPad Pro, so
 the picture is never enlarged) and bg-<name>-thumb (320 px for the
-Settings tiles), plus a contact sheet to look at. Run again with 4K sources to replace them.
+Settings tiles), plus a contact sheet to look at. Every <name>.png in the folder becomes one
+background; artwork in the catalog that is no longer in the folder is removed.
 
-    python tools/make_backgrounds.py <folder with ebru.png, ink.png, ...> [contact-sheet.png]
+    python tools/make_backgrounds.py <folder with glass.png, silk.png, ...> [contact-sheet.png]
 """
 import json
 import sys
@@ -13,7 +14,6 @@ from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "Murekkep.swiftpm" / "Assets.xcassets" / "Backgrounds"
-NAMES = ["ebru", "ink", "goldleaf", "watercolor", "iznik", "aurora", "sakura", "aegean", "bosphorus", "cotton"]
 FULL = 2752
 THUMB = 320
 
@@ -32,8 +32,14 @@ def main(source, sheet=None):
     CATALOG.mkdir(parents=True, exist_ok=True)
     (CATALOG / "Contents.json").write_text(json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n",
                                            encoding="utf-8", newline="\n")
+    names = sorted(f.stem for f in Path(source).glob("*.png"))
+    for old in CATALOG.glob("bg-*.imageset"):
+        if old.name.removesuffix(".imageset").removeprefix("bg-").removesuffix("-thumb") not in names:
+            for f in old.iterdir():
+                f.unlink()
+            old.rmdir()
     thumbs = []
-    for name in NAMES:
+    for name in names:
         art = Image.open(Path(source) / f"{name}.png").convert("RGB")
         side = min(art.size)
         art = art.crop(((art.width - side) // 2, (art.height - side) // 2, (art.width + side) // 2, (art.height + side) // 2))
@@ -42,7 +48,7 @@ def main(source, sheet=None):
         if side > FULL:
             full = art.resize((FULL, FULL), Image.LANCZOS)
         thumb = art.resize((THUMB, THUMB), Image.LANCZOS)
-        imageset(f"bg-{name}", full, 86)
+        imageset(f"bg-{name}", full, 90)
         imageset(f"bg-{name}-thumb", thumb, 84)
         thumbs.append((name, thumb))
         print(name, f"{(CATALOG / f'bg-{name}.imageset' / f'bg-{name}.jpg').stat().st_size // 1024} KB")

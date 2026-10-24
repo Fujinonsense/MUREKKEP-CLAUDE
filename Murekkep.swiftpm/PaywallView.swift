@@ -54,7 +54,7 @@ struct PaywallView: View {
 
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
-            AppBackgroundView(kind: .ebru)
+            AppBackgroundView(kind: .holo)
             LinearGradient(colors: [.clear, Theme.paper], startPoint: .center, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: "Mürekkep Pro")
