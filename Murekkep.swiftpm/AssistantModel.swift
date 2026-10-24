@@ -289,12 +289,24 @@ final class AssistantModel: ObservableObject {
                 pages += await gatherSectionPages(editor: editor, limit: max(pageLimit, 24))
             }
             try Task.checkCancellation()
+            // Answer in the language of the question (or, for the ready-made actions, of the notes).
+            let language = Self.answerLanguage(question: question, action: action, pages: pages)
+            // A page of plain calculations: the math engine's check is exact and comes at once, where
+            // the downloaded model would think for a minute to say the same thing.
+            let current = editor.currentPage
+            if action == .check || action == .solve, PageMath.engineSettles(OfflineBrain.mathLines(pages, current: current)) {
+                setEngine(Loc.t("Cihazda · hesap motoru"))
+                let answer = AnswerLanguage.$bound.withValue(language) {
+                    action == .check ? OfflineBrain.check(pages, current: current)
+                        : OfflineBrain.solvePage(pages, current: current, web: [])
+                }
+                try await reveal(answer)
+                return
+            }
             let wantsWeb = settings.webSearch && (action == nil || action == .explain || action == .solve)
             if let warning {
                 appendToAnswer("_\(warning)_\n\n")
             }
-            // Answer in the language of the question (or, for the ready-made actions, of the notes).
-            let language = Self.answerLanguage(question: question, action: action, pages: pages)
             // Exact results of the math engine, so a language model never gets the arithmetic wrong.
             let facts = AnswerLanguage.$bound.withValue(language) { OfflineBrain.mathFacts(pages, current: editor.currentPage) }
             // A page of questions: the small models are far more accurate one question at a time. A
@@ -472,16 +484,19 @@ final class AssistantModel: ObservableObject {
         if let cached = ocrCache[i], cached.version == version { return cached.text }
         status = label
         let strokes = editor.pages[i].strokes
-        var text = ""
+        var lines: [OCRLine] = []
         if let raster = await Task.detached(priority: .userInitiated, operation: { InkRaster.render(strokes) }).value {
-            text = Spelling.polish(await PageOCR.lines(in: raster)).map(\.text).joined(separator: "\n")
+            lines = Spelling.polish(await PageOCR.lines(in: raster))
         }
+        func length(_ lines: [OCRLine]) -> Int { lines.map(\.text).joined(separator: "\n").count }
         let inkCount = strokes.filter { $0.brush != .highlighter }.count
-        if text.count < max(2, inkCount / 6),
+        if length(lines) < max(2, inkCount / 6),
            let thick = await Task.detached(priority: .userInitiated, operation: { InkRaster.render(strokes, lineScale: 1.7) }).value {
-            let second = Spelling.polish(await PageOCR.lines(in: thick)).map(\.text).joined(separator: "\n")
-            if second.count > text.count { text = second }
+            let second = Spelling.polish(await PageOCR.lines(in: thick))
+            if length(second) > length(lines) { lines = second }
         }
+        // Calculations are read again by the text pen's readers, which know the user's hand.
+        let text = await HandwritingConverter.mathReadings(lines, ink: strokes).joined(separator: "\n")
         ocrCache[i] = (version: version, text: text)
         return text
     }

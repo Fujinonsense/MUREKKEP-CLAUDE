@@ -338,9 +338,9 @@ mature.due = t0
 check(abs(SpacedRepetition.review(mature, rating: .hard, now: t0).interval - 12) < 1e-9, "srs: hard x1.2")
 let easyMature = SpacedRepetition.review(mature, rating: .easy, now: t0)
 check(abs(easyMature.interval - 32.5) < 1e-9 && abs(easyMature.ease - 2.65) < 1e-9, "srs: easy x ease x 1.3, ease up")
-var floor = mature
-floor.ease = 1.35
-check(abs(SpacedRepetition.review(floor, rating: .again, now: t0).ease - 1.3) < 1e-9, "srs: ease never below 1.3")
+var lowEase = mature
+lowEase.ease = 1.35
+check(abs(SpacedRepetition.review(lowEase, rating: .again, now: t0).ease - 1.3) < 1e-9, "srs: ease never below 1.3")
 check(SpacedRepetition.isDue(fresh, now: t0) && !SpacedRepetition.isDue(graduated, now: t0), "srs: new cards are due, graduated ones wait")
 
 // MARK: Study tools (StudyOffline, MindMapLayout)
@@ -593,6 +593,26 @@ check(PenShelf.opening(saved: "", favorites: [], current: .neon) == .paint
       && PenShelf.opening(saved: "nature", favorites: [.pen], current: .neon) == .nature
       && PenShelf.opening(saved: "favorites", favorites: [], current: .lava) == .threeD,
       "pen shelves: which shelf the panel opens on")
+
+// MARK: Handwritten math the engine settles alone (PageMath)
+
+check(PageMath.engineSettles(["3+3=33"]), "page math: a lone calculation needs no model")
+check(PageMath.engineSettles(["Soru 1", "3+3=33", "-"]), "page math: a label and a stray mark do not count")
+check(PageMath.engineSettles(["2x+3=7", "2x=4", "x=2"]), "page math: equation steps are the engine's")
+check(!PageMath.engineSettles(["Ali'nin 3 elması var, 2 tane daha alırsa kaç elması olur?"]), "page math: a word problem needs the model")
+check(!PageMath.engineSettles(["3+3=33", "Buna göre sonuç neden yanlış"]), "page math: a sentence next to the sum needs the model")
+check(!PageMath.engineSettles(["Bugün hava çok güzel"]) && !PageMath.engineSettles([]), "page math: no calculation, no engine answer")
+// The engine pulls the sum out of a worded question ("3+4×2 işleminin…" → 11, "2x+3=7 ise x kaçtır?"
+// even → x = 0.6): a question in words is the model's, with its options.
+check(!PageMath.engineSettles(["3+4×2 işleminin sonucu kaçtır?", "A) 12", "B) 11"])
+      && !PageMath.engineSettles(["2x+3=7 ise x kaçtır?"]), "page math: a worded question goes to the model")
+check(PageMath.engineSettles(["3+3=?"]), "page math: a bare question mark is still the engine's")
+// The text pen's reading (the user's own readers with Vision's readings among its candidates) wins
+// on a math line when the engine can work it out; otherwise Vision's line stays.
+check(PageMath.reading(vision: "343=33", pen: "3+3=33") == "3+3=33", "page math: the text pen's reading of a sum wins")
+check(PageMath.reading(vision: "3+3=33", pen: nil) == "3+3=33", "page math: without the text pen Vision's line stays")
+check(PageMath.reading(vision: "3+3=33", pen: "3+3=3)") == "3+3=33", "page math: a reading the engine cannot work out loses")
+check(PageMath.reading(vision: "3+3=33", pen: "  ") == "3+3=33", "page math: an empty reading loses")
 
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

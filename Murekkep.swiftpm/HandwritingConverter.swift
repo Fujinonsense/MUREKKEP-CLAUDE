@@ -120,19 +120,7 @@ enum HandwritingConverter {
                 !$0.text.trimmingCharacters(in: .whitespaces).isEmpty
             }
             guard !lines.isEmpty else { return nil }
-            // Strokes of each line: their center lies in the line's box and they are not a big drawing.
-            var taken = Set<Int>()
-            for line in lines {
-                let zone = line.box.insetBy(dx: -4, dy: -max(4, line.box.height * 0.25))
-                let maxHeight = line.box.height * 2.4 + 10
-                let mine = source.filter { s in
-                    guard !taken.contains(s.id) else { return false }
-                    let height = CGFloat(s.bounds.maxY - s.bounds.minY)
-                    return height <= maxHeight && zone.contains(center(of: s))
-                }
-                for s in mine { taken.insert(s.id) }
-                members.append(mine)
-            }
+            members = lineStrokes(lines, in: source)
         }
         let printed = paper.ruling(pageSize: pageSize)
         var ruling = printed ?? estimatedRuling(lines, pageSize: pageSize)
@@ -301,6 +289,42 @@ enum HandwritingConverter {
             members.append(line.map { original[$0.id] ?? $0 })
         }
         return (lines, members)
+    }
+
+    /// Strokes of each of Vision's lines: their center lies in the line's box and they are not a big
+    /// drawing.
+    private static func lineStrokes(_ lines: [OCRLine], in source: [Stroke]) -> [[Stroke]] {
+        var taken = Set<Int>()
+        return lines.map { line in
+            let zone = line.box.insetBy(dx: -4, dy: -max(4, line.box.height * 0.25))
+            let maxHeight = line.box.height * 2.4 + 10
+            let mine = source.filter { s in
+                guard !taken.contains(s.id) else { return false }
+                let height = CGFloat(s.bounds.maxY - s.bounds.minY)
+                return height <= maxHeight && zone.contains(center(of: s))
+            }
+            for s in mine { taken.insert(s.id) }
+            return mine
+        }
+    }
+
+    /// The text of Vision's lines of a page's ink, its math lines read again by the text pen's readers.
+    /// Vision alone misreads a handwritten "+" or "=" now and then; the readers tuned on the user's hand
+    /// weigh Vision's readings with their own, and their reading wins when the math engine can work
+    /// it out (PageMath).
+    static func mathReadings(_ lines: [OCRLine], ink: [Stroke]) async -> [String] {
+        let source = ink.filter { $0.brush != .highlighter && !$0.points.isEmpty }
+        guard let model = HandwritingModel.shared else { return lines.map(\.text) }
+        var out: [String] = []
+        for (line, mine) in zip(lines, lineStrokes(lines, in: source)) {
+            guard !mine.isEmpty, PageOCR.mathScore(line.text) >= 2 || line.text.contains("=") else {
+                out.append(line.text)
+                continue
+            }
+            let read = await readWithModel(mine, model: model).0.map(\.text).joined(separator: " ")
+            out.append(PageMath.reading(vision: line.text, pen: read))
+        }
+        return out
     }
 
     private static func inkBounds(_ strokes: [Stroke]) -> CGRect {

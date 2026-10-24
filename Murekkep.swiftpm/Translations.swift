@@ -501,6 +501,7 @@ enum Translations {
         "Otomatik": "Automatic",
         "Otomatik · yerel sunucu": "Automatic · local server",
         "Otomatik · çevrimdışı": "Automatic · offline",
+        "Cihazda · hesap motoru": "On device · math engine",
         "Oynat": "Play",
         "Oynatılamadı": "Couldn't play",
         "PDF Claude'a yükleniyor…": "Uploading the PDF to Claude…",
