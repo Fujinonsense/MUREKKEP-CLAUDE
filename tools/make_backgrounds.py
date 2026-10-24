@@ -1,5 +1,6 @@
 """Turns the generated background artwork (one square PNG per background) into the app's asset
-catalog entries: bg-<name> (2048 px JPEG for the library) and bg-<name>-thumb (320 px for the
+catalog entries: bg-<name> (2752 px JPEG for the library: the long side of a 13-inch iPad Pro, so
+the picture is never enlarged) and bg-<name>-thumb (320 px for the
 Settings tiles), plus a contact sheet to look at. Run again with 4K sources to replace them.
 
     python tools/make_backgrounds.py <folder with ebru.png, ink.png, ...> [contact-sheet.png]
@@ -13,7 +14,7 @@ from PIL import Image, ImageFilter
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "Murekkep.swiftpm" / "Assets.xcassets" / "Backgrounds"
 NAMES = ["ebru", "ink", "goldleaf", "watercolor", "iznik", "aurora", "sakura", "aegean", "bosphorus", "cotton"]
-FULL = 2048
+FULL = 2752
 THUMB = 320
 
 

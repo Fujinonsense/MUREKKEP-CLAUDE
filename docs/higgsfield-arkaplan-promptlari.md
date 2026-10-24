@@ -15,6 +15,8 @@ Kitaplığın 10 Pro arka planı için. Her promptu Higgsfield'da (Image sekmesi
 
 İyi olanı indir ve `İndirilenler\Murekkep-arkaplan` klasörüne başlıktaki adla kaydet (ör. `ebru.png`).
 
+Komut satırından (Higgsfield CLI girişliyken) hepsi birden: `python tools/higgsfield/backgrounds.py <klasör>` (4K = 2880 px, max kalite, Sunburst; tek tek yeniden üretmek için adlarını ekle). Sonra `python tools/make_backgrounds.py <klasör>` uygulamaya 2752 px olarak koyar.
+
 ## Promptlar
 
 ### 1. ebru.png
