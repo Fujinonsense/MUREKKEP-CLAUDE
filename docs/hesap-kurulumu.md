@@ -4,15 +4,15 @@ Hesapları sen açarsın (giriş, şifre ve telefon onayı senin işin). Ben her
 
 ## 0. Önce: marka e-postası
 
-Üç hesabı da aynı yeni Gmail ile aç (ör. `murekkep.app@gmail.com`). Böylece kişisel hesabın karışmaz, ileride başkasına da devredebilirsin.
+Üç hesap da aynı Gmail ile açılır: **murekkep.notebook@gmail.com**. Böylece kişisel hesabın karışmaz, ileride başkasına da devredebilirsin.
 
 ## Kullanıcı adı (üçünde de aynı)
 
-İlk boşta olanı al:
-1. `murekkep.app`
-2. `murekkepapp`
-3. `murekkep.ipad`
-4. `murekkep.notlar`
+E-postayla aynı olsun diye ilk tercih `murekkep.notebook`. Doluysa sıradakini al:
+1. `murekkep.notebook`
+2. `murekkepnotebook`
+3. `murekkep.app`
+4. `murekkep.ipad`
 
 Görünen ad: **Mürekkep**. Instagram ve TikTok'ta ada "· iPad not defteri" de eklenebilir, aramada çıkmaya yardım eder.
 
