@@ -1,8 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// Drawings that are better as a picture: a heart, a kidney, a spleen, a pair of lungs, a smiling or
-/// sad face. Each drawing is compared with outlines taken from the app's own vector pictures (in
+/// Drawings that are better as a picture: a heart, a five-pointed star, a kidney, a spleen, a pair of
+/// lungs, a smiling or sad face. Each drawing is compared with outlines taken from the app's own vector pictures (in
 /// every orientation) and checked against its shape: whether it is closed, how deep its notches go,
 /// how many lobes it has.
 enum SketchRecognizer {
@@ -31,6 +31,9 @@ enum SketchRecognizer {
             return Match(kind: .face(happy: face.mood == .happy), alternate: nil, members: face.members)
         }
         guard let loop = closedLoop(current) else { return nil }
+        if let crossing = star(loop) {
+            return Match(kind: .star(crossing: crossing), alternate: nil, members: [currentIndex])
+        }
         let t = Templates.shared
         let pts = Geo.resample(loop, count: 64)
         let shape = Geo.normalized(pts)
@@ -136,6 +139,66 @@ enum SketchRecognizer {
             }
         }
         return Array(s[0...bestIndex])
+    }
+
+    // MARK: Stars
+
+    /// A five-pointed star: `true` for one stroke whose five lines cross (each tip joined to the one two
+    /// along, so the loop turns round twice), `false` for the outline (five tips and five notches,
+    /// turning round once), nil for anything else. Twin of star_kind in tests/ports/sketch.py.
+    static func star(_ loop: [CGPoint]) -> Bool? {
+        guard loop.count >= 8 else { return nil }
+        let p = Array(Geo.resample(loop, count: 97).dropLast())
+        let m = p.count
+        guard m >= 16 else { return nil }
+        func angle(_ a: CGPoint, _ b: CGPoint) -> CGFloat { atan2(b.y - a.y, b.x - a.x) }
+        func wrap(_ x: CGFloat) -> CGFloat {
+            var x = x
+            while x > .pi { x -= 2 * .pi }
+            while x < -.pi { x += 2 * .pi }
+            return x
+        }
+        var total: CGFloat = 0
+        for i in 0..<m {
+            total += wrap(angle(p[i], p[(i + 1) % m]) - angle(p[(i - 1 + m) % m], p[i]))
+        }
+        let w = 4
+        let turns = (0..<m).map { i in wrap(angle(p[i], p[(i + w) % m]) - angle(p[(i - w + m) % m], p[i])) }
+        let sign: CGFloat = total > 0 ? 1 : -1
+        let full = abs(total)
+        // Corners turning more than `threshold` in `direction`, strongest first, `spacing` points apart.
+        func corners(_ direction: CGFloat, _ threshold: CGFloat, _ spacing: Int) -> Int {
+            var picked: [Int] = []
+            for i in (0..<m).sorted(by: { direction * turns[$0] > direction * turns[$1] }) {
+                if direction * turns[i] < threshold { break }
+                if picked.allSatisfy({ min(abs(i - $0), m - abs(i - $0)) >= spacing }) { picked.append(i) }
+            }
+            return picked.count
+        }
+        let degree = CGFloat.pi / 180
+        if full > 4 * .pi * 0.85, full < 4 * .pi * 1.15 {
+            return corners(sign, 100 * degree, m / 12) == 5 ? true : nil
+        }
+        if full > 2 * .pi * 0.8, full < 2 * .pi * 1.2,
+           corners(sign, 60 * degree, m / 16) == 5, corners(-sign, 28 * degree, m / 16) == 5 {
+            return false
+        }
+        return nil
+    }
+
+    /// A neat five-pointed star filling `rect`, point up: the five lines crossing, or the outline.
+    static func starPath(in rect: CGRect, crossing: Bool) -> [CGPoint] {
+        // A star of radius r is 1.902 r wide and 1.809 r tall, its middle 0.0955 r above its centre.
+        let r = min(rect.width / 1.902, rect.height / 1.809)
+        let c = CGPoint(x: rect.midX, y: rect.midY + 0.0955 * r)
+        func point(_ k: Int, _ radius: CGFloat, _ step: CGFloat) -> CGPoint {
+            let a = -CGFloat.pi / 2 + step * CGFloat(k)
+            return CGPoint(x: c.x + radius * cos(a), y: c.y + radius * sin(a))
+        }
+        if crossing {
+            return (0...5).map { point(($0 * 2) % 5, r, 2 * .pi / 5) }
+        }
+        return (0...10).map { point($0 % 10, $0 % 2 == 0 ? r : r * 0.382, .pi / 5) }
     }
 
     /// How deep the outline dips inside its convex hull, relative to the drawing's size (deepest first).

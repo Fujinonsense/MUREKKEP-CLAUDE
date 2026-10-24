@@ -652,6 +652,7 @@ final class StickerKit {
 struct SketchSuggestion: Identifiable, Equatable {
     enum Kind: Equatable {
         case heart
+        case star(crossing: Bool)
         case kidney
         case spleen
         case lungs
@@ -660,6 +661,7 @@ struct SketchSuggestion: Identifiable, Equatable {
         var title: String {
             switch self {
             case .heart: return Loc.t("Kalp")
+            case .star: return Loc.t("Yıldız")
             case .kidney: return Loc.t("Böbrek")
             case .spleen: return Loc.t("Dalak")
             case .lungs: return Loc.t("Akciğerler")
@@ -670,6 +672,7 @@ struct SketchSuggestion: Identifiable, Equatable {
         var stickers: [String] {
             switch self {
             case .heart: return ["art:heart", "art:redheart", "art:pinkheart", "art:brokenheart"]
+            case .star: return ["art:star"]
             case .kidney: return ["art:kidney"]
             case .spleen: return ["art:spleen"]
             case .lungs: return ["art:lungs"]
@@ -716,12 +719,15 @@ struct SuggestionPalette: View {
     private enum Item {
         case sticker(String)
         case cleanHeart
+        case cleanStar(crossing: Bool)
         case more
     }
 
     private var items: [Item] {
         var out: [Item] = suggestion.stickers.map { .sticker($0) }
         if suggestion.kind == .heart { out.insert(.cleanHeart, at: 1) }
+        // A held star is first offered as a neat star in the same ink, then as the picture.
+        if case let .star(crossing) = suggestion.kind { out.insert(.cleanStar(crossing: crossing), at: 0) }
         out.append(.more)
         return out
     }
@@ -807,6 +813,20 @@ struct SuggestionPalette: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Mürekkeple düzgün kalp"))
+        case let .cleanStar(crossing):
+            Button {
+                editor.applySuggestionCleanStar(crossing: crossing)
+            } label: {
+                Image(systemName: "star")
+                    .font(.system(size: primary ? 24 : 20, weight: .semibold))
+                    .foregroundStyle(editor.color(for: editor.activeBrush).swiftUIColor)
+                    .frame(width: primary ? 58 : 48, height: primary ? 58 : 48)
+                    .background(Circle().fill(Color(uiColor: .systemBackground).opacity(0.94)))
+                    .overlay(Circle().strokeBorder(primary ? Theme.ink.opacity(0.6) : Color.primary.opacity(0.08),
+                                                   lineWidth: primary ? 2 : 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Loc.t("Mürekkeple düzgün yıldız"))
         case .more:
             Button {
                 showLibrary = true

@@ -708,6 +708,24 @@ final class EditorModel: ObservableObject {
         onHaptic?(.completed)
     }
 
+    /// Redraws the held star as a neat star in the same ink, point up, in the drawing's place.
+    func applySuggestionCleanStar(crossing: Bool) {
+        guard let s = suggestion, pages.indices.contains(s.page) else { return }
+        suggestion = nil
+        guard let original = pages[s.page].strokes.last(where: { s.strokeIDs.contains($0.id) }), !original.points.isEmpty else { return }
+        let n = Float(original.points.count)
+        let r = original.points.reduce(Float(0)) { $0 + $1.r } / n
+        let ink = original.points.reduce(Float(0)) { $0 + $1.ink } / n
+        let path = Geo.resample(SketchRecognizer.starPath(in: s.bounds, crossing: crossing), spacing: CGFloat(max(1.5, r * 0.7)))
+        let star = Stroke(brush: original.brush, color: original.color, width: original.width, birth: original.birth,
+                          seed: original.seed, points: path.map { InkPoint(x: Float($0.x), y: Float($0.y), r: r, ink: ink) })
+        change(page: s.page) { page in
+            page.strokes.removeAll { s.strokeIDs.contains($0.id) }
+            page.strokes.append(star)
+        }
+        onHaptic?(.completed)
+    }
+
     /// Places a sticker in the middle of the screen.
     func placeSticker(_ symbol: String) {
         guard let c = viewCenter else { return }

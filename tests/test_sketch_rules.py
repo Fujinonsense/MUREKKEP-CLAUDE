@@ -36,3 +36,34 @@ def test_drawn_kidneys_and_spleens_are_found():
     # As many as the 2.9 rule finds (145 and 118 of 150 with these seeds).
     assert kidneys >= 140
     assert spleens >= 115
+
+
+# Held stars: a five-pointed star in one stroke (lines crossing) or its outline is offered as a star.
+from sketch import star_kind  # noqa: E402
+from stargen import crossing_star, outline_star  # noqa: E402
+
+
+def test_drawn_stars_are_found():
+    rng = random.Random(5)
+    crossing = sum(star_kind(crossing_star(rng)) == "crossing" for _ in range(200))
+    outline = sum(star_kind(outline_star(rng)) == "outline" for _ in range(200))
+    assert crossing >= 190
+    assert outline >= 185
+
+
+def test_circles_and_organs_are_not_stars():
+    rng = random.Random(9)
+    assert sum(star_kind(bad_circle(rng)) is not None for _ in range(3000)) == 0
+    assert sum(star_kind(noisy(flatten(KIDNEY), rng)) is not None for _ in range(200)) == 0
+    assert sum(star_kind(noisy(flatten(SPLEEN), rng)) is not None for _ in range(200)) == 0
+
+
+def test_polygons_are_not_stars():
+    def polygon(n, r=60.0):
+        pts = [(200 + r * math.cos(2 * math.pi * k / n), 200 + r * math.sin(2 * math.pi * k / n)) for k in range(n)]
+        out = []
+        for i in range(n):
+            a, b = pts[i], pts[(i + 1) % n]
+            out += [(a[0] + (b[0] - a[0]) * t / 20, a[1] + (b[1] - a[1]) * t / 20) for t in range(20)]
+        return out + [out[0]]
+    assert all(star_kind(polygon(n)) is None for n in (3, 4, 5, 6))

@@ -1014,6 +1014,7 @@ enum Translations {
         "Oynatıcıyı kapat": "Close the player",
         "5 sn geri": "Back 5 s",
         "Yazıyı sayfaya koy": "Put the text on the page",
+        "Mürekkeple düzgün yıldız": "A neat star in ink",
         "Sıvı cam": "Liquid glass",
         "İpek": "Silk",
         "Erimiş altın": "Molten gold",
