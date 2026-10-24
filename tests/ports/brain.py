@@ -93,4 +93,4 @@ def is_math(text):
 
 
 def thinking_budget(text):
-    return 2048 if is_math(text) else 768
+    return 1024 if is_math(text) else 512

@@ -146,12 +146,20 @@ enum ThinkingText {
     }
 }
 
-/// How long the downloaded model may think before it must answer.
+/// How long the downloaded model may think before it must answer. Qwen3.5 4B always spends its whole
+/// budget, so the wait follows these numbers; at half the earlier ones (2,048 / 768) it still got 39 of
+/// 40 test questions right (mrk-ml/textpen/brain_eval), and the answers came twice as fast.
 enum BrainBudget {
     /// Thinking tokens for one question: working out numbers needs room, a reading question less.
     static func thinking(for text: String) -> Int {
-        isMath(text) ? 2_048 : 768
+        isMath(text) ? 1_024 : 512
     }
+
+    /// A textbook exercise, answered whole.
+    static let exercise = 512
+
+    /// Checking a solution, solving a page, or a free question with arithmetic.
+    static let deep = 768
 
     static func isMath(_ text: String) -> Bool {
         let digits = text.filter(\.isNumber).count

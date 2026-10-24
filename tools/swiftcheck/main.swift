@@ -525,9 +525,12 @@ check(ThinkingText.choice(in: "Cevap: E", letters: ["A", "B", "C", "D"]) == nil,
 check(ThinkingText.explanation("Metinde yazar umudu anlatıyor.\nBu yüzden B.\nCevap: B") == "Metinde yazar umudu anlatıyor.\nBu yüzden B."
       && ThinkingText.explanation("**Cevap: B**, çünkü metnin tamamı umudu anlatıyor.") == "**Cevap: B**, çünkü metnin tamamı umudu anlatıyor.",
       "brain: the choice line leaves the explanation")
-check(BrainBudget.thinking(for: "3x + 5 = 20 ise x kaçtır?") == 2_048 && BrainBudget.thinking(for: "√16 + 2² − 3 = ?") == 2_048
-      && BrainBudget.thinking(for: "Parçada asıl anlatılmak istenen nedir?") == 768 && BrainBudget.thinking(for: "1923 yılında ne oldu?") == 768,
+check(BrainBudget.thinking(for: "3x + 5 = 20 ise x kaçtır?") == 1_024 && BrainBudget.thinking(for: "√16 + 2² − 3 = ?") == 1_024
+      && BrainBudget.thinking(for: "Parçada asıl anlatılmak istenen nedir?") == 512 && BrainBudget.thinking(for: "1923 yılında ne oldu?") == 512,
       "brain: arithmetic thinks longer")
+// Half the old budgets: Qwen3.5 4B got 39 of 40 test questions right at 2,048/768 and at 1,024/384, and
+// always spends its whole budget, so the wait halves.
+check(BrainBudget.exercise == 512 && BrainBudget.deep == 768, "brain: exercises and checks think half as long as before")
 check(BrainModel.sizeText(3_061_000_000, english: false) == "3,1 GB" && BrainModel.sizeText(5_977_000_000, english: true) == "6.0 GB", "brain: sizes")
 
 // The text pen reads a line again when the writing goes on (tests/test_textpen_batch.py).

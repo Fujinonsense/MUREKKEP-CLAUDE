@@ -669,7 +669,7 @@ final class AssistantModel: ObservableObject {
             }
             let label = brainTitle + " · " + Loc.t("Soru {0}/{1}", "\(index + 1)", "\(exercises.count)")
             let request = BrainRuntime.Request(system: system, prompt: ExerciseSplitter.exercisePrompt(e),
-                                               thinking: 1_024, maxAnswerTokens: 900, temperature: 0.6)
+                                               thinking: BrainBudget.exercise, maxAnswerTokens: 900, temperature: 0.6)
             appendToAnswer("**\(e.number)** \(e.instruction)\n")
             let before = messages.last?.text ?? ""
             let answer = try await runBrain(request, label: label) { [weak self] text in
@@ -695,7 +695,7 @@ final class AssistantModel: ObservableObject {
                                  editor: editor, history: recentHistory(maxTurns: 4, maxChars: 600), web: web)
         let deep = action == .check || action == .solve || (action == nil && BrainBudget.isMath(question))
         let request = BrainRuntime.Request(system: Self.instructions(web: !web.isEmpty, tool: false, language: language),
-                                           prompt: prompt, thinking: deep ? 1_536 : nil,
+                                           prompt: prompt, thinking: deep ? BrainBudget.deep : nil,
                                            maxAnswerTokens: 1_400, temperature: deep ? 0.6 : 0.7)
         let before = messages.last?.text ?? ""
         let answer = try await runBrain(request, label: brainTitle) { [weak self] text in

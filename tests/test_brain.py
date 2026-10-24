@@ -82,10 +82,10 @@ def test_explanation_drops_the_choice_line():
 
 
 def test_arithmetic_gets_more_thinking():
-    assert brain.thinking_budget("3x + 5 = 20 ise x kaçtır?") == 2048
-    assert brain.thinking_budget("√16 + 2² − 3 = ?") == 2048
-    assert brain.thinking_budget("Parçada asıl anlatılmak istenen nedir?") == 768
-    assert brain.thinking_budget("1923 yılında ne oldu?") == 768
+    assert brain.thinking_budget("3x + 5 = 20 ise x kaçtır?") == 1024
+    assert brain.thinking_budget("√16 + 2² − 3 = ?") == 1024
+    assert brain.thinking_budget("Parçada asıl anlatılmak istenen nedir?") == 512
+    assert brain.thinking_budget("1923 yılında ne oldu?") == 512
 
 
 def test_swift_matches_the_twin():
@@ -98,4 +98,4 @@ def test_swift_matches_the_twin():
     pattern = brain.FINAL.pattern
     swift_pattern = re.search(r'pattern: "(\(\?:cevap[^"]+)"', swift).group(1).replace("\\\\", "\\")
     assert swift_pattern == pattern
-    assert "2_048 : 768" in swift
+    assert "1_024 : 512" in swift
