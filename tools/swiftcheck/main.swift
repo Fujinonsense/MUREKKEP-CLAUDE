@@ -594,6 +594,30 @@ check(PenShelf.opening(saved: "", favorites: [], current: .neon) == .paint
       && PenShelf.opening(saved: "favorites", favorites: [], current: .lava) == .threeD,
       "pen shelves: which shelf the panel opens on")
 
+// MARK: Math inside a worded question (MathEngine)
+
+/// The equation the engine solved on a line and its roots; nil when it solved none.
+func solved(_ line: String) -> (String, [Double])? {
+    if case let .solved(text, _, roots, _, _)? = MathEngine.analyze(line) { return (text, roots) }
+    return nil
+}
+
+// The engine's result reaches the model as a certain fact: a worded line gives the right result or none.
+check(solved("2x+3=7 ise x kaçtır?").map { $0.0 == "2x+3=7" && $0.1 == [2] } == true,
+      "math engine: the x after \"ise\" is what is asked, not part of the equation")
+check(solved("x²+3x=10 ise x kaçtır?")?.1 == [-5, 2], "math engine: a worded quadratic has both roots")
+check(solved("Soru 3) 2x+1=7 ise x kaçtır?")?.1 == [3] && solved("2x+3=7 ise x'in değeri kaçtır?")?.1 == [2],
+      "math engine: a numbered question and \"x'in değeri\"")
+check(solved("2x+3=7 ise x=?")?.1 == [2], "math engine: \"x=?\" after the equation")
+check(MathEngine.analyze("2x+3=7 ise 4x kaçtır?") == nil && MathEngine.analyze("2x+3=7 ise y kaçtır?") == nil,
+      "math engine: a question about something other than the unknown gets no fact")
+check(MathEngine.analyze("f(x)=3x+2 ise f(4) kaçtır?") == nil, "math engine: function notation gets no fact")
+if case let .value(text, v)? = MathEngine.analyze("3+4×2 işleminin sonucu kaçtır?") {
+    check(text == "3+4×2" && v == 11, "math engine: the sum inside a worded question")
+} else {
+    check(false, "math engine: the sum inside a worded question")
+}
+
 // MARK: Handwritten math the engine settles alone (PageMath)
 
 check(PageMath.engineSettles(["3+3=33"]), "page math: a lone calculation needs no model")
@@ -603,7 +627,7 @@ check(!PageMath.engineSettles(["Ali'nin 3 elması var, 2 tane daha alırsa kaç 
 check(!PageMath.engineSettles(["3+3=33", "Buna göre sonuç neden yanlış"]), "page math: a sentence next to the sum needs the model")
 check(!PageMath.engineSettles(["Bugün hava çok güzel"]) && !PageMath.engineSettles([]), "page math: no calculation, no engine answer")
 // The engine pulls the sum out of a worded question ("3+4×2 işleminin…" → 11, "2x+3=7 ise x kaçtır?"
-// even → x = 0.6): a question in words is the model's, with its options.
+// → x = 2), but a question in words is the model's, with its options.
 check(!PageMath.engineSettles(["3+4×2 işleminin sonucu kaçtır?", "A) 12", "B) 11"])
       && !PageMath.engineSettles(["2x+3=7 ise x kaçtır?"]), "page math: a worded question goes to the model")
 check(PageMath.engineSettles(["3+3=?"]), "page math: a bare question mark is still the engine's")

@@ -461,8 +461,10 @@ struct MathSystemSolution {
 }
 
 enum MathEngine {
-    /// Removes question numbering and Turkish question words: "Soru 3) 2x+1=7 ise x kaçtır?" → "2x+1=7".
-    static func clean(_ raw: String) -> String {
+    /// Splits a question at its numbering and Turkish question words into the math and what it asks for:
+    /// "Soru 3) 2x+1=7 ise x kaçtır?" → ("2x+1=7", ["x"]). The pieces are never glued back together
+    /// ("7 x" would read as 7x).
+    static func clean(_ raw: String) -> (math: String, asked: [String]) {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let patterns = [
             "^(?i)(soru|s)\\s*\\d{1,2}\\s*[:.)\\-]\\s*",
@@ -475,18 +477,31 @@ enum MathEngine {
         let words = ["ise", "kaçtır", "kaç eder", "kaç", "nedir", "sonucu", "hesaplayınız", "hesaplayın", "hesapla",
                      "bulunuz", "bulun", "çözünüz", "çözün", "çöz", "işleminin", "işlemi", "ifadesinin", "değeri",
                      "değerini", "sonucunu", "solve", "find", "calculate"]
+        let mark = "\u{1F}"
         for w in words {
-            s = s.replacingOccurrences(of: "(?i)(^|\\s)" + w + "(?=\\s|$|\\?|=)", with: " ", options: .regularExpression)
+            s = s.replacingOccurrences(of: "(?i)(^|\\s)" + w + "(?=\\s|$|\\?|=)", with: " \(mark) ", options: .regularExpression)
         }
         // "x=?" asks for x: the equation is the rest of the line.
         s = s.replacingOccurrences(of: "[,;]?\\s*[a-zA-Z]\\s*=\\s*\\?\\s*$", with: "", options: .regularExpression)
         s = s.replacingOccurrences(of: "\\?", with: "", options: .regularExpression)
-        return s.trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: ",;")))
+        // A piece with no letter or digit ("sonucu =") says nothing.
+        let pieces = s.components(separatedBy: mark)
+            .map { $0.trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: ",;"))) }
+            .filter { $0.contains(where: { $0.isLetter || $0.isNumber }) }
+        return (pieces.first ?? "", Array(pieces.dropFirst()))
     }
 
-    /// Reads one handwritten line. nil when it isn't math.
+    /// "x", or "x'in" with a Turkish suffix, asks for the unknown x.
+    private static func asks(_ piece: String, for variable: String) -> Bool {
+        guard piece.hasPrefix(variable) else { return false }
+        let suffix = String(piece.dropFirst(variable.count))
+        return suffix.isEmpty || suffix.range(of: "^['’]\\p{L}+$", options: .regularExpression) != nil
+    }
+
+    /// Reads one handwritten line. nil when it isn't math, or when its words ask for something other
+    /// than the unknown the engine solves ("2x+3=7 ise 4x kaçtır?" is the model's).
     static func analyze(_ raw: String) -> MathFinding? {
-        let line = clean(raw)
+        let (line, asked) = clean(raw)
         guard line.count >= 2, line.count <= 160 else { return nil }
         guard line.contains(where: { $0.isNumber }) || line.contains("=") else { return nil }
         let normalized = MathParser.normalize(line)
@@ -496,7 +511,7 @@ enum MathEngine {
 
         // "3·4 =" (or a lone expression with an operator): compute it.
         if pieces.count == 1 {
-            guard let e = MathParser.parse(pieces[0]), e.variables.isEmpty, let v = e.evaluate([:]) else { return nil }
+            guard asked.isEmpty, let e = MathParser.parse(pieces[0]), e.variables.isEmpty, let v = e.evaluate([:]) else { return nil }
             let hasOperator = pieces[0].contains(where: { "+-*/^√!%".contains($0) }) || pieces[0].contains("(")
             guard hasOperator || parts.count > 1 else { return nil }
             return .value(line, v)
@@ -510,14 +525,14 @@ enum MathEngine {
         let vars = exprs.reduce(Set<String>()) { $0.union($1.variables) }
         if vars.isEmpty {
             let values = exprs.compactMap { $0.evaluate([:]) }
-            guard values.count == exprs.count else { return nil }
+            guard asked.isEmpty, values.count == exprs.count else { return nil }
             for k in 1..<values.count where !approxEqual(values[k - 1], values[k], written: pieces[k]) {
                 return .claim(line, holds: false, left: values[k - 1], right: values[k], rightText: pieces[k])
             }
             return .claim(line, holds: true, left: values[values.count - 2], right: values[values.count - 1],
                           rightText: pieces[pieces.count - 1])
         }
-        guard vars.count == 1, let variable = vars.first else { return nil }
+        guard vars.count == 1, let variable = vars.first, asked.allSatisfy({ asks($0, for: variable) }) else { return nil }
         let lhs = exprs[0]
         let rhs = exprs[1]
         let trig = lhs.hasTrig || rhs.hasTrig
@@ -542,7 +557,7 @@ enum MathEngine {
         var equations: [(text: String, f: ([String: Double]) -> Double?)] = []
         var vars = Set<String>()
         for raw in lines {
-            let line = clean(raw)
+            let line = clean(raw).math
             let pieces = MathParser.normalize(line).components(separatedBy: "=")
                 .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             guard pieces.count == 2, let l = MathParser.parse(pieces[0]), let r = MathParser.parse(pieces[1]) else { continue }
