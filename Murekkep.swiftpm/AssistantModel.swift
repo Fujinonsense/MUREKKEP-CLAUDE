@@ -150,6 +150,13 @@ final class AssistantModel: ObservableObject {
         return brain.isReady ? brain.model : nil
     }
 
+    /// The downloaded model starts loading as the assistant opens, so the first answer does not wait.
+    func warmUp() {
+        guard settings.engine == .auto || settings.engine == .deviceBrain, Self.readyBrain != nil,
+              let directory = DeviceBrain.shared.directory else { return }
+        BrainRuntime.warmUp(directory: directory)
+    }
+
     func run(_ action: QuickAction) {
         send(action.prompt, action: action, forceHandwriting: action.currentPageOnly)
     }

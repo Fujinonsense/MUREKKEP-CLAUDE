@@ -28,6 +28,7 @@ struct AssistantPanel: View {
             controls
         }
         .background(Color(uiColor: .systemBackground))
+        .onAppear { assistant.warmUp() }
     }
 
     // MARK: Header

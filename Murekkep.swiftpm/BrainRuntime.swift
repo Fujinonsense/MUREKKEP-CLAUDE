@@ -69,6 +69,17 @@ enum BrainRuntime {
         return last
     }
 
+    /// Loads the model ahead of the first question (the assistant just opened), so that answer does not
+    /// wait for it. Skipped in the background or while an answer is running.
+    static func warmUp(directory: URL) {
+        #if canImport(MLX) && canImport(MLXLLM) && canImport(MLXLMCommon) && canImport(Tokenizers) && !MUREKKEP_PLAIN
+        Task.detached(priority: .utility) {
+            guard !BrainRuntime.gate.isPaused else { return }
+            await BrainHost.shared.warm(directory)
+        }
+        #endif
+    }
+
     static func unload() async {
         #if canImport(MLX) && canImport(MLXLLM) && canImport(MLXLMCommon) && canImport(Tokenizers) && !MUREKKEP_PLAIN
         await BrainHost.shared.unload(force: true)
@@ -173,6 +184,13 @@ private actor BrainHost {
         } else {
             waiting.removeFirst().resume()
         }
+    }
+
+    func warm(_ directory: URL) async {
+        guard !busy else { return }
+        busy = true
+        _ = try? await load(directory)
+        release()
     }
 
     func unload(force: Bool) {
