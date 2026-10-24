@@ -192,7 +192,7 @@ private actor BrainHost {
             .filter { $0.pathExtension == "safetensors" }
             .reduce(Int64(0)) { $0 + max(0, BrainFetcher.fileSize($1)) } ?? 0
         // The weights stay as they are (4-bit); room is made around them instead.
-        let need = weights + 700_000_000
+        let need = BrainMemory.need(weights: weights)
         var free = Int64(os_proc_available_memory())
         if free > 0, free < need {
             await MainActor.run { NotificationCenter.default.post(name: BrainRuntime.needsMemory, object: nil) }

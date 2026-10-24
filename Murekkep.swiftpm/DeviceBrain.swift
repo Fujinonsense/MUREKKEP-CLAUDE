@@ -203,6 +203,20 @@ final class DeviceBrain: ObservableObject {
         let free = os_proc_available_memory()
         return free > 0 ? Int64(free) : nil
     }
+
+    /// The app's footprint and what it may still take (nil where iOS does not say, e.g. a simulator).
+    static func memory() -> BrainMemory? {
+        guard let free = availableMemory() else { return nil }
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        return BrainMemory(used: Int64(info.phys_footprint), free: free)
+    }
 }
 
 /// The list of a model's files on Hugging Face (public, no account).

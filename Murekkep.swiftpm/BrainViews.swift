@@ -38,12 +38,41 @@ struct BrainCard: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+            if !compact, BrainRuntime.isCompiledIn, let model = brain.model {
+                // Read again every few seconds: what is open in the app changes what is free.
+                TimelineView(.periodic(from: .now, by: 3)) { _ in
+                    if let memory = DeviceBrain.memory() {
+                        memoryRow(memory, model: model)
+                    }
+                }
+            }
         }
         .confirmationDialog(Loc.t("Model silinsin mi?"), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button(Loc.t("Sil"), role: .destructive) { brain.delete() }
         } message: {
             Text(Loc.t("Yer açılır; istediğinde yeniden indirebilirsin."))
         }
+    }
+
+    /// What iOS lets the app hold, what is free now, and whether the model loads in it.
+    private func memoryRow(_ memory: BrainMemory, model: BrainModel) -> some View {
+        let english = Loc.isEnglish
+        let fits = memory.fits(weights: model.bytes)
+        return VStack(alignment: .leading, spacing: 3) {
+            Label(Loc.t("Uygulamaya ayrılan bellek: {0} · şu an boş: {1}",
+                        BrainModel.sizeText(memory.limit, english: english), BrainModel.sizeText(memory.free, english: english)),
+                  systemImage: "memorychip")
+                .foregroundStyle(.secondary)
+            Label(fits
+                  ? Loc.t("{0} yüklenirken {1} boş bellek ister: sığıyor.", model.title,
+                          BrainModel.sizeText(BrainMemory.need(weights: model.bytes), english: english))
+                  : Loc.t("{0} yüklenirken {1} boş bellek ister: şu an sığmıyor. Diğer uygulamaları kapat; yine sığmazsa yükleyici büyük bellek iznini almamış olabilir.",
+                          model.title, BrainModel.sizeText(BrainMemory.need(weights: model.bytes), english: english)),
+                  systemImage: fits ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(fits ? Color.green : Color.orange)
+        }
+        .font(.caption)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var title: String {

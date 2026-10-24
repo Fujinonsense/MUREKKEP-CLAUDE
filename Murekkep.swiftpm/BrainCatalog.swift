@@ -53,6 +53,26 @@ struct BrainModel: Identifiable, Equatable, Sendable {
     }
 }
 
+/// The app's memory as iOS allows it (Settings shows it under the model). The larger memory limit
+/// raises `limit`; what is open in the app takes from `free`.
+struct BrainMemory: Equatable {
+    /// What the app holds now (its footprint), bytes.
+    let used: Int64
+    /// What the app may still take now.
+    let free: Int64
+
+    /// Room to answer beside the weights: the context and the work of each step.
+    static let headroom: Int64 = 700_000_000
+
+    /// Everything iOS lets the app hold.
+    var limit: Int64 { used + free }
+
+    /// Free memory a model of `weights` bytes needs to load (BrainRuntime refuses below it).
+    static func need(weights: Int64) -> Int64 { weights + headroom }
+
+    func fits(weights: Int64) -> Bool { free >= Self.need(weights: weights) }
+}
+
 /// A reply of a thinking model: "<think>…</think>" and then the answer.
 enum ThinkingText {
     struct Parts: Equatable {

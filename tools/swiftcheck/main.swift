@@ -425,6 +425,10 @@ check(BrainModel.best(physicalMemory: 12 * gib, available: nil) == .qwen9B, "bra
 check(BrainModel.best(physicalMemory: UInt64(7.6 * Double(gib)), available: 4_500_000_000) == .qwen4B, "brain: 8 GB gets the 4B")
 check(BrainModel.best(physicalMemory: 6 * gib, available: nil) == .qwen2B && BrainModel.best(physicalMemory: 4 * gib, available: nil) == nil,
       "brain: 6 GB gets the 2B, 4 GB none")
+check(BrainMemory.need(weights: 3_061_000_000) == 3_761_000_000, "brain memory: the weights and 0.7 GB to answer")
+let roomy = BrainMemory(used: 1_200_000_000, free: 4_900_000_000)
+check(roomy.limit == 6_100_000_000 && roomy.fits(weights: BrainModel.qwen4B.bytes) && !roomy.fits(weights: BrainModel.qwen9B.bytes),
+      "brain memory: the limit is used plus free; the 4B fits in 4.9 GB free, the 9B not")
 check(["config.json", "model.safetensors", "tokenizer.json", "chat_template.jinja", "vocab.json"].allSatisfy(BrainModel.wanted)
       && !["README.md", ".gitattributes", "images/demo.png", "onnx/model.json"].contains(where: BrainModel.wanted), "brain: model files only")
 let thought = ThinkingText.split("Önce şıkları tartalım. 12+3=15.\n</think>\n\nB şıkkı doğrudur.\nCevap: B", thinking: true)
