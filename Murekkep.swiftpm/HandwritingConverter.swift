@@ -152,7 +152,6 @@ enum HandwritingConverter {
         var nextLine = 0
         var end: TextEnd?
         let unit = ruling.capHeight / 10
-        let space = CGFloat(StrokeFont.spaceAdvance) * unit
         let hairline = CGFloat(StrokeFont.tracking) * unit
         var blocking = TextPlacement.obstacles(obstacles, ruling: ruling)
         if keepPosition, let previous = continueFrom {
@@ -179,6 +178,9 @@ enum HandwritingConverter {
                 widths.append(CGFloat(StrokeFont.width(word.text, tracking: tracking)) * unit)
             }
             let joins = line.text.first.map { ".,;:!?)]}%".contains($0) } ?? false
+            // Words keep apart by the space of the widest-set ink on the line (WordSpacing).
+            let space = CGFloat(WordSpacing.space(tracking: trackings.max() ?? StrokeFont.tracking,
+                                                  fontTracking: StrokeFont.tracking, spaceAdvance: StrokeFont.spaceAdvance)) * unit
             let spots = TextPlacement.place(widths: widths, startX: startX, startLine: k, ruling: ruling, space: space,
                                             joinGap: joins ? hairline : space, obstacles: blocking)
             var lastLine = k
@@ -376,7 +378,8 @@ enum HandwritingConverter {
                     let paths = StrokeFont.paths(w, origin: SIMD2<Float>(Float(x), Float(baseline)), capHeight: Float(cap), tracking: tracking)
                     out += StrokeText.strokes(paths, style: thin, flowerLevel: flowerLevel, birth: birth)
                 }
-                x += width + CGFloat(StrokeFont.spaceAdvance) * unit
+                x += width + CGFloat(WordSpacing.space(tracking: tracking, fontTracking: StrokeFont.tracking,
+                                                       spaceAdvance: StrokeFont.spaceAdvance)) * unit
             }
             baseline += spacing
         }

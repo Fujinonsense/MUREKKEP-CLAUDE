@@ -316,7 +316,7 @@ enum StrokeFont {
         var first = true
         for ch in prepared(text) {
             if ch == " " {
-                w += spaceAdvance
+                w += WordSpacing.space(tracking: tracking, fontTracking: Self.tracking, spaceAdvance: spaceAdvance)
                 first = true
                 continue
             }
@@ -338,7 +338,7 @@ enum StrokeFont {
         var first = true
         for ch in prepared(text) {
             if ch == " " {
-                pen += spaceAdvance
+                pen += WordSpacing.space(tracking: tracking, fontTracking: Self.tracking, spaceAdvance: spaceAdvance)
                 first = true
                 continue
             }

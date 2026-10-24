@@ -261,6 +261,17 @@ check(RecordingSync.skip(time: 10, by: -5, duration: 60) == 5 && RecordingSync.s
 check(RecordingSync.volume(1, step: 0.1) == 1 && RecordingSync.volume(1, step: -0.1) == 0.9
       && RecordingSync.volume(0.9, step: -0.1) == 0.8 && RecordingSync.volume(0.05, step: -0.1) == 0, "recording: volume in tenths")
 
+// MARK: Word spaces of typed text (WordSpacing)
+
+// StrokeFont: tracking 2.8, space 5.5 (font units, a tenth of the cap height).
+check(WordSpacing.space(tracking: 2.8, fontTracking: 2.8, spaceAdvance: 5.5) == 5.5, "word space: the font's own at its own tracking")
+let thick = WordSpacing.space(tracking: 4.0, fontTracking: 2.8, spaceAdvance: 5.5)
+check(abs(thick - 8.5) < 0.0001, "word space: a thick 3D ink (tracking 4.0) gets 8.5, not 5.5")
+// What the eye sees: the gaps minus the line width (here 2 units for the thick ink).
+check((thick - 2) / (4.0 - 2) >= 2.5, "word space: a word gap reads as at least 2.5 letter gaps on thick ink")
+check(WordSpacing.space(tracking: 3.4, fontTracking: 2.8, spaceAdvance: 5.5) > 5.5
+      && WordSpacing.space(tracking: 3.4, fontTracking: 2.8, spaceAdvance: 5.5) < thick, "word space: grows with the tracking")
+
 // MARK: Typing from a keyboard (KeyboardSpot)
 
 // Page lines 28 apart; the view shows y 0…600; the margin is at 60.
