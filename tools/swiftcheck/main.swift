@@ -263,7 +263,7 @@ check(RecordingSync.volume(1, step: 0.1) == 1 && RecordingSync.volume(1, step: -
 
 // MARK: Word spaces of typed text (WordSpacing)
 
-// StrokeFont: tracking 2.8, space 5.5 (font units, a tenth of the cap height).
+// The font's tracking 2.8 with an example space of 5.5 (font units, a tenth of the cap height).
 check(WordSpacing.space(tracking: 2.8, fontTracking: 2.8, spaceAdvance: 5.5) == 5.5, "word space: the font's own at its own tracking")
 let thick = WordSpacing.space(tracking: 4.0, fontTracking: 2.8, spaceAdvance: 5.5)
 check(abs(thick - 8.5) < 0.0001, "word space: a thick 3D ink (tracking 4.0) gets 8.5, not 5.5")
@@ -271,6 +271,67 @@ check(abs(thick - 8.5) < 0.0001, "word space: a thick 3D ink (tracking 4.0) gets
 check((thick - 2) / (4.0 - 2) >= 2.5, "word space: a word gap reads as at least 2.5 letter gaps on thick ink")
 check(WordSpacing.space(tracking: 3.4, fontTracking: 2.8, spaceAdvance: 5.5) > 5.5
       && WordSpacing.space(tracking: 3.4, fontTracking: 2.8, spaceAdvance: 5.5) < thick, "word space: grows with the tracking")
+
+// MARK: Letter and word gaps of the typed font (StrokeFont)
+
+/// Ink of each drawn character across the x-height band (0.8…6.2 above the baseline, font units), as
+/// typed text lays it out; nil for a space.
+func bandSpans(_ text: String, tracking: Float = StrokeFont.tracking) -> [(ch: Character, lo: Float, hi: Float)?] {
+    var out: [(ch: Character, lo: Float, hi: Float)?] = []
+    for mark in StrokeFont.layout(text, tracking: tracking).marks {
+        var xs: [Float] = []
+        for path in mark.glyph.paths {
+            let pts = path.map { SIMD2<Float>(mark.x + $0.x * mark.k, mark.rise + $0.y * mark.k) }
+            for (a, b) in zip(pts, pts.dropFirst()) {
+                for s in 0...10 {
+                    let p = a + (b - a) * (Float(s) / 10)
+                    if p.y >= 0.8 && p.y <= 6.2 { xs.append(p.x) }
+                }
+            }
+            if pts.count == 1, pts[0].y >= 0.8, pts[0].y <= 6.2 { xs.append(pts[0].x) }
+        }
+        if mark.spaceBefore { out.append(nil) }
+        if let lo = xs.min(), let hi = xs.max() { out.append((mark.ch, lo, hi)) }
+    }
+    return out
+}
+
+/// The widest gap between letters of a word and the narrowest gap between words, across the band.
+func gaps(_ text: String) -> (letters: Float, words: Float) {
+    var letters: Float = 0
+    var words: Float = .infinity
+    let spans = bandSpans(text)
+    var previous: (ch: Character, lo: Float, hi: Float)?
+    var spaced = false
+    for span in spans {
+        guard let span else { spaced = true; continue }
+        if let p = previous {
+            let gap = span.lo - p.hi
+            if spaced { words = min(words, gap) } else { letters = max(letters, gap) }
+        }
+        previous = span
+        spaced = false
+    }
+    return (letters, words)
+}
+
+// Lowercase letters keep their ink near their sides; "r", "t" and "f" left gaps as wide as a word space
+// ("der ste", "tekr ar", "no t").
+let openSides = "abcçdefgğhkmnoöprsştuüvwxyz".filter { ch in
+    let spans = bandSpans("n\(ch)n").compactMap { $0 }
+    guard spans.count == 3 else { return true }
+    return spans[1].lo - spans[0].hi > 2.0 + StrokeFont.tracking || spans[2].lo - spans[1].hi > 2.0 + StrokeFont.tracking
+}
+check(openSides.isEmpty, "font: no lowercase letter leaves more than 2 units of air beside its ink (open: \(String(openSides)))")
+for sample in ["Bugün derste türev ve integral konusunu tekrar ettik", "artık fırtına ortak birtakım şeyler",
+               "Türkiye Test Yarın Tarih fıstık"] {
+    let g = gaps(sample)
+    check(g.words >= 1.4 * g.letters, "font: words stand apart in \"\(sample)\" (word gap \(g.words), letter gap \(g.letters))")
+}
+let tu = bandSpans("Tü").compactMap { $0 }
+check(tu.count == 2 && tu[1].lo - tu[0].hi <= 4.6, "font: a lowercase letter tucks under the T")
+check(abs(StrokeFont.width("ortak birtakım") - StrokeFont.layout("ortak birtakım").width) < 0.0001,
+      "font: width and layout agree")
 
 // MARK: Typing from a keyboard (KeyboardSpot)
 

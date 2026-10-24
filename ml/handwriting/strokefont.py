@@ -7,6 +7,8 @@ from pathlib import Path
 
 SWIFT = Path(__file__).resolve().parents[2] / "Murekkep.swiftpm" / "StrokeFont.swift"
 TRACKING = 2.8
+# The word gap synthetic handwriting is built around (typed text in the app now uses 7.0,
+# StrokeFont.spaceAdvance); kept so the training data stays as the readers were trained on.
 SPACE = 5.5
 
 _ENTRY = re.compile(r'^\s+"((?:[^"\\]|\\.)+)":\s*"((?:[^"\\]|\\.)*)"', re.M)

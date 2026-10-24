@@ -13,10 +13,11 @@ enum StrokeFont {
         let paths: [[SIMD2<Float>]]
     }
 
-    /// Units between neighbouring glyphs (0.28 × the cap height) and for a space (0.55 ×), so letters
-    /// never run into each other, also in thick 3D inks.
+    /// Units between neighbouring glyphs (0.28 × the cap height), so letters never run into each other,
+    /// also in thick 3D inks, and for a space (0.7 ×), so a word gap stays clearly wider than any gap
+    /// inside a word.
     static let tracking: Float = 2.8
-    static let spaceAdvance: Float = 5.5
+    static let spaceAdvance: Float = 7.0
 
     private static let source: [Character: String] = [
         // Capitals
@@ -58,7 +59,7 @@ enum StrokeFont {
         "c": "5.4; e(2.9,3.5,2.9,3.5,40,320)",
         "d": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,10 5.6,0",
         "e": "5.6; 0,3.5 5.6,3.5 e(2.8,3.5,2.8,3.5,0,315)",
-        "f": "4.4; 4.4,9.7 a(3.1,8.5,1.5,60,180) 1.6,0 | 0,7 4,7",
+        "f": "2.8; 3.6,9.7 a(2.3,8.5,1.5,60,180) 0.8,0 | -0.8,7 3.2,7",
         "g": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,7 5.6,-1 a(3.4,-1,2.2,0,-150)",
         "h": "5.4; 0,10 0,0 | 0,4.3 a(2.7,4.3,2.7,180,0) 5.4,0",
         "i": "0; 0,0 0,7 | 0,9.2 0,9.7",
@@ -70,9 +71,9 @@ enum StrokeFont {
         "o": "5.8; e(2.9,3.5,2.9,3.5,90,450)",
         "p": "5.6; 0,7 0,-3.2 | e(2.8,3.5,2.8,3.5,180,540)",
         "q": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,7 5.6,-3.2",
-        "r": "4.2; 0,7 0,0 | 0,4.2 a(2.8,4.2,2.8,180,70)",
+        "r": "2.2; 0,7 0,0 | 0,4.2 a(2.8,4.2,2.8,180,80)",
         "s": "4.8; e(2.4,5.25,2.2,1.75,20,270) e(2.4,1.75,2.4,1.75,90,-160)",
-        "t": "4; 1.5,10 1.5,1.4 a(2.9,1.4,1.4,180,270) 4,0.2 | 0,7 3.8,7",
+        "t": "2.0; 0.6,10 0.6,1.4 a(2.0,1.4,1.4,180,270) 3.1,0.2 | -0.6,7 2.9,7",
         "u": "5.4; 0,7 0,2.7 a(2.7,2.7,2.7,180,360) | 5.4,7 5.4,0",
         "v": "5.6; 0,7 2.8,0 5.6,7",
         "w": "8; 0,7 2,0 4,5.6 6,0 8,7",
@@ -310,36 +311,31 @@ enum StrokeFont {
             .replacingOccurrences(of: "ℓ", with: "l")
     }
 
-    /// Width of `text` in font units (multiply by capHeight / 10 for points).
-    static func width(_ text: String, tracking: Float = StrokeFont.tracking) -> Float {
-        var w: Float = 0
-        var first = true
-        for ch in prepared(text) {
-            if ch == " " {
-                w += WordSpacing.space(tracking: tracking, fontTracking: Self.tracking, spaceAdvance: spaceAdvance)
-                first = true
-                continue
-            }
-            let small = superscripts[ch] ?? subscripts[ch]
-            guard let g = glyph(small ?? ch) else { continue }
-            if !first { w += tracking * (small == nil ? 1 : 0.6) }
-            w += g.advance * (small == nil ? 1 : 0.6)
-            first = false
-        }
-        return w
+    /// A drawn character of laid-out text: its glyph, where its origin sits (font units from the start),
+    /// its size (0.6 for raised and lowered characters), how far it is raised, and whether a space
+    /// came right before it.
+    struct Mark {
+        let ch: Character
+        let glyph: Glyph
+        let x: Float
+        let k: Float
+        let rise: Float
+        let spaceBefore: Bool
     }
 
-    /// Pen paths of `text` in page space (y down): the baseline starts at `origin`.
-    static func paths(_ text: String, origin: SIMD2<Float>, capHeight: Float,
-                      tracking: Float = StrokeFont.tracking) -> [[SIMD2<Float>]] {
-        let s = capHeight / 10
-        var out: [[SIMD2<Float>]] = []
+    /// The characters of `text` one after another, and where the pen ends (font units).
+    static func layout(_ text: String, tracking: Float = StrokeFont.tracking) -> (marks: [Mark], width: Float) {
+        var marks: [Mark] = []
         var pen: Float = 0
         var first = true
+        var spaced = false
+        var previous: Character?
         for ch in prepared(text) {
             if ch == " " {
                 pen += WordSpacing.space(tracking: tracking, fontTracking: Self.tracking, spaceAdvance: spaceAdvance)
                 first = true
+                spaced = true
+                previous = nil
                 continue
             }
             let raised = superscripts[ch]
@@ -347,17 +343,39 @@ enum StrokeFont {
             let small = raised ?? lowered
             guard let g = glyph(small ?? ch) else { continue }
             let k: Float = small == nil ? 1 : 0.6
-            let rise: Float = raised != nil ? 5.2 : (lowered != nil ? -2.2 : 0)
-            if !first { pen += tracking * k }
-            for path in g.paths {
-                out.append(path.map { p in
-                    SIMD2<Float>(origin.x + (pen + p.x * k) * s, origin.y - (rise + p.y * k) * s)
-                })
-            }
+            if !first { pen += tracking * k - kern(previous, ch) }
+            marks.append(Mark(ch: ch, glyph: g, x: pen, k: k, rise: raised != nil ? 5.2 : (lowered != nil ? -2.2 : 0),
+                              spaceBefore: spaced))
             pen += g.advance * k
             first = false
+            spaced = false
+            previous = ch
         }
-        return out
+        return (marks, pen)
+    }
+
+    /// Capitals with room under their arms: a lowercase letter after them moves in.
+    private static let kerns: [Character: Float] = ["T": 1.6, "Y": 1.0, "V": 0.8, "W": 0.8, "F": 0.6, "P": 0.6]
+
+    private static func kern(_ previous: Character?, _ ch: Character) -> Float {
+        guard let previous, let amount = kerns[previous], ch.isLowercase else { return 0 }
+        return amount
+    }
+
+    /// Width of `text` in font units (multiply by capHeight / 10 for points).
+    static func width(_ text: String, tracking: Float = StrokeFont.tracking) -> Float {
+        layout(text, tracking: tracking).width
+    }
+
+    /// Pen paths of `text` in page space (y down): the baseline starts at `origin`.
+    static func paths(_ text: String, origin: SIMD2<Float>, capHeight: Float,
+                      tracking: Float = StrokeFont.tracking) -> [[SIMD2<Float>]] {
+        let s = capHeight / 10
+        return layout(text, tracking: tracking).marks.flatMap { m in
+            m.glyph.paths.map { path in
+                path.map { p in SIMD2<Float>(origin.x + (m.x + p.x * m.k) * s, origin.y - (m.rise + p.y * m.k) * s) }
+            }
+        }
     }
 }
 
