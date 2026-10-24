@@ -78,7 +78,7 @@ Bunlar olmadan abonelik satılamaz.
 Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceksin.
 
 1. **Bundle ID seç.** `com.murekkep.app` başkasına ait olabilir. Sana özel bir kimlik seç, örneğin `com.<soyadın>.murekkep`.
-2. developer.apple.com > Certificates, IDs & Profiles > **Identifiers** sayfasında bu Bundle ID'yi oluştur. "In-App Purchase" zaten açık gelir.
+2. developer.apple.com > Certificates, IDs & Profiles > **Identifiers** sayfasında bu Bundle ID'yi oluştur. "In-App Purchase" zaten açık gelir. Capabilities listesinde **Increased Memory Limit**'i de işaretle; yapay zekâ modeli iPad'in belleğine ancak bununla sığar.
 3. App Store Connect > Kullanıcılar ve Erişim > **Entegrasyonlar > App Store Connect API** sayfasında "App Manager" yetkili bir anahtar oluştur. `.p8` dosyasını indir, Key ID ile Issuer ID'yi not et.
 4. GitHub'da MUREKKEP-CLAUDE > Settings > Secrets and variables > Actions sayfasına üç secret ekle:
    - `ASC_KEY_ID`

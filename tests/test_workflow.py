@@ -156,3 +156,19 @@ def test_app_store_edition_is_ipad_only(job):
     script = runs(job)
     patch = script.split('if [ "$EDITION" = "appstore" ]; then', 1)[1].split("fi\n", 1)[0]
     assert 'TARGETED_DEVICE_FAMILY: \\"1,2\\"' in patch and 'TARGETED_DEVICE_FAMILY: \\"2\\"' in patch
+
+
+def test_the_ipa_asks_for_the_larger_memory_limit(job):
+    # Without it iOS lets the app hold about 5 GB, too little for the downloaded model next to the
+    # page. The IPA is unsigned, so it is signed ad hoc with the entitlement: Sideloadly and SideStore
+    # read the entitlements from the app when they sign it again.
+    entitlements = WORKFLOW.parent.parent.parent / "Murekkep.swiftpm" / "Murekkep.entitlements"
+    assert "<key>com.apple.developer.kernel.increased-memory-limit</key>\n\t<true/>" in entitlements.read_text(encoding="utf-8")
+    script = runs(job)
+    for name in ["project.yml", "project-plain.yml"]:
+        spec = script.split(f"cat << 'EOF' > {name}", 1)[1].split("EOF", 1)[0]
+        assert "CODE_SIGN_ENTITLEMENTS: AppSource/Murekkep.entitlements" in spec, name
+        assert '- "*.entitlements"' in spec, name
+    pack = step_with(job, "zip -qry")["run"]
+    assert "--entitlements AppSource/Murekkep.entitlements" in pack
+    assert pack.index("--entitlements") < pack.index("zip -qry")

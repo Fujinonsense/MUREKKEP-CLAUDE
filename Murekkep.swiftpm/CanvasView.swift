@@ -311,6 +311,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         // Window lifecycle is observed per scene in `didMoveToWindow`; these concern the whole device.
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(memoryWarning), name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        nc.addObserver(self, selector: #selector(memoryWarning), name: BrainRuntime.needsMemory, object: nil)
         nc.addObserver(self, selector: #selector(powerConditionsChanged), name: .NSProcessInfoPowerStateDidChange, object: nil)
         nc.addObserver(self, selector: #selector(powerConditionsChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
         nc.addObserver(self, selector: #selector(keyboardWillShow(_:)), name: UIResponder.keyboardWillShowNotification, object: nil)

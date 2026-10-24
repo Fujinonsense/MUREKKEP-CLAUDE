@@ -286,6 +286,7 @@ jobs:
                     - "*_2.swift"
                     - "AppVoices/**"
                     - "PrivacyInfo.xcprivacy"
+                    - "*.entitlements"
                 - path: AppSource/AppVoices
                   type: folder
                   buildPhase: resources
@@ -309,6 +310,7 @@ jobs:
                   PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
                   PRODUCT_NAME: Murekkep
                   INFOPLIST_FILE: AppSource/Info.plist
+                  CODE_SIGN_ENTITLEMENTS: AppSource/Murekkep.entitlements
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
                   CURRENT_PROJECT_VERSION: "29"
@@ -343,6 +345,7 @@ jobs:
                     - "*_2.swift"
                     - "AppVoices/**"
                     - "PrivacyInfo.xcprivacy"
+                    - "*.entitlements"
                 - path: AppSource/PrivacyInfo.xcprivacy
                   buildPhase: resources
               settings:
@@ -350,6 +353,7 @@ jobs:
                   PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
                   PRODUCT_NAME: Murekkep
                   INFOPLIST_FILE: AppSource/Info.plist
+                  CODE_SIGN_ENTITLEMENTS: AppSource/Murekkep.entitlements
                   GENERATE_INFOPLIST_FILE: NO
                   MARKETING_VERSION: "3.0"
                   CURRENT_PROJECT_VERSION: "29"
@@ -493,6 +497,15 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Murekkep.app Payload/
+          # The build is unsigned; signed ad hoc with the larger memory limit, so Sideloadly and
+          # SideStore see the entitlement and keep it when they sign the app again.
+          find Payload/Murekkep.app -name "*.framework" -o -name "*.dylib" | while read -r f; do
+            codesign --force --sign - "$f" || true
+          done
+          if ! codesign --force --sign - --entitlements AppSource/Murekkep.entitlements --generate-entitlement-der Payload/Murekkep.app; then
+            echo "::warning::IPA bellek izniyle imzalanamadi; imzasiz paketleniyor."
+          fi
+          codesign -d --entitlements - Payload/Murekkep.app 2>/dev/null || true
           IPA=Murekkep.ipa
           if [ "$EDITION" = "appstore" ]; then IPA=Murekkep-AppStore.ipa; fi
           zip -qry "$IPA" Payload

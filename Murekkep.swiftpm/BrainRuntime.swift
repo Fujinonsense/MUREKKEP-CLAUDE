@@ -29,6 +29,10 @@ enum BrainRuntime {
 
     private static let gate = BrainGate()
 
+    /// Posted on the main thread when the model needs room to load: the page lets go of the PDF images
+    /// and caches it can draw again.
+    static let needsMemory = Notification.Name("MurekkepBrainNeedsMemory")
+
     /// Called as the app goes to the background, where the GPU may not be used: the answer in
     /// progress stops (this waits for it briefly) and an idle model leaves memory.
     static func pauseForBackground() {
@@ -187,14 +191,23 @@ private actor BrainHost {
         let weights = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil))?
             .filter { $0.pathExtension == "safetensors" }
             .reduce(Int64(0)) { $0 + max(0, BrainFetcher.fileSize($1)) } ?? 0
-        let free = Int64(os_proc_available_memory())
-        if free > 0, free < weights + 700_000_000 {
+        // The weights stay as they are (4-bit); room is made around them instead.
+        let need = weights + 700_000_000
+        var free = Int64(os_proc_available_memory())
+        if free > 0, free < need {
+            await MainActor.run { NotificationCenter.default.post(name: BrainRuntime.needsMemory, object: nil) }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            free = Int64(os_proc_available_memory())
+        }
+        if free > 0, free < need {
             throw LocalAIError(Loc.t("Model için bellek yetmiyor. Açık uygulamaları kapatıp tekrar dene."))
         }
         Memory.cacheLimit = 64 * 1024 * 1024
         let configuration = ModelConfiguration(directory: directory, extraEOSTokens: ["<|im_end|>"])
         let loaded = try await LLMModelFactory.shared.loadContainer(
             from: LocalFilesOnly(), using: TransformersTokenizerLoader(), configuration: configuration)
+        // Buffers left over from reading the files are not needed again.
+        Memory.clearCache()
         container = loaded
         self.directory = directory
         return loaded
