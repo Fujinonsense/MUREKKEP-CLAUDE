@@ -97,6 +97,8 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 
 ### 2.4 Uygulama kaydı (yaklaşık 20 dk)
 
+**Durum (25 Ekim 2026):** kayıt açıldı. Ad **Mürekkep**, Apple ID `6826858468`, SKU `murekkep-001`, Bundle ID `com.murekkep.notebook`, birincil dil English (U.S.), kategori Eğitim + Verimlilik. Sürüm 1.0, "Prepare for Submission".
+
 1. App Store Connect > Uygulamalar > **+ Yeni Uygulama** sayfasını aç:
    - platform: iOS,
    - Bundle ID: 2.3'teki kimlik,
