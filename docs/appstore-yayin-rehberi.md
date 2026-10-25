@@ -170,7 +170,32 @@ Ekim 2026 App Store Türkiye fiyatlarıyla karşılaştırma:
    - Önerilen ekranlar: kitaplık (ebru arka planla), el yazısıyla not, metin kalemi, yapay zekâ cevabı, video özet.
 2. **Altyazı** (en fazla 30 karakter): "El yazısı not, PDF ve yapay zekâ".
 3. **Anahtar kelimeler**: not,pdf,el yazısı,ders,yks,öğrenci,kalem,ipad,çalışma.
-4. **İnceleme notu** (Apple'ın incelemecisine): "Giriş yok. Yapay zekâ modeli (Qwen3.5, 2–6 GB) ilk açılışta internetten (Wi‑Fi ya da mobil veri) Hugging Face'ten indirilir ve iPad'de çalışır. Ücretsiz planda günde 15 cevap var; Pro'yu test etmek için yıllık plandaki 7 günlük deneme kullanılabilir. Arka planda ses: ders kaydı ve sesli özetler uygulama arka plandayken de sürer."
+4. **İnceleme notu** (Apple'ın incelemecisine): "Giriş yok. Yapay zekâ modeli (Qwen3.5, 2–6 GB), kullanıcı asistandaki "İndir" düğmesine basıp boyutu onaylayınca Hugging Face'ten indirilir ve iPad'de çalışır; model inene kadar asistan Apple'ın cihazdaki modeliyle cevap verir. Ücretsiz planda günde 15 cevap var; Pro'yu test etmek için yıllık plandaki 7 günlük deneme kullanılabilir. Arka planda ses: ders kaydı ve sesli özetler uygulama arka plandayken de sürer."
+
+### 2.8 İnceleme denetimi (25 Ekim 2026)
+
+İncelemede reddedilmemek için kod ve mağaza kaydı denetlendi. Kod düzeltmeleri: 579f004, 2d84cd9, ardından gelen commit. Testler: `tests/test_app_review.py`.
+
+**Kodda düzeltilenler (App Store sürümü):**
+- 2–6 GB'lık model kendiliğinden inmiyor. "İndir"e basınca önce boyut söyleniyor ve onay isteniyor (4.2.3).
+- Claude anahtarı, motoru ve Anthropic metinleri bu sürümde yok (5.1.2).
+- Ödeme ekranı yalnız var olan arka planları vaat ediyor. Fiyatlar dönemiyle yazıyor ("₺899,99/yıl"); düğmenin altında "7 gün ücretsiz, sonra yılda ₺899,99" var. Deneme süresi App Store teklifinden okunuyor. Fiyatlar gelmezse "Fiyatlar yüklenemedi" ve "Tekrar dene" çıkıyor (3.1.2).
+- Gizlilik politikası, kullanım koşulları ve destek e-postası bağlantıları ödeme ekranında ve Ayarlar'da.
+- Yapay zekâ cevabı "Bildir" ile e-postayla bildirilebiliyor; model zararlı içeriği reddediyor (1.2).
+- İzin metinleri İngilizce ve Türkçe.
+- TestFlight'a yalnız tam derleme yükleniyor; yükleme atlanırsa çalıştırma kırmızı biter.
+
+**Mağaza kaydında kalanlar (gönderimden önce):**
+1. Gizlilik ve destek sayfası `https://fujinonsense.github.io/murekkep/privacy.html` yayınlanacak (uygulama bu adrese bağlı). URL App Store Connect > App Privacy'ye ve Support URL'ye girilecek.
+2. Açıklamanın sonuna: `Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/` (Türkçede "Kullanım Koşulları (EULA): …").
+3. Yaş derecelendirmesi: reklam, kumar, yarışma, sosyal ağ, mesajlaşma, kullanıcı içeriği, sınırsız web, şiddet, korku için "Hayır"; küfür, olgun temalar, tıbbi bilgi için "Seyrek" (yapay zekâ sohbeti yüzünden). Sonuç 13+ beklenir.
+4. Content Rights: üçüncü taraf içerik var ve kullanım hakkı var (Wikipedia/DuckDuckGo özetleri, Qwen, Supertonic sesleri).
+5. App Privacy: "Data Not Collected".
+6. En az 3 mağaza ekran görüntüsü (2064×2752); Pro özellikleri işaretlenecek.
+7. Support URL, Copyright satırı ("2026 Yiğit Emre Örsyürek"), inceleme iletişim bilgileri.
+8. Sürüm 1.0'a üç ürün ve "Mürekkep Pro" grubu eklenecek; ilk satın almalar sürümle birlikte gider.
+9. AB DSA: karar kullanıcıda (öneri: 1.0'da AB'yi satıştan çıkar, "not a trader / don't distribute in the EU" seç).
+10. İnceleme notu: yapay zekânın cihazda çalıştığı ve modelin "İndir" ile indiği; ücretsiz planda günde 15 cevap; Pro'yu yıllık plandaki 7 günlük denemeyle test etme; arka plan sesi için adımlar (ders kaydı başlat → Ana ekrana dön → kayıt sürer; Stüdyo'da sesli özet oynat → ekranı kilitle → çalmaya devam eder).
 
 ## Aşama 3: Yükleme ve gönderme
 
