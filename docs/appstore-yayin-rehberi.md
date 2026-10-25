@@ -185,6 +185,8 @@ Ekim 2026 App Store Türkiye fiyatlarıyla karşılaştırma:
 - İzin metinleri İngilizce ve Türkçe.
 - TestFlight'a yalnız tam derleme yükleniyor; yükleme atlanırsa çalıştırma kırmızı biter.
 
+**Durum (25 Ekim akşamı):** aşağıdaki 1–5 ile 7'nin copyright ve destek kısmı ve 10 App Store Connect'e girildi; metinler `docs/magaza-metinleri.md`'de. İngilizce ve Türkçe mağaza sayfası hazır (Türkçe ad: "Mürekkep: El Yazısı Defteri"). Kalan: inceleme iletişim bilgileri (ad, telefon, e-posta; kullanıcı girer), mağaza ekran görüntüleri, yeni build'in sürüme eklenmesi, 8. madde.
+
 **Mağaza kaydında kalanlar (gönderimden önce):**
 1. Gizlilik ve destek sayfası **yayında** (25 Ekim): `https://fujinonsense.github.io/murekkep/privacy.html` ve destek `https://fujinonsense.github.io/murekkep/`. Herkese açık ayrı depo `Fujinonsense/murekkep` yalnız bu sayfaları tutar (kaynak `docs/site`); uygulama deposu gizli. Bu iki URL App Store Connect > App Privacy (Privacy Policy URL) ve sürüm sayfasındaki Support URL'ye girilecek.
 2. Açıklamanın sonuna: `Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/` (Türkçede "Kullanım Koşulları (EULA): …").
