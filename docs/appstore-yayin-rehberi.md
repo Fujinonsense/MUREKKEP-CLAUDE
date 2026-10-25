@@ -186,7 +186,7 @@ Ekim 2026 App Store Türkiye fiyatlarıyla karşılaştırma:
 - TestFlight'a yalnız tam derleme yükleniyor; yükleme atlanırsa çalıştırma kırmızı biter.
 
 **Mağaza kaydında kalanlar (gönderimden önce):**
-1. Gizlilik ve destek sayfası `https://fujinonsense.github.io/murekkep/privacy.html` yayınlanacak (uygulama bu adrese bağlı). URL App Store Connect > App Privacy'ye ve Support URL'ye girilecek.
+1. Gizlilik ve destek sayfası **yayında** (25 Ekim): `https://fujinonsense.github.io/murekkep/privacy.html` ve destek `https://fujinonsense.github.io/murekkep/`. Herkese açık ayrı depo `Fujinonsense/murekkep` yalnız bu sayfaları tutar (kaynak `docs/site`); uygulama deposu gizli. Bu iki URL App Store Connect > App Privacy (Privacy Policy URL) ve sürüm sayfasındaki Support URL'ye girilecek.
 2. Açıklamanın sonuna: `Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/` (Türkçede "Kullanım Koşulları (EULA): …").
 3. Yaş derecelendirmesi: reklam, kumar, yarışma, sosyal ağ, mesajlaşma, kullanıcı içeriği, sınırsız web, şiddet, korku için "Hayır"; küfür, olgun temalar, tıbbi bilgi için "Seyrek" (yapay zekâ sohbeti yüzünden). Sonuç 13+ beklenir.
 4. Content Rights: üçüncü taraf içerik var ve kullanım hakkı var (Wikipedia/DuckDuckGo özetleri, Qwen, Supertonic sesleri).
