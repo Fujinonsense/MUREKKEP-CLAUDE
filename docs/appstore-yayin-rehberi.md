@@ -168,6 +168,7 @@ Ekim 2026 App Store Türkiye fiyatlarıyla karşılaştırma:
 
 1. **TestFlight'a yükleme (benim adımım).** CI derler, imzalar ve TestFlight'a yükler. App Store Connect'te build 15–30 dakikada "İşleniyor"dan "Test Edilebilir"e geçer.
 2. **TestFlight'ı kur.** iPad'e TestFlight uygulamasını kur. App Store Connect > TestFlight > Dahili Test bölümünde kendini test eden olarak ekle ve daveti kabul et.
+   **Durum (25 Ekim 2026):** dahili grup **Murekkep Ekibi** kuruldu, otomatik dağıtım açık: CI'ın her yeni yüklemesi gruba kendiliğinden düşer. Test eden: orsyureky@gmail.com (davet gönderildi). Build 1.0 (109) "Ready to Test".
 3. **Deneme hesabı aç.** App Store Connect > Kullanıcılar ve Erişim > Sandbox sayfasında bir deneme hesabı oluştur. Sonra iPad'de Ayarlar > App Store > **Sandbox hesabı** ile giriş yap. Deneme satın almaları para çekmez.
 4. **TestFlight kontrolü** (yaklaşık 15 dk):
    - Aylık plan satın alınıyor ve Pro açılıyor mu? Kilitler kalkmalı, arka planlar seçilebilmeli.
