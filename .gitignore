@@ -5,6 +5,7 @@
 !/.github/
 !/.gitignore
 !/README.md
+!/codemagic.yaml
 
 # Xcode and macOS leftovers inside the package.
 .DS_Store
