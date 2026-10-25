@@ -203,7 +203,8 @@ final class AppSettings: ObservableObject {
             "lavaCoolDuration": 6.0,
             "flowerLevel": 1,
             "textOnlyPDF": false,
-            "autoBrainDownload": true,
+            // The App Store edition asks before the 2–6 GB model comes down (guideline 4.2.3).
+            "autoBrainDownload": !ProPlan.sells,
             "appBackground": (ProPlan.sells ? AppBackground.paper : AppBackground.ruled).rawValue,
         ])
         language = AppLanguage.stored
@@ -264,7 +265,7 @@ final class AppSettings: ObservableObject {
         appBackground = AppBackground.migrated(d.string(forKey: "appBackground") ?? "") ?? .paper
         favoriteBrushes = (d.array(forKey: "favoriteBrushes") as? [Int] ?? []).compactMap { Brush(rawValue: UInt8(clamping: $0)) }
         paletteEdge = PaletteEdge(rawValue: d.string(forKey: "paletteEdge") ?? "") ?? .top
-        hasAPIKey = (Keychain.read(account: Self.keyAccount) ?? d.string(forKey: Self.fallbackKey)) != nil
+        hasAPIKey = !ProPlan.sells && (Keychain.read(account: Self.keyAccount) ?? d.string(forKey: Self.fallbackKey)) != nil
     }
 
     func toggleFavorite(_ brush: Brush) {
@@ -276,7 +277,9 @@ final class AppSettings: ObservableObject {
         appBackground.isPremium && locked ? .paper : appBackground
     }
 
+    /// The Claude key; never in the App Store edition, which sends nothing to a third-party AI.
     var apiKey: String? {
+        guard !ProPlan.sells else { return nil }
         if let k = Keychain.read(account: Self.keyAccount), !k.isEmpty { return k }
         if let k = UserDefaults.standard.string(forKey: Self.fallbackKey), !k.isEmpty { return k }
         return nil

@@ -420,6 +420,11 @@ struct MessageBubble: View {
                 } label: {
                     Label(Loc.t("Kopyala"), systemImage: "doc.on.doc")
                 }
+                // A wrong or harmful AI answer can be sent to us (App Store guideline 1.2).
+                Link(destination: ProPlan.supportMail(subject: Loc.t("Yapay zekâ cevabını bildir"),
+                                                      body: Loc.t("Bu cevapta sorun var:") + "\n\n" + message.text)) {
+                    Label(Loc.t("Bildir"), systemImage: "exclamationmark.bubble")
+                }
             }
         }
     }

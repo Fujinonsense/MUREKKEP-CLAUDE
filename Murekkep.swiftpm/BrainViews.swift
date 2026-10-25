@@ -6,6 +6,8 @@ struct BrainCard: View {
     @ObservedObject var brain = DeviceBrain.shared
     var compact = false
     @State private var confirmDelete = false
+    /// The App Store edition says the size and asks before the model comes down (guideline 4.2.3).
+    @State private var confirmDownload = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 10) {
@@ -28,6 +30,13 @@ struct BrainCard: View {
                 }
                 Spacer(minLength: 8)
                 action
+            }
+            .confirmationDialog(Loc.t("{0} indirilsin mi?", title), isPresented: $confirmDownload, titleVisibility: .visible) {
+                Button(Loc.t("İndir")) { brain.startDownload() }
+                Button(Loc.t("Şimdi değil"), role: .cancel) {}
+            } message: {
+                Text(Loc.t("{0} yer kaplar ve bir kez indirilir; sonra yapay zekâ iPad'inde internetsiz çalışır. İndirme arka planda sürer ve Wi‑Fi yoksa mobil veriyi de kullanır.",
+                           brain.model.map { BrainModel.sizeText($0.bytes, english: Loc.isEnglish) } ?? ""))
             }
             if let fraction = brain.fraction {
                 ProgressView(value: fraction)
@@ -52,6 +61,10 @@ struct BrainCard: View {
         } message: {
             Text(Loc.t("Yer açılır; istediğinde yeniden indirebilirsin."))
         }
+    }
+
+    private func download() {
+        if ProPlan.sells { confirmDownload = true } else { brain.startDownload() }
     }
 
     /// What iOS lets the app hold, what is free now, and whether the model loads in it.
@@ -104,12 +117,12 @@ struct BrainCard: View {
         if BrainRuntime.isCompiledIn, brain.model != nil {
             switch brain.phase {
             case .absent:
-                Button(Loc.t("İndir")) { brain.startDownload() }
+                Button(Loc.t("İndir")) { download() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.ink)
                     .controlSize(compact ? .small : .regular)
             case .failed:
-                Button(Loc.t("Yeniden dene")) { brain.startDownload() }
+                Button(Loc.t("Yeniden dene")) { download() }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.ink)
                     .controlSize(compact ? .small : .regular)

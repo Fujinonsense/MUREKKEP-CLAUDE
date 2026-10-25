@@ -215,7 +215,12 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>CFBundleDevelopmentRegion</key>
-              <string>tr</string>
+              <string>en</string>
+              <key>CFBundleLocalizations</key>
+              <array>
+                  <string>en</string>
+                  <string>tr</string>
+              </array>
               <key>CFBundleDisplayName</key>
               <string>Mürekkep</string>
               <key>CFBundleExecutable</key>
@@ -270,6 +275,20 @@ jobs:
               </array>
           </dict>
           </plist>
+          EOF
+
+          # Permission prompts in the iPad's language (the store's first language is English; the
+          # Turkish texts above are only the fallback).
+          mkdir -p AppSource/en.lproj AppSource/tr.lproj
+          cat << 'EOF' > AppSource/en.lproj/InfoPlist.strings
+          "NSMicrophoneUsageDescription" = "Mürekkep records the lecture so your ink stays in sync with the audio: tap any ink to jump to that moment.";
+          "NSPhotoLibraryAddUsageDescription" = "Mürekkep saves the video summaries you export to Photos.";
+          "NSLocalNetworkUsageDescription" = "Only if you set it up: Mürekkep connects to an AI (Ollama, LM Studio) running on your own computer on the same Wi-Fi.";
+          EOF
+          cat << 'EOF' > AppSource/tr.lproj/InfoPlist.strings
+          "NSMicrophoneUsageDescription" = "Dersi kaydetmek için: yazdıkların sesle eşleşir, mürekkebe dokununca o ana gidersin.";
+          "NSPhotoLibraryAddUsageDescription" = "Video özetlerini Fotoğraflar'a kaydetmek için.";
+          "NSLocalNetworkUsageDescription" = "Aynı Wi-Fi'deki bilgisayarında çalışan yapay zekâya (Ollama, LM Studio) bağlanmak için.";
           EOF
 
           # Not: XcodeGen'in "info:" anahtari Info.plist'i her seferinde bastan uretip ustteki ayarlari
@@ -544,7 +563,8 @@ jobs:
       # the entitlement survives, then exported with Apple's cloud-managed distribution certificate
       # through the App Store Connect API key and uploaded to TestFlight.
       - name: TestFlight'a Yukle
-        if: inputs.testflight && inputs.edition == 'appstore'
+        # Only the full build: the fallback builds (no MLX, plain) lack the model engine.
+        if: inputs.testflight && inputs.edition == 'appstore' && steps.build.outcome == 'success'
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}

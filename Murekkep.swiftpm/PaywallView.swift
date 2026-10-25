@@ -2,13 +2,12 @@ import SwiftUI
 
 /// The Mürekkep Pro page: what Pro adds beside the free plan, the three plans and the purchase.
 /// It opens when a free allowance runs out or a Pro-only thing is touched, and from Settings. The
-/// sheet of ebru at the top is the same artwork as the Pro library background.
+/// artwork at the top is one of the Pro library backgrounds.
 struct PaywallView: View {
     let reason: ProPlan.Feature?
     let close: () -> Void
     @ObservedObject private var store = ProStore.shared
     @State private var plan: ProPlan.Product.Kind = .yearly
-    @State private var showPrivacy = false
 
     var body: some View {
         ScrollView {
@@ -21,6 +20,8 @@ struct PaywallView: View {
                     perks
                     if store.isPro {
                         active
+                    } else if store.pricesFailed {
+                        unavailable
                     } else {
                         plans
                         purchase
@@ -43,9 +44,6 @@ struct PaywallView: View {
             .buttonStyle(.plain)
             .padding(16)
             .accessibilityLabel(Loc.t("Kapat"))
-        }
-        .sheet(isPresented: $showPrivacy) {
-            PrivacyNote()
         }
         .task { await store.refresh() }
     }
@@ -110,7 +108,7 @@ struct PaywallView: View {
                  Loc.t("Ücretsiz planda deneme mürekkebi kadar"))
             perk("paintbrush.pointed", Loc.t("10 adet 3D mürekkep"),
                  Loc.t("Lav, altın, krom, galaksi, yıldırım, inci ve fazlası"))
-            perk("photo.artframe", Loc.t("Ebru, İznik çinisi ve 10 sanat arka planı"),
+            perk("photo.artframe", Loc.t("10 sanat arka planı: sıvı cam, ipek, erimiş altın ve fazlası"),
                  Loc.t("Ücretsiz planda düz renkler"))
             perk("doc.richtext", Loc.t("Planlayıcı, CV ve özel şablonlar"),
                  Loc.t("Haftalık, aylık, toplantı, nota kâğıdı ve fazlası"))
@@ -161,7 +159,7 @@ struct PaywallView: View {
                         Text(Self.title(kind))
                             .font(.headline)
                         if kind == .yearly && store.trialEligible {
-                            Chip(text: Loc.t("{0} gün ücretsiz", "\(ProPlan.freeTrialDays)"), symbol: "gift", tint: Theme.aiEnd)
+                            Chip(text: Loc.t("{0} gün ücretsiz", "\(store.trialDays)"), symbol: "gift", tint: Theme.aiEnd)
                         }
                     }
                     Text(detail(kind))
@@ -169,7 +167,8 @@ struct PaywallView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Text(store.price(ProPlan.product(kind)))
+                // The amount that is billed, with its period, is the largest price on the page (3.1.2).
+                Text(billed(kind))
                     .font(.headline.monospacedDigit())
             }
             .padding(16)
@@ -186,6 +185,15 @@ struct PaywallView: View {
         case .yearly: return Loc.t("Yıllık")
         case .monthly: return Loc.t("Aylık")
         case .lifetime: return Loc.t("Ömür boyu")
+        }
+    }
+
+    private func billed(_ kind: ProPlan.Product.Kind) -> String {
+        let price = store.price(ProPlan.product(kind))
+        switch kind {
+        case .yearly: return Loc.t("{0}/yıl", price)
+        case .monthly: return Loc.t("{0}/ay", price)
+        case .lifetime: return price
         }
     }
 
@@ -220,6 +228,12 @@ struct PaywallView: View {
             .buttonBorderShape(.roundedRectangle(radius: 14))
             .tint(Theme.ink)
             .disabled(store.purchasing)
+            if plan == .yearly && store.trialEligible {
+                // What the trial turns into, in readable type right under the button.
+                Text(Loc.t("{0} gün ücretsiz, sonra yılda {1}", "\(store.trialDays)", store.price(ProPlan.product(.yearly))))
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
             Text(terms)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -238,7 +252,7 @@ struct PaywallView: View {
     private var callToAction: String {
         switch plan {
         case .yearly:
-            return store.trialEligible ? Loc.t("{0} gün ücretsiz dene", "\(ProPlan.freeTrialDays)") : Loc.t("Yıllık Pro'yu başlat")
+            return store.trialEligible ? Loc.t("{0} gün ücretsiz dene", "\(store.trialDays)") : Loc.t("Yıllık Pro'yu başlat")
         case .monthly: return Loc.t("Aylık Pro'yu başlat")
         case .lifetime: return Loc.t("Ömür boyu Pro'yu al")
         }
@@ -251,7 +265,7 @@ struct PaywallView: View {
         switch plan {
         case .yearly where store.trialEligible:
             return Loc.t("{0} gün ücretsiz, sonra yılda {1}. Deneme bitmeden en az 24 saat önce iptal etmezsen abonelik başlar ve her yıl kendiliğinden yenilenir.",
-                         "\(ProPlan.freeTrialDays)", price) + " " + manage
+                         "\(store.trialDays)", price) + " " + manage
         case .yearly:
             return Loc.t("Yılda {0}. Dönem bitmeden en az 24 saat önce iptal etmezsen her yıl kendiliğinden yenilenir.", price) + " " + manage
         case .monthly:
@@ -259,6 +273,25 @@ struct PaywallView: View {
         case .lifetime:
             return Loc.t("{0}, tek seferlik ödeme. Abonelik değildir, yenilenmez.", price)
         }
+    }
+
+    /// No prices from the App Store (no connection, or the store not ready): nothing to buy yet.
+    private var unavailable: some View {
+        VStack(spacing: 12) {
+            Label(Loc.t("Fiyatlar yüklenemedi."), systemImage: "wifi.exclamationmark")
+                .font(.headline)
+            Text(Loc.t("İnternet bağlantını kontrol edip yeniden dene."))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button(Loc.t("Tekrar dene")) {
+                Task { await store.refresh() }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.ink)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(Theme.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var active: some View {
@@ -285,9 +318,7 @@ struct PaywallView: View {
                 Task { await store.restore() }
             }
             Link(Loc.t("Kullanım koşulları"), destination: ProPlan.termsURL)
-            Button(Loc.t("Gizlilik")) {
-                showPrivacy = true
-            }
+            Link(Loc.t("Gizlilik politikası"), destination: ProPlan.privacyURL)
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
@@ -365,12 +396,17 @@ struct PrivacyNote: View {
     }
 
     static var paragraphs: [String] {
-        [
+        var all = [
             Loc.t("Defterlerin, PDF'lerin, el yazın ve ses kayıtların iPad'inde durur; iPad yedeklemesi açıksa kendi iCloud yedeğine de girer. Mürekkep'in sunucusu, hesabı, reklamı ya da izleme aracı yoktur."),
             Loc.t("Yapay zekâ (Qwen3.5) iPad'in üzerinde çalışır; notların ve soruların bir sunucuya gönderilmez."),
             Loc.t("Model ilk kez indirilirken dosyalar Hugging Face'ten alınır. İnternet araması açıksa, aranan kelimeler Wikipedia'ya ve DuckDuckGo'ya gider. Bu sırada o sitelere yalnızca olağan bağlantı bilgileri (IP adresi gibi) ulaşır."),
-            Loc.t("Ayarlar'da kendi anahtarınla Claude'u seçersen, o sorular ve gönderdiğin sayfalar Anthropic'e gider."),
-            Loc.t("Satın almaları Apple yapar; ödeme bilgilerin Mürekkep'e hiç gelmez. Ücretsiz plandaki günlük ve haftalık hakların yalnızca bu iPad'de sayılır."),
+            Loc.t("Ayarlar'da kendi bilgisayarındaki yapay zekâyı seçersen, sorular yalnızca aynı Wi‑Fi'deki o bilgisayara gider."),
         ]
+        if !ProPlan.sells {
+            all.append(Loc.t("Ayarlar'da kendi anahtarınla Claude'u seçersen, o sorular ve gönderdiğin sayfalar Anthropic'e gider."))
+        }
+        all.append(Loc.t("Satın almaları Apple yapar; ödeme bilgilerin Mürekkep'e hiç gelmez. Ücretsiz plandaki günlük ve haftalık hakların yalnızca bu iPad'de sayılır."))
+        all.append(Loc.t("Notlarını silmek için defteri ya da PDF'i sil; uygulamayı silince her şey iPad'den kalkar. Sorular için: {0}", ProPlan.supportEmail))
+        return all
     }
 }

@@ -230,3 +230,21 @@ def test_testflight_writes_the_key_as_a_strict_pem(job):
     assert '"$ASC_KEY_P8" >' not in script
     # A Key ID or Issuer ID pasted with a line break would break the key's file name and the token.
     assert "tr -d '[:space:]'" in script
+
+
+def test_permission_prompts_speak_english_and_turkish(job):
+    # The store's first language is English: an English iPad must not get Turkish system prompts.
+    script = step_with(job, "cat << 'EOF' > AppSource/Info.plist")["run"]
+    assert "<key>CFBundleDevelopmentRegion</key>\n    <string>en</string>" in script
+    assert "<key>CFBundleLocalizations</key>" in script and "<string>tr</string>" in script
+    for lang in ("en", "tr"):
+        assert f"AppSource/{lang}.lproj/InfoPlist.strings" in script
+    for key in ("NSMicrophoneUsageDescription", "NSPhotoLibraryAddUsageDescription", "NSLocalNetworkUsageDescription"):
+        assert script.count(f'"{key}" =') == 2, key
+    assert "Mürekkep records the lecture" in script
+
+
+def test_testflight_only_uploads_the_full_build(job):
+    # The fallback builds (no MLX, plain) lack the model engine; they must never reach TestFlight.
+    step = step_with(job, "-exportArchive")
+    assert "steps.build.outcome == 'success'" in str(step.get("if", ""))

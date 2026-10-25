@@ -148,4 +148,17 @@ enum ProPlan {
 
     /// Apple's standard licence for apps without their own.
     static let termsURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+    /// The public privacy policy (Turkish and English), also given in App Store Connect.
+    static let privacyURL = URL(string: "https://fujinonsense.github.io/murekkep/privacy.html")!
+    static let supportEmail = "murekkep.notebook@gmail.com"
+
+    /// A mail to support, with the subject and an optional text already filled in.
+    static func supportMail(subject: String, body: String = "") -> URL {
+        var parts = URLComponents()
+        parts.scheme = "mailto"
+        parts.path = supportEmail
+        parts.queryItems = [URLQueryItem(name: "subject", value: subject)]
+            + (body.isEmpty ? [] : [URLQueryItem(name: "body", value: body)])
+        return parts.url ?? URL(string: "mailto:\(supportEmail)")!
+    }
 }

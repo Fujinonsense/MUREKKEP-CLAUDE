@@ -16,7 +16,13 @@ final class ProStore: ObservableObject {
     @Published private(set) var isPro: Bool
     /// The App Store's products by id; empty until it answers (or outside the App Store).
     @Published private(set) var products: [String: Product] = [:]
-    @Published private(set) var trialEligible = true
+    /// True when the App Store could not give the prices; the Pro page then says so instead of
+    /// showing plans that cannot be bought.
+    @Published private(set) var pricesFailed = false
+    /// Only when the yearly plan has a free trial in App Store Connect and this account may still use it.
+    @Published private(set) var trialEligible = false
+    /// The free trial's length, from the App Store's offer.
+    @Published private(set) var trialDays = ProPlan.freeTrialDays
     @Published private(set) var purchasing = false
     @Published var message: String?
     @Published private(set) var usage: ProPlan.Usage
@@ -53,10 +59,15 @@ final class ProStore: ObservableObject {
         guard Self.sells else { return }
         if let loaded = try? await Product.products(for: ProPlan.products.map(\.id)) {
             products = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, $0) })
-            if let yearly = products[ProPlan.product(.yearly).id], let subscription = yearly.subscription {
+            if let yearly = products[ProPlan.product(.yearly).id], let subscription = yearly.subscription,
+               let offer = subscription.introductoryOffer, offer.paymentMode == .freeTrial {
+                trialDays = Self.days(offer.period)
                 trialEligible = await subscription.isEligibleForIntroOffer
+            } else {
+                trialEligible = false
             }
         }
+        pricesFailed = products.isEmpty
         await updateEntitlements()
     }
 
@@ -118,6 +129,16 @@ final class ProStore: ObservableObject {
     func price(_ plan: ProPlan.Product) -> String {
         if let product = products[plan.id] { return product.displayPrice }
         return Self.inTurkey ? plan.fallbackPriceTR : plan.fallbackPriceUS
+    }
+
+    private static func days(_ period: Product.SubscriptionPeriod) -> Int {
+        switch period.unit {
+        case .day: return period.value
+        case .week: return period.value * 7
+        case .month: return period.value * 30
+        case .year: return period.value * 365
+        @unknown default: return ProPlan.freeTrialDays
+        }
     }
 
     /// How much less the yearly plan costs than twelve months, in whole percent.

@@ -986,6 +986,7 @@ final class AssistantModel: ObservableObject {
         - Emin olmadığın yerde bunu açıkça söyle.
         - Sayfada soru ya da işlem varsa doğrudan çöz; "göremiyorum" deme, okunan metinle en iyi yorumu yap.
         - HESAP_MOTORU bölümündeki sonuçlar kesindir; sayıları ve doğru/yanlış kararlarını oradan al.
+        - Zararlı, cinsel, nefret ya da şiddet içeren içerik üretme; böyle bir istekte kibarca reddet ve derse dön.
         """
         if web && tool {
             s += "\n- Sayfalarda olmayan bir bilgi gerekiyorsa webSearch aracını kullan ve yanıtın sonunda kaynak başlığını yaz."

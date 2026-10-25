@@ -17,13 +17,16 @@ enum AIEngine: String, CaseIterable, Identifiable, Codable {
     /// they answer by themselves while Qwen is still downloading or on an iPad too small for it.
     /// The computer's server only shows while it is the choice.
     static func listed(current: AIEngine, hasKey: Bool) -> [AIEngine] {
-        [.deviceBrain] + (hasKey || current == .claude ? [.claude] : []) + (current == .localServer ? [.localServer] : [])
+        [.deviceBrain] + (!ProPlan.sells && (hasKey || current == .claude) ? [.claude] : [])
+            + (current == .localServer ? [.localServer] : [])
     }
 
-    /// Choices of earlier versions that are no longer listed move to the downloaded model.
+    /// Choices of earlier versions that are no longer listed move to the downloaded model; so does
+    /// Claude in the App Store edition, which has no Claude.
     static func migrated(_ stored: AIEngine?) -> AIEngine {
         switch stored {
-        case .claude, .localServer: return stored!
+        case .claude: return ProPlan.sells ? .deviceBrain : .claude
+        case .localServer: return .localServer
         default: return .deviceBrain
         }
     }

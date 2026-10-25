@@ -26,7 +26,9 @@ struct SettingsView: View {
                 pencilSection
                 inkSection
                 serverSection
-                claudeSection
+                if !ProPlan.sells {
+                    claudeSection
+                }
             }
             .navigationTitle(Loc.t("Ayarlar"))
             .navigationBarTitleDisplayMode(.inline)
@@ -69,6 +71,9 @@ struct SettingsView: View {
                 Button(Loc.t("Gizlilik")) {
                     showPrivacy = true
                 }
+                Link(Loc.t("Gizlilik politikası"), destination: ProPlan.privacyURL)
+                Link(Loc.t("Kullanım koşulları"), destination: ProPlan.termsURL)
+                Link(Loc.t("Destek: {0}", ProPlan.supportEmail), destination: ProPlan.supportMail(subject: "Mürekkep"))
                 if let message = pro.message {
                     Text(message)
                         .font(.footnote)
@@ -95,7 +100,7 @@ struct SettingsView: View {
             Text(Loc.t("Kitaplık arka planı"))
         } footer: {
             Text(ProStore.sells
-                 ? Loc.t("Düz renkler ücretsiz; ebru, İznik çinisi, Boğaz ve diğer sanat arka planları Mürekkep Pro'da.")
+                 ? Loc.t("Düz renkler ücretsiz; sıvı cam, ipek, erimiş altın ve diğer sanat arka planları Mürekkep Pro'da.")
                  : Loc.t("Sanat arka planları kitaplığın arkasında durur; yazılar her birinde okunacak renge geçer."))
         }
     }
@@ -162,7 +167,9 @@ struct SettingsView: View {
         } header: {
             Text(Loc.t("Yapay zekâ motoru"))
         } footer: {
-            Text(Loc.t("Claude dışındaki hiçbir motor API anahtarı istemez. El yazısı ve taranmış sayfalar her zaman cihazda metne çevrilir."))
+            Text(ProPlan.sells
+                 ? Loc.t("Hiçbir motor hesap ya da API anahtarı istemez. El yazısı ve taranmış sayfalar her zaman cihazda metne çevrilir.")
+                 : Loc.t("Claude dışındaki hiçbir motor API anahtarı istemez. El yazısı ve taranmış sayfalar her zaman cihazda metne çevrilir."))
         }
     }
 
@@ -264,11 +271,13 @@ struct SettingsView: View {
             Toggle(isOn: $settings.fingerTapUndo) {
                 Label(Loc.t("İki parmakla dokununca geri al, üç parmakla yinele"), systemImage: "hand.tap")
             }
-            Toggle(isOn: $settings.handwritingAI) {
-                Label(settings.hasAPIKey
-                      ? Loc.t("El yazısını ve matematiği Claude ile oku (en doğru)")
-                      : Loc.t("El yazısını Claude ile oku (aşağıya Claude anahtarı ekleyince açılır)"),
-                      systemImage: "text.viewfinder")
+            if !ProPlan.sells {
+                Toggle(isOn: $settings.handwritingAI) {
+                    Label(settings.hasAPIKey
+                          ? Loc.t("El yazısını ve matematiği Claude ile oku (en doğru)")
+                          : Loc.t("El yazısını Claude ile oku (aşağıya Claude anahtarı ekleyince açılır)"),
+                          systemImage: "text.viewfinder")
+                }
             }
             Toggle(isOn: $settings.paperSound) {
                 Label(Loc.t("Yazı sesi (müziği durdurmaz; sayfanın sol alt köşesinden de açılır)"), systemImage: "speaker.wave.1")
