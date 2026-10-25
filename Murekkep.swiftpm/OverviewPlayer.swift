@@ -921,6 +921,9 @@ enum OverviewQuestions {
         if let best, !best.isEmpty {
             return (overview.language.isEnglish ? "Here's what the overview says: " : "Özette bununla ilgili şöyle geçiyor: ") + best + "."
         }
+        if ProPlan.sells {  // The App Store edition has no Claude.
+            return overview.language.isEnglish ? "The overview doesn't cover that. Ask the assistant on the page." : "Özette buna dair bir şey yok. Sayfadaki asistana sorabilirsin."
+        }
         return overview.language.isEnglish ? "I need Claude or Apple Intelligence to answer that." : "Bunu yanıtlamak için Claude ya da Apple Intelligence gerekir."
     }
 }

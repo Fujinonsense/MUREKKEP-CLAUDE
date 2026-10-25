@@ -67,7 +67,7 @@ final class ProStore: ObservableObject {
                 trialEligible = false
             }
         }
-        pricesFailed = products.isEmpty
+        pricesFailed = ProPlan.products.contains { products[$0.id] == nil }
         await updateEntitlements()
     }
 

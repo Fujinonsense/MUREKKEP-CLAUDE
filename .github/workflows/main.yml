@@ -647,3 +647,11 @@ jobs:
         with:
           name: ${{ inputs.edition == 'appstore' && 'Murekkep-AppStore' || 'Murekkep-IPA' }}
           path: Murekkep*.ipa
+
+      # TestFlight was asked for, but the full build failed: a fallback IPA exists, nothing was
+      # uploaded. The run must not end green.
+      - name: TestFlight Atlandi
+        if: inputs.testflight && inputs.edition == 'appstore' && steps.build.outcome != 'success'
+        run: |
+          echo "::error::Tam derleme olmadi; TestFlight'a yuklenmedi."
+          exit 1

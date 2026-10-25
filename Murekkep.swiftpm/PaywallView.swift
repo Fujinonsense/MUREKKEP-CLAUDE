@@ -22,6 +22,9 @@ struct PaywallView: View {
                         active
                     } else if store.pricesFailed {
                         unavailable
+                    } else if store.products.isEmpty {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 120)
                     } else {
                         plans
                         purchase

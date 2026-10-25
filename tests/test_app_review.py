@@ -69,3 +69,18 @@ def test_an_ai_answer_can_be_reported():
     assert 'Label(Loc.t("Bildir")' in view and "ProPlan.supportMail(" in view
     assert 'parts.scheme = "mailto"' in src("ProPlan.swift")
     assert "Zararlı" in src("AssistantModel.swift")
+
+
+def test_every_plan_needs_its_app_store_price():
+    # A plan the App Store did not return (say, not attached to the version) must not be sold at a
+    # planned price; and nothing is for sale before the App Store answers.
+    store = src("ProStore.swift")
+    assert "pricesFailed = ProPlan.products.contains { products[$0.id] == nil }" in store
+    paywall = src("PaywallView.swift")
+    assert re.search(r"else if store\.products\.isEmpty \{\s*ProgressView\(\)", paywall)
+
+
+def test_no_claude_text_in_the_app_store_edition():
+    player = src("OverviewPlayer.swift")
+    line = next(l for l in player.splitlines() if "I need Claude" in l)
+    assert "if ProPlan.sells" in player.split("I need Claude")[0][-400:], line

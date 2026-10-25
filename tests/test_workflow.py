@@ -248,3 +248,12 @@ def test_testflight_only_uploads_the_full_build(job):
     # The fallback builds (no MLX, plain) lack the model engine; they must never reach TestFlight.
     step = step_with(job, "-exportArchive")
     assert "steps.build.outcome == 'success'" in str(step.get("if", ""))
+
+
+def test_a_skipped_testflight_upload_fails_the_run(job):
+    # With the full build failed, the fallback build succeeds and the upload is skipped: say so loudly.
+    step = next(s for s in job["steps"] if s.get("name") == "TestFlight Atlandi")
+    assert "steps.build.outcome != 'success'" in str(step["if"]) and "inputs.testflight" in str(step["if"])
+    assert "exit 1" in step["run"]
+    names = [s.get("name") for s in job["steps"]]
+    assert names.index("TestFlight Atlandi") > names.index("TestFlight'a Yukle")
