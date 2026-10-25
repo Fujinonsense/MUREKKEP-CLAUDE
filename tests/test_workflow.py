@@ -208,3 +208,25 @@ def test_testflight_step_signs_in_the_cloud_and_uploads(job):
         assert step["env"][name] == "${{ secrets.%s }}" % name
     # The private key never outlives the step.
     assert "trap 'rm -f \"$KEY\"' EXIT" in script
+
+
+def test_the_app_store_key_is_checked_before_the_build(job):
+    # A badly pasted secret must fail in seconds, not after the half-hour build (run 40204167042
+    # archived fine, then xcodebuild refused the key: invalidPEMDocument).
+    names = [s.get("name") for s in job["steps"]]
+    check = step_with(job, "--check-api")
+    assert "python3 tools/asc_key.py" in check["run"]
+    assert names.index(check["name"]) < names.index("IPA Derle")
+    condition = str(check.get("if", ""))
+    assert "inputs.testflight" in condition and "appstore" in condition
+    for name in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_P8"):
+        assert check["env"][name] == "${{ secrets.%s }}" % name
+    assert "trap 'rm -f \"$KEY\"' EXIT" in check["run"]
+
+
+def test_testflight_writes_the_key_as_a_strict_pem(job):
+    script = step_with(job, "-exportArchive")["run"]
+    assert 'python3 tools/asc_key.py "$KEY"' in script
+    assert '"$ASC_KEY_P8" >' not in script
+    # A Key ID or Issuer ID pasted with a line break would break the key's file name and the token.
+    assert "tr -d '[:space:]'" in script

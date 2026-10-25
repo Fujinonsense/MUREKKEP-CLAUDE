@@ -33,6 +33,19 @@ jobs:
       - name: Projeyi Indir
         uses: actions/checkout@v4
 
+      # The App Store Connect key, tried against Apple before the half-hour build, so a badly pasted
+      # secret fails in seconds. Prints the key's shape (lines, line endings), never its content.
+      - name: App Store Anahtarini Dogrula
+        if: inputs.testflight && inputs.edition == 'appstore'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          KEY="$RUNNER_TEMP/asc-check.p8"
+          trap 'rm -f "$KEY"' EXIT
+          python3 tools/asc_key.py "$KEY" --check-api
+
       - name: Xcode 26.6 Sec
         run: |
           sudo xcode-select -s /Applications/Xcode_26.6.app
@@ -538,9 +551,11 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           set -o pipefail
+          ASC_KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          ASC_ISSUER_ID=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]')
           KEY="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
           trap 'rm -f "$KEY"' EXIT
-          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          python3 tools/asc_key.py "$KEY"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
           if ! xcodebuild -project Murekkep.xcodeproj \
             -scheme Murekkep \
