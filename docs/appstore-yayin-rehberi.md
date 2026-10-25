@@ -60,6 +60,8 @@ Bir şey farklıysa ekran görüntüsünü bana at.
 
 ### 2.1 Apple Developer Program üyeliği (yaklaşık 30 dk, onay 1–2 gün)
 
+**Durum (25 Ekim 2026):** üyelik alındı. Apple'ın onay e-postası gelince 2.2'ye geç.
+
 1. https://developer.apple.com/programs/enroll/ adresinden "Bireysel" (Individual) olarak üye ol.
 2. Yıllık ücret 99 ABD doları; Apple bazı ülkelerde yerel fiyat gösterir.
 3. Apple kimliğini doğrulayınca e-posta gelir.
@@ -72,6 +74,8 @@ Bunlar olmadan abonelik satılamaz.
 2. **Ücretli Uygulamalar Sözleşmesi**'ni (Paid Apps Agreement) kabul et.
 3. Banka hesabını ekle (IBAN; TL hesabı olabilir).
 4. Vergi formunu doldur. ABD dışındaki bireyler için bu W-8BEN formudur.
+5. **AB "trader" beyanı** (App Store Connect > İş): AB'de satış için zorunlu. Trader olarak beyan edersen adresin, telefonun ve e-postan AB mağaza sayfasında herkese açık görünür. İki yol var: ayrı bir telefon ve posta kutusu kullan, ya da AB ülkelerini ilk sürümde satış listesinden çıkar ve sonra ekle. Ayrıntı: `Downloads\Murekkep-reklam\globale-acilma-plani.md`, bölüm 7.
+6. Türkiye'de vergi (GVK 20/B istisnası ve ayrı banka hesabı) için bir mali müşavire danış.
 
 ### 2.3 İmza anahtarları (yaklaşık 20 dk)
 
@@ -94,7 +98,7 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
    - Bundle ID: 2.3'teki kimlik,
    - SKU: `murekkep-001`.
 2. Ad olarak "Mürekkep" alınmışsa "Mürekkep: Not ve PDF" gibi bir ad dene.
-3. Birincil dil Türkçe, kategori **Eğitim** (ikincisi Verimlilik).
+3. Birincil dil **English (U.S.)**, kategori **Eğitim** (ikincisi Verimlilik). Türkçe'yi ayrıca yerelleştirme olarak ekle. Küresel plana göre birincil dil İngilizce olmalı; Türkçe kalırsa çevirisi olmayan ülkelerde Türkçe sayfa çıkabilir. İngilizce ad, alt başlık ve anahtar kelime taslakları planın 4. bölümünde.
 
 ### 2.5 Abonelikler ve ömür boyu satın alma (yaklaşık 40 dk)
 
