@@ -85,7 +85,7 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 
 1. **Bundle ID seç.** `com.murekkep.app` başkasına ait olabilir. Sana özel bir kimlik seç, örneğin `com.<soyadın>.murekkep`.
 2. developer.apple.com > Certificates, IDs & Profiles > **Identifiers** sayfasında bu Bundle ID'yi oluştur. "In-App Purchase" zaten açık gelir. Capabilities listesinde **Increased Memory Limit**'i de işaretle; yapay zekâ modeli iPad'in belleğine ancak bununla sığar.
-3. App Store Connect > Kullanıcılar ve Erişim > **Entegrasyonlar > App Store Connect API** sayfasında "App Manager" yetkili bir anahtar oluştur. `.p8` dosyasını indir, Key ID ile Issuer ID'yi not et.
+3. App Store Connect > Kullanıcılar ve Erişim > **Entegrasyonlar > App Store Connect API** sayfasında **Admin** yetkili bir anahtar oluştur (App Manager yetmiyor: Apple bulut imzasını yalnız Admin anahtarına veriyor). `.p8` dosyasını indir, Key ID ile Issuer ID'yi not et.
 **Durum (25 Ekim 2026):** App Store Connect API erişimi onaylandı; "Murekkep CI" adlı App Manager anahtarı oluşturuldu. Üç secret **Fujinonsense/MUREKKEP-CLAUDE** deposuna girildi (CI bu depoda çalışıyor; Fujibonita eski depo). `.p8` dosyası yalnız bir kez indirilebilir; kullanıcı saklıyor.
 
 4. GitHub'da MUREKKEP-CLAUDE > Settings > Secrets and variables > Actions sayfasına üç secret ekle:
@@ -95,6 +95,10 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 5. Bana iki şey yaz: Team ID ve Bundle ID. Team ID'yi developer.apple.com > Membership sayfasında bulursun; 10 harf ve rakamdan oluşur ve gizli değildir.
 6. Ben CI'a "imzala ve TestFlight'a yükle" adımını eklerim. Sertifika ve profil API anahtarıyla kendiliğinden oluşur. İlk denemede ufak bir hata çıkabilir; düzeltip yeniden çalıştırırım.
 **Durum (25 Ekim 2026):** adım yazıldı ve Fujinonsense'e gönderildi (a3227a1), henüz hiç çalıştırılmadı. Çalıştırmak için: Actions > Murekkep IPA Builder > Run workflow > `edition: appstore`, `testflight` kutusu işaretli. İmzasız arşiv alır, bellek izniyle ad hoc imzalar, Apple'ın bulutta tuttuğu dağıtım sertifikasıyla API anahtarı üzerinden dışa aktarır ve TestFlight'a yükler. Her yüklemenin build numarası 100 + çalıştırma numarası olur. Apple bulut imzasını App Manager anahtarına vermeyebilir; hata "cloud signing permission" derse Admin yetkili yeni bir anahtar oluşturulur, `ASC_KEY_ID` ve `ASC_KEY_P8` güncellenir (`ASC_ISSUER_ID` aynı kalır).
+**Durum (25 Ekim 2026, iki deneme):**
+- Run 40204167042: arşiv tamam, dışa aktarma `invalidPEMDocument` ile düştü. Secret'ta yalnız anahtarın gövdesi vardı (BEGIN/END satırları yoktu). `tools/asc_key.py` artık her yapıştırmayı katı PEM'e çeviriyor ve anahtarı build'den önce Apple'a soruyor (8ae2330).
+- Run 40207308022: anahtar Apple'da çalıştı ("Mürekkep, Apple ID 6826858468"), arşiv tamam, dışa aktarma `Cloud signing permission error` ile düştü. App Manager anahtarı bulut imzasına yetmiyor.
+- Sıradaki: Admin yetkili yeni anahtar → `ASC_KEY_ID` ve `ASC_KEY_P8` güncellenir → yeniden çalıştırılır.
 
 ### 2.4 Uygulama kaydı (yaklaşık 20 dk)
 
