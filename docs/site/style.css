@@ -38,4 +38,7 @@ h2 { font-size: 18px; margin: 28px 0 6px; }
 ul { padding-left: 20px; }
 li { margin: 6px 0; }
 li ul { margin: 4px 0; }
+/* lang.js shows one language; without it both stay visible. */
+html[lang="tr"] .bi [lang="en"], html[lang="en"] .bi [lang="tr"] { display: none; }
+nav a[aria-current="true"] { color: var(--text); font-weight: 600; }
 footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 14px; }
