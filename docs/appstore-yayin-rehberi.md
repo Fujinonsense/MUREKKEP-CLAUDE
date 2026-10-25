@@ -71,7 +71,7 @@ Bir şey farklıysa ekran görüntüsünü bana at.
 Bunlar olmadan abonelik satılamaz.
 
 1. App Store Connect > **İş (Business)** bölümüne gir.
-2. **Ücretli Uygulamalar Sözleşmesi**'ni (Paid Apps Agreement) kabul et.
+2. Önce **Edit Legal Entity** ile tüzel kişi bilgilerini (bireysel: ad, adres, il, posta kodu) gözden geçirip **Save** de; Apple bunu yapmadan Ücretli Uygulamalar Sözleşmesi'nde (Paid Apps Agreement) yalnız "View" gösterir. Sonra sözleşmeyi aç ve kabul et.
 3. Banka hesabını ekle (IBAN; TL hesabı olabilir).
 4. Vergi formunu doldur. ABD dışındaki bireyler için bu W-8BEN formudur.
 5. **AB "trader" beyanı** (App Store Connect > İş): AB'de satış için zorunlu. Trader olarak beyan edersen adresin, telefonun ve e-postan AB mağaza sayfasında herkese açık görünür. İki yol var: ayrı bir telefon ve posta kutusu kullan, ya da AB ülkelerini ilk sürümde satış listesinden çıkar ve sonra ekle. Ayrıntı: `Downloads\Murekkep-reklam\globale-acilma-plani.md`, bölüm 7.
@@ -122,7 +122,7 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 - `murekkep.pro.yearly` (6826912490): 1 yıl peşin, $24.99 / ₺899,99. "İlk hafta ücretsiz" tanıtım teklifi 175 ülkede açık, bitiş tarihi yok. "12 ay taahhütlü aylık" seçeneği kullanılmadı.
 - `murekkep.pro.lifetime` (6826913005, tüketilemeyen): $79.99 / ₺2.999,99.
 - Üçü de 175 ülkede satışta. İngilizce ve Türkçe ad ve açıklamaları var.
-- Eksik: her ürüne ödeme ekranının bir inceleme ekran görüntüsü (iPad'den alınacak). Ürünler ilk sürümle birlikte incelemeye gider. TestFlight'ta satın almayı denemek için Paid Apps sözleşmesi gerekiyor.
+- İnceleme ekran görüntüleri yüklendi (25 Ekim): kullanıcının iPad görüntülerinden ödeme penceresi, 2064×2752 (iPad 13" dikey; başka boyutu Apple reddediyor). Dosyalar `DownloadsMurekkep-AppStoreinceleme-ekranlari`. Ürünler ilk sürümle birlikte incelemeye gider. TestFlight'ta satın almayı denemek için Paid Apps sözleşmesi gerekiyor.
 
 1. Uygulama > **Abonelikler** sayfasında "Mürekkep Pro" adlı bir abonelik grubu oluştur.
 2. Gruba iki abonelik ekle:
