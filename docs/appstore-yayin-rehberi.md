@@ -81,7 +81,7 @@ Bunlar olmadan abonelik satılamaz.
 
 Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceksin.
 
-**Durum (25 Ekim 2026):** Team ID `DW66Y98N3Z`. App Store sürümünün kimliği **`com.murekkep.notebook`** ("Murekkep App Store"); In-App Purchase ve Increased Memory Limit açık, kaydedildi. Kişisel sürüm `com.murekkep.app` olarak kalır, böylece ikisi aynı iPad'de yan yana kurulabilir. Swift Playgrounds'un kendiliğinden açtığı `com.murekkep.app.DW66Y98N3Z` kullanılmıyor. CI'ın App Store derlemesi `PRODUCT_BUNDLE_IDENTIFIER` olarak `com.murekkep.notebook` kullanacak (imza adımı eklenirken).
+**Durum (25 Ekim 2026):** Team ID `DW66Y98N3Z`. App Store sürümünün kimliği **`com.murekkep.notebook`** ("Murekkep App Store"); In-App Purchase ve Increased Memory Limit açık, kaydedildi. Kişisel sürüm `com.murekkep.app` olarak kalır, böylece ikisi aynı iPad'de yan yana kurulabilir. Swift Playgrounds'un kendiliğinden açtığı `com.murekkep.app.DW66Y98N3Z` kullanılmıyor. CI'ın App Store derlemesi `PRODUCT_BUNDLE_IDENTIFIER` olarak `com.murekkep.notebook` ve sürüm 1.0 kullanıyor (a3227a1).
 
 1. **Bundle ID seç.** `com.murekkep.app` başkasına ait olabilir. Sana özel bir kimlik seç, örneğin `com.<soyadın>.murekkep`.
 2. developer.apple.com > Certificates, IDs & Profiles > **Identifiers** sayfasında bu Bundle ID'yi oluştur. "In-App Purchase" zaten açık gelir. Capabilities listesinde **Increased Memory Limit**'i de işaretle; yapay zekâ modeli iPad'in belleğine ancak bununla sığar.
@@ -94,6 +94,7 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
    - `ASC_KEY_P8`: `.p8` dosyasının içeriği.
 5. Bana iki şey yaz: Team ID ve Bundle ID. Team ID'yi developer.apple.com > Membership sayfasında bulursun; 10 harf ve rakamdan oluşur ve gizli değildir.
 6. Ben CI'a "imzala ve TestFlight'a yükle" adımını eklerim. Sertifika ve profil API anahtarıyla kendiliğinden oluşur. İlk denemede ufak bir hata çıkabilir; düzeltip yeniden çalıştırırım.
+**Durum (25 Ekim 2026):** adım yazıldı ve Fujinonsense'e gönderildi (a3227a1), henüz hiç çalıştırılmadı. Çalıştırmak için: Actions > Murekkep IPA Builder > Run workflow > `edition: appstore`, `testflight` kutusu işaretli. İmzasız arşiv alır, bellek izniyle ad hoc imzalar, Apple'ın bulutta tuttuğu dağıtım sertifikasıyla API anahtarı üzerinden dışa aktarır ve TestFlight'a yükler. Her yüklemenin build numarası 100 + çalıştırma numarası olur. Apple bulut imzasını App Manager anahtarına vermeyebilir; hata "cloud signing permission" derse Admin yetkili yeni bir anahtar oluşturulur, `ASC_KEY_ID` ve `ASC_KEY_P8` güncellenir (`ASC_ISSUER_ID` aynı kalır).
 
 ### 2.4 Uygulama kaydı (yaklaşık 20 dk)
 
