@@ -13,6 +13,10 @@ on:
         type: choice
         options: [personal, appstore]
         default: personal
+      testflight:
+        description: "App Store surumunu imzalayip TestFlight'a yukle (yalnizca edition: appstore)"
+        type: boolean
+        default: false
   push:
     branches: [ main, master ]
 
@@ -24,6 +28,7 @@ jobs:
     runs-on: ${{ inputs.runner || 'macos-26' }}
     env:
       EDITION: ${{ inputs.edition || 'personal' }}
+      TESTFLIGHT: ${{ inputs.testflight && 'yes' || 'no' }}
     steps:
       - name: Projeyi Indir
         uses: actions/checkout@v4
@@ -371,6 +376,7 @@ jobs:
           # project.yml'den MLX'siz proje kesilmeden once eklenir; uc derleme de bayragi alir.
           if [ "$EDITION" = "appstore" ]; then
           python3 - << 'PYEOF'
+          import os
           for name in ["project.yml", "project-plain.yml"]:
               text = open(name, encoding="utf-8").read()
               if "MUREKKEP_PLAIN" in text:
@@ -382,6 +388,15 @@ jobs:
               # iPad only: marked for iPhone too, review would want iPhone screenshots and test it there.
               text = text.replace("TARGETED_DEVICE_FAMILY: \"1,2\"", "TARGETED_DEVICE_FAMILY: \"2\"")
               assert "TARGETED_DEVICE_FAMILY: \"2\"" in text, name
+              # Its own bundle ID (App Store Connect: Murekkep, team DW66Y98N3Z), so it installs next to
+              # the personal build; version 1.0 on the store, and a new build number for every upload.
+              text = text.replace("PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app",
+                                  "PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.notebook")
+              text = text.replace("MARKETING_VERSION: \"3.0\"", "MARKETING_VERSION: \"1.0\"")
+              if os.environ.get("TESTFLIGHT") == "yes":
+                  build = 100 + int(os.environ["GITHUB_RUN_NUMBER"])
+                  text = text.replace("CURRENT_PROJECT_VERSION: \"29\"", f"CURRENT_PROJECT_VERSION: \"{build}\"")
+              assert "com.murekkep.notebook" in text and "MARKETING_VERSION: \"1.0\"" in text, name
               open(name, "w", encoding="utf-8").write(text)
           PYEOF
           fi
@@ -511,10 +526,81 @@ jobs:
           zip -qry "$IPA" Payload
           ls -la "$IPA"
 
+      # App Store edition, only when asked: an unsigned archive of the project that built above (no
+      # development profile or registered device needed), signed ad hoc with the larger memory limit so
+      # the entitlement survives, then exported with Apple's cloud-managed distribution certificate
+      # through the App Store Connect API key and uploaded to TestFlight.
+      - name: TestFlight'a Yukle
+        if: inputs.testflight && inputs.edition == 'appstore'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          set -o pipefail
+          KEY="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          if ! xcodebuild -project Murekkep.xcodeproj \
+            -scheme Murekkep \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Murekkep.xcarchive \
+            -derivedDataPath build \
+            -clonedSourcePackagesDirPath spm \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive 2>&1 | tee archive.log; then
+            echo "::error::Arsiv alinamadi."
+            exit 1
+          fi
+          APP=build/Murekkep.xcarchive/Products/Applications/Murekkep.app
+          find "$APP" -name "*.framework" -o -name "*.dylib" | while read -r f; do
+            codesign --force --sign - "$f"
+          done
+          codesign --force --sign - --entitlements AppSource/Murekkep.entitlements --generate-entitlement-der "$APP"
+          cat > ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>destination</key>
+              <string>upload</string>
+              <key>teamID</key>
+              <string>DW66Y98N3Z</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>uploadSymbols</key>
+              <false/>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+          if ! xcodebuild -exportArchive \
+            -archivePath build/Murekkep.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath export \
+            "${AUTH[@]}" 2>&1 | tee export.log; then
+            if grep -qiE "cloud signing permission|cloud managed distribution" export.log; then
+              echo "::error::Apple bulut imzasi bu API anahtariyla calismadi; anahtarin Admin yetkisi gerekiyor. App Store Connect > Integrations'ta Admin yetkili yeni bir anahtar olustur, ASC_KEY_ID ve ASC_KEY_P8 secret'larini guncelle."
+            fi
+            grep -E "error:|Error" export.log | sort -u | head -40 || true
+            exit 1
+          fi
+          echo "TestFlight'a yuklendi: App Store Connect > TestFlight'ta 15-30 dakikada 'Test Edilebilir' olur."
+
       - name: Derleme Hatalarini Goster
         if: failure()
         run: |
-          for f in build.log build-nomlx.log build-plain.log; do
+          for f in build.log build-nomlx.log build-plain.log archive.log export.log; do
             if [ -f "$f" ]; then
               echo "== $f"
               grep -E "error:|warning: .*(will be an error|unable to type-check)" "$f" | sort -u | head -80 || true

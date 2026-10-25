@@ -172,3 +172,39 @@ def test_the_ipa_asks_for_the_larger_memory_limit(job):
     pack = step_with(job, "zip -qry")["run"]
     assert "--entitlements AppSource/Murekkep.entitlements" in pack
     assert pack.index("--entitlements") < pack.index("zip -qry")
+
+
+def test_testflight_upload_is_opt_in():
+    # Signing and uploading cost minutes and only make sense for the App Store edition: off unless asked.
+    triggers = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))[True]
+    upload = triggers["workflow_dispatch"]["inputs"]["testflight"]
+    assert upload["type"] == "boolean" and upload["default"] is False
+
+
+def test_app_store_edition_has_its_own_bundle_id_and_version(job):
+    # App Store Connect: Mürekkep, com.murekkep.notebook (team DW66Y98N3Z), version 1.0; the personal
+    # build stays com.murekkep.app, so both can be installed on one iPad.
+    script = step_with(job, 'if [ "$EDITION" = "appstore" ]')["run"]
+    assert '"PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.notebook"' in script
+    assert 'MARKETING_VERSION: \\"1.0\\"' in script
+    assert "GITHUB_RUN_NUMBER" in script  # every upload a new build number
+
+
+def test_testflight_step_signs_in_the_cloud_and_uploads(job):
+    step = step_with(job, "-exportArchive")
+    condition = str(step.get("if", ""))
+    assert "inputs.testflight" in condition and "appstore" in condition
+    script = step["run"]
+    # An unsigned archive (no development profile or registered device needed), signed ad hoc with the
+    # larger memory limit so the entitlement survives the export's re-signing.
+    assert "CODE_SIGNING_ALLOWED=NO" in script and "archive 2>&1" in script
+    assert "--entitlements AppSource/Murekkep.entitlements" in script
+    for flag in ("-allowProvisioningUpdates", "-authenticationKeyPath", "-authenticationKeyID",
+                 "-authenticationKeyIssuerID"):
+        assert flag in script
+    assert "<string>app-store-connect</string>" in script and "<string>upload</string>" in script
+    assert "<string>DW66Y98N3Z</string>" in script
+    for name in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_P8"):
+        assert step["env"][name] == "${{ secrets.%s }}" % name
+    # The private key never outlives the step.
+    assert "trap 'rm -f \"$KEY\"' EXIT" in script
