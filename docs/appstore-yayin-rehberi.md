@@ -98,7 +98,8 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 **Durum (25 Ekim 2026, iki deneme):**
 - Run 40204167042: arşiv tamam, dışa aktarma `invalidPEMDocument` ile düştü. Secret'ta yalnız anahtarın gövdesi vardı (BEGIN/END satırları yoktu). `tools/asc_key.py` artık her yapıştırmayı katı PEM'e çeviriyor ve anahtarı build'den önce Apple'a soruyor (8ae2330).
 - Run 40207308022: anahtar Apple'da çalıştı ("Mürekkep, Apple ID 6826858468"), arşiv tamam, dışa aktarma `Cloud signing permission error` ile düştü. App Manager anahtarı bulut imzasına yetmiyor.
-- Sıradaki: Admin yetkili yeni anahtar → `ASC_KEY_ID` ve `ASC_KEY_P8` güncellenir → yeniden çalıştırılır.
+- Admin anahtarı "Murekkep CI Admin" (Key ID `7T62YL32F2`) oluşturuldu; `ASC_KEY_ID` ve `ASC_KEY_P8` güncellendi. Eski App Manager anahtarı `CUP7X4WHX8` artık kullanılmıyor.
+- **Run 40216278389: TestFlight'a yüklendi.** Build **1.0 (109)**, 25 Ekim 21:49'da App Store Connect'te "Processing". Toplam yaklaşık 85 dk sürdü (Intel Mac'te derleme 38 dk, arşiv ve yükleme 44 dk).
 
 ### 2.4 Uygulama kaydı (yaklaşık 20 dk)
 
