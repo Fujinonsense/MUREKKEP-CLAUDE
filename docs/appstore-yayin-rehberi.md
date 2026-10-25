@@ -81,6 +81,8 @@ Bunlar olmadan abonelik satılamaz.
 
 Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceksin.
 
+**Durum (25 Ekim 2026):** Team ID `DW66Y98N3Z`. App Store sürümünün kimliği **`com.murekkep.notebook`** ("Murekkep App Store"); In-App Purchase ve Increased Memory Limit açık, kaydedildi. Kişisel sürüm `com.murekkep.app` olarak kalır, böylece ikisi aynı iPad'de yan yana kurulabilir. Swift Playgrounds'un kendiliğinden açtığı `com.murekkep.app.DW66Y98N3Z` kullanılmıyor. CI'ın App Store derlemesi `PRODUCT_BUNDLE_IDENTIFIER` olarak `com.murekkep.notebook` kullanacak (imza adımı eklenirken).
+
 1. **Bundle ID seç.** `com.murekkep.app` başkasına ait olabilir. Sana özel bir kimlik seç, örneğin `com.<soyadın>.murekkep`.
 2. developer.apple.com > Certificates, IDs & Profiles > **Identifiers** sayfasında bu Bundle ID'yi oluştur. "In-App Purchase" zaten açık gelir. Capabilities listesinde **Increased Memory Limit**'i de işaretle; yapay zekâ modeli iPad'in belleğine ancak bununla sığar.
 3. App Store Connect > Kullanıcılar ve Erişim > **Entegrasyonlar > App Store Connect API** sayfasında "App Manager" yetkili bir anahtar oluştur. `.p8` dosyasını indir, Key ID ile Issuer ID'yi not et.
