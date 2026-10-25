@@ -86,6 +86,8 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 1. **Bundle ID seç.** `com.murekkep.app` başkasına ait olabilir. Sana özel bir kimlik seç, örneğin `com.<soyadın>.murekkep`.
 2. developer.apple.com > Certificates, IDs & Profiles > **Identifiers** sayfasında bu Bundle ID'yi oluştur. "In-App Purchase" zaten açık gelir. Capabilities listesinde **Increased Memory Limit**'i de işaretle; yapay zekâ modeli iPad'in belleğine ancak bununla sığar.
 3. App Store Connect > Kullanıcılar ve Erişim > **Entegrasyonlar > App Store Connect API** sayfasında "App Manager" yetkili bir anahtar oluştur. `.p8` dosyasını indir, Key ID ile Issuer ID'yi not et.
+**Durum (25 Ekim 2026):** App Store Connect API erişimi onaylandı; "Murekkep CI" adlı App Manager anahtarı oluşturuldu. Üç secret **Fujinonsense/MUREKKEP-CLAUDE** deposuna girildi (CI bu depoda çalışıyor; Fujibonita eski depo). `.p8` dosyası yalnız bir kez indirilebilir; kullanıcı saklıyor.
+
 4. GitHub'da MUREKKEP-CLAUDE > Settings > Secrets and variables > Actions sayfasına üç secret ekle:
    - `ASC_KEY_ID`
    - `ASC_ISSUER_ID`
