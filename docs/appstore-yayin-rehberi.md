@@ -103,7 +103,7 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 
 ### 2.4 Uygulama kaydı (yaklaşık 20 dk)
 
-**Durum (25 Ekim 2026):** kayıt açıldı. Ad **Mürekkep**, Apple ID `6826858468`, SKU `murekkep-001`, Bundle ID `com.murekkep.notebook`, birincil dil English (U.S.), kategori Eğitim + Verimlilik. Sürüm 1.0, "Prepare for Submission".
+**Durum (25 Ekim 2026):** kayıt açıldı. Ad **Mürekkep: Handwriting Notes** (önce "Mürekkep" konmuştu; kullanıcı aynı adlı başka bir uygulama görünce 25 Ekim akşamı ilk öneriye döndük; ana ekrandaki ad yine "Mürekkep"), Apple ID `6826858468`, SKU `murekkep-001`, Bundle ID `com.murekkep.notebook`, birincil dil English (U.S.), kategori Eğitim + Verimlilik. Sürüm 1.0, "Prepare for Submission".
 
 1. App Store Connect > Uygulamalar > **+ Yeni Uygulama** sayfasını aç:
    - platform: iOS,
@@ -115,6 +115,14 @@ Anahtarları bana yazma. Onları yalnızca sen GitHub'a "secret" olarak gireceks
 ### 2.5 Abonelikler ve ömür boyu satın alma (yaklaşık 40 dk)
 
 Ürün kimlikleri koddakilerle harfi harfine **aynı** olmalı.
+
+**Durum (25 Ekim 2026):** kuruldu, durumları "Prepare for Submission".
+- Abonelik grubu **Mürekkep Pro** (ID 22513408). Görünen ad İngilizce ve Türkçe "Mürekkep Pro".
+- `murekkep.pro.monthly` (Apple ID 6826911140): $3.99 / ₺129,99. ₺129,99 Türk lirası listesinin ana kısmında yok; "See Additional Prices" altında.
+- `murekkep.pro.yearly` (6826912490): 1 yıl peşin, $24.99 / ₺899,99. "İlk hafta ücretsiz" tanıtım teklifi 175 ülkede açık, bitiş tarihi yok. "12 ay taahhütlü aylık" seçeneği kullanılmadı.
+- `murekkep.pro.lifetime` (6826913005, tüketilemeyen): $79.99 / ₺2.999,99.
+- Üçü de 175 ülkede satışta. İngilizce ve Türkçe ad ve açıklamaları var.
+- Eksik: her ürüne ödeme ekranının bir inceleme ekran görüntüsü (iPad'den alınacak). Ürünler ilk sürümle birlikte incelemeye gider. TestFlight'ta satın almayı denemek için Paid Apps sözleşmesi gerekiyor.
 
 1. Uygulama > **Abonelikler** sayfasında "Mürekkep Pro" adlı bir abonelik grubu oluştur.
 2. Gruba iki abonelik ekle:
