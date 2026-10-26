@@ -469,22 +469,24 @@ static float3 shadeWave(float3 base, float x, float2 n2, float sq, float2 P, flo
     return saturate(col + float3(spec));
 }
 
-static void curlingSeaWave(float2 q, float2 dir, float scale, float amp, float L, float t, float seed,
-                           thread float& h, thread float2& g, thread float& breaker) {
-    float k = 6.2831853 / (L * scale);
-    float w = 2.6 / sqrt(scale);
-    float rawPhase = dot(dir, q) * k - w * t + seed;
-    float warpedPhase = rawPhase + 0.42 * sin(rawPhase);
-    float sn = max(0.5 + 0.5 * sin(warpedPhase), 1e-3);
-    float waveH = powr(sn, 2.1);
-    h += amp * waveH;
-
-    float dWarped = 1.0 + 0.42 * cos(rawPhase);
-    float dWave = amp * 2.1 * powr(sn, 1.1) * 0.5 * cos(warpedPhase) * dWarped * k;
-    g += dWave * dir;
-
-    float frontFace = saturate(cos(rawPhase - 0.55));
-    breaker += amp * powr(max(waveH, 1e-4), 2.2) * (0.65 + 0.35 * frontFace);
+// The sea pen's waves: three trains rolling along the line with the current, their crests a little
+// oblique, the wavelength following the line's width. Returns the height (0 trough .. 1 crest) and
+// the slope along and across the line (height units per point).
+static float seaSwell(float arc, float v, float t, float L, float seed, thread float2& slope) {
+    float k0 = 6.2831853 / L;
+    float k1 = 6.2831853 / (L * 0.62);
+    float k2 = 6.2831853 / (L * 0.41);
+    float p0 = k0 * (arc + v * 0.35) - 3.0 * t + seed * 3.1;
+    float p1 = k1 * (arc - v * 0.28) - 3.8 * t + seed * 4.8 + 1.3;
+    float p2 = k2 * (arc + v * 0.15) - 4.6 * t + seed * 6.5 + 2.9;
+    float w0 = max(0.5 + 0.5 * sin(p0), 1e-3);
+    float w1 = max(0.5 + 0.5 * sin(p1), 1e-3);
+    float w2 = max(0.5 + 0.5 * sin(p2), 1e-3);
+    float g0 = 0.55 * 0.8 * powr(w0, 0.6) * cos(p0) * k0;
+    float g1 = 0.30 * 0.9 * powr(w1, 0.8) * cos(p1) * k1;
+    float g2 = 0.15 * 1.0 * w2 * cos(p2) * k2;
+    slope = float2(g0 + g1 + g2, g0 * 0.35 - g1 * 0.28 + g2 * 0.15);
+    return 0.55 * powr(w0, 1.6) + 0.30 * powr(w1, 1.8) + 0.15 * powr(w2, 2.0);
 }
 
 static float3 tubeLight(float3 col, float2 n2, float x, float sq, float gloss, float strength) {
@@ -531,76 +533,70 @@ fragment InkOut ink_fragment(RibbonOut in [[stage_in]],
     float alphaScale = 1.0;
 
     if (s.brush == BRUSH_SEA) {
+        // A sea flowing along the line: the water, its caustic nets and foam all slide with the
+        // current, waves roll along it, turquoise shallows and breaking foam line both shores and the
+        // shoreline itself surges with the waves. Patterns are sized from the line's set width and
+        // blurred by the pixel size, so thin handwriting stays a smooth banded line with a foamy rim.
         float t = fu.waveTime;
-        float L = max(r * 2.35, 6.5);
-        float curveLag = sacross * sacross * r * 0.52;
-        float2 wq = float2(arc - curveLag, sacross * r);
+        float rN = max(s.width * 0.5, 0.5);
+        float L = max(rN * 2.4, 7.0);
+        float detail = smoothstep(2.0, 6.0, rN / px);
+        float u = arc - t * rN * 1.5;
+        float v = sacross * r;
+        float2 slope;
+        float hN = seaSwell(arc, v, t, L, s.seed, slope);
 
-        float hsum = 0.0;
-        float2 grad = float2(0.0);
-        float breaker = 0.0;
-        curlingSeaWave(wq, float2(1.0, 0.0),    1.00, 1.00, L, t * 1.15, s.seed * 3.1,       hsum, grad, breaker);
-        curlingSeaWave(wq, float2(0.93, 0.36),  0.58, 0.52, L, t * 1.25, s.seed * 4.8 + 1.3, hsum, grad, breaker);
-        curlingSeaWave(wq, float2(0.92, -0.39), 0.38, 0.36, L, t * 1.35, s.seed * 6.5 + 2.9, hsum, grad, breaker);
-        curlingSeaWave(wq, float2(0.98, 0.18),  0.24, 0.22, L, t * 1.50, s.seed * 8.1 + 0.7, hsum, grad, breaker);
-
-        float hN = hsum / 2.10;
-        float breakN = breaker / 1.65;
-
-        float shoreSurge = sin(arc / L * 6.2831853 - t * 2.6 + s.seed * 5.0 + step(0.0, sacross) * 1.5);
-        float shoreNoise = valueNoise(float2(arc / max(r * 0.7, 1.2) - t * 0.9, sacross * 3.0) + s.seed * 9.0) - 0.5;
-        float rDynamic = r * (0.95 + 0.09 * hN + 0.06 * shoreSurge + 0.04 * shoreNoise);
-        float cov = clamp((rDynamic - d) / (px * 1.2) + 0.5, 0.0, 1.0);
+        float side = sacross < 0.0 ? -1.0 : 1.0;
+        float surge = sin(arc / L * 6.2831853 - 2.6 * t + s.seed * 5.0 + side * 1.6);
+        float rDyn = r * (0.97 + 0.06 * surge + 0.05 * hN);
+        float cov = clamp((rDyn - d) / (px * 1.2) + 0.5, 0.0, 1.0);
         if (cov <= 0.0) {
             discard_fragment();
         }
-
-        float xDyn = clamp(d / max(rDynamic, 1e-4), 0.0, 1.0);
+        float xDyn = clamp(d / max(rDyn, 1e-4), 0.0, 1.0);
         float sqDyn = sqrt(saturate(1.0 - xDyn * xDyn));
 
-        float2 slope = grad * (L * 0.085);
         float2 nLeft = float2(-tdir.y, tdir.x);
-        float3 N = normalize(float3(-(slope.x * tdir + slope.y * nLeft) + n2 * (xDyn / max(sqDyn, 0.18)) * 0.42, 1.0));
+        float2 slopeP = slope.x * tdir + slope.y * nLeft;
+        float3 N = normalize(float3(-slopeP * (rN * 0.45) + n2 * (xDyn / max(sqDyn, 0.18)) * 0.35, 1.0));
 
         float3 base = s.color.rgb;
         float3 deep = base * float3(0.20, 0.38, 0.68);
         float3 midSea = mix(base, float3(0.05, 0.66, 0.78), 0.58);
         float3 shallow = mix(base, float3(0.36, 0.96, 0.88), 0.78);
-        float depth = smoothstep(0.15, 0.92, sqDyn * (0.85 + 0.15 * hN));
+        float depth = smoothstep(0.45, 1.0, sqDyn * (0.88 - 0.22 * hN)) * (0.65 + 0.35 * detail);
         float3 water = depth < 0.5 ? mix(shallow, midSea, depth * 2.0) : mix(midSea, deep, (depth - 0.5) * 2.0);
+        water = mix(water, mix(shallow, float3(0.50, 0.96, 0.90), 0.4), smoothstep(0.55, 1.0, hN) * 0.50 * (1.0 - 0.3 * depth));
+        water *= (0.78 + 0.22 * hN) * (0.92 + 0.50 * (dot(N, kLight) - kLight.z));
 
-        float sss = smoothstep(0.35, 0.90, hN) * (1.0 - 0.35 * depth);
-        water += float3(0.12, 0.92, 0.84) * sss * 0.34;
-        water *= (0.80 + 0.38 * hN) * (1.0 + 0.65 * (dot(N, kLight) - kLight.z));
-
-        float cs = max(max(r * 0.95, 2.2), px * 12.0);
-        float2 cq = (wq + float2(-t * r * 1.05, 0.0)) / cs + slope * 0.75 + s.seed * 11.0;
-        float e1 = waterCells(cq, t * 1.45);
-        float e2 = waterCells(cq * 1.75 + float2(3.1 - t * 0.35, 7.7), t * 1.85 + 2.0);
-        float pxc = px / cs;
-        float caust = (1.0 - smoothstep(0.0, 0.08 + pxc * 1.4, e1)) * 0.80
-                    + (1.0 - smoothstep(0.0, 0.06 + pxc * 2.2, e2)) * 0.45;
-        water += float3(0.62, 0.96, 1.0) * caust * mix(0.85, 0.22, depth);
+        float cs = max(rN * 0.9, 3.0);
+        float aa = px / cs;
+        float2 cq = float2(u, v) / cs + slope * 0.6 + s.seed * 11.0;
+        float e1 = waterCells(cq, t * 1.3);
+        float e2 = waterCells(cq * 1.8 + float2(3.1, 7.7), -t * 1.6 + 2.0);
+        float caust = powr(saturate(1.0 - e1 / (0.28 + aa * 2.2)), 1.6) * 0.25
+                    + powr(saturate(1.0 - e2 / (0.20 + aa * 2.6)), 1.6) * 0.12;
+        water += float3(0.60, 0.97, 1.0) * caust * detail * smoothstep(0.25, 0.7, depth) * 0.7;
 
         float fresnel = powr(saturate(1.0 - N.z), 2.6);
-        water = mix(water, envColor(reflectView(N), float3(0.88, 0.96, 1.0)), fresnel * 0.36);
+        water = mix(water, envColor(reflectView(N), float3(0.88, 0.96, 1.0)), fresnel * 0.32);
 
-        float2 foamUV = float2(arc / max(r * 0.45, 1.0) - t * 1.6, sacross * 3.4) + slope * 0.8;
-        float3 vFoam = voronoiDetail(foamUV * 1.8, t * 2.2);
-        float foamWeb = 1.0 - smoothstep(0.0, 0.16, vFoam.x);
-        float fn = fbm(foamUV * 0.7 + s.seed * 7.0);
-
-        float whitecap = smoothstep(0.42, 0.78, breakN + (fn - 0.5) * 0.28);
-        float trailingLace = smoothstep(0.22, 0.58, breakN) * foamWeb * smoothstep(0.38, 0.68, fn);
-        float shoreZone = smoothstep(0.70, 0.94, xDyn + 0.10 * shoreSurge + 0.12 * (fn - 0.5));
-        float shoreFoam = shoreZone * (0.45 + 0.55 * foamWeb);
-
-        float foam = saturate(whitecap * (0.65 + 0.35 * foamWeb) + trailingLace * 0.75 + shoreFoam * 0.90);
-        float3 foamColor = float3(0.96, 0.99, 1.0) * (0.88 + 0.14 * dot(N, kLight));
+        float fw = max(rN * 0.5, 1.0);
+        float3 vF = voronoiDetail(float2(u / fw, sacross * 3.0) * 1.2 + s.seed * 3.0, t * 2.0);
+        float web = 1.0 - smoothstep(0.0, 0.18 + (px / fw) * 1.5, vF.x);
+        float fn = valueNoise(float2(u / max(rN * 0.8, 1.5), sacross * 2.0) + s.seed * 7.0);
+        float shoreLine = 0.70 + 0.09 * surge + 0.10 * (fn - 0.5);
+        float shoreFoam = smoothstep(shoreLine - 0.16, shoreLine + 0.04, xDyn) * (0.55 + 0.45 * web) * (0.55 + 0.45 * detail);
+        float edgeLine = smoothstep(0.90, 0.985, xDyn) * 0.8;
+        float streak = valueNoise(float2(u / max(rN * 1.6, 2.0), sacross * 5.0) + s.seed * 4.0);
+        float spill = smoothstep(0.40, 0.90, xDyn) * smoothstep(0.55, 0.85, streak) * 0.45 * detail;
+        float cap = smoothstep(0.72, 0.95, hN + (fn - 0.5) * 0.25) * (0.35 + 0.65 * web) * detail;
+        float foam = saturate(max(shoreFoam * 0.9, edgeLine) + spill + cap * 0.65);
+        float3 foamColor = float3(0.96, 0.99, 1.0) * (0.90 + 0.12 * dot(N, kLight));
         water = mix(water, foamColor, foam);
 
         float nh = saturate(dot(N, kHalf));
-        float glint = powr(nh, 140.0) * 1.35 * (1.0 - foam * 0.65) + powr(nh, 28.0) * 0.18;
+        float glint = powr(nh, 120.0) * 1.2 * (1.0 - foam * 0.6) + powr(nh, 400.0) * 1.0 + powr(nh, 24.0) * 0.14;
         col = saturate(water + float3(glint));
         alpha = cov * s.color.a;
     } else if (s.brush == BRUSH_LAVA) {

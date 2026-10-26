@@ -120,11 +120,13 @@ enum FlatInk {
         case .wave:
             drawPolyline(s.points, color: color(s.color, lighten: 0.12), widthScale: 1, in: ctx)
         case .sea:
-            drawPolyline(s.points, color: color(s.color, lighten: 0.1), widthScale: 0.9, in: ctx)
-            drawAlong(s, every: { max($0 * 3.4, 5) }, in: ctx) { p, r, c in
-                c.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.9))
-                c.fillEllipse(in: CGRect(x: p.x - r * 0.45, y: p.y - r * 0.8, width: r * 0.9, height: r * 1.6))
-            }
+            // As the shader draws it: foam along both shores, the water over it, turquoise shallows.
+            drawPolyline(s.points, color: CGColor(red: 0.97, green: 0.99, blue: 1, alpha: 0.85 * CGFloat(s.color.a)),
+                         widthScale: 1.02, in: ctx)
+            drawPolyline(s.points, color: color(s.color, lighten: 0.1), widthScale: 0.78, in: ctx)
+            let sh = color(InkColor(s.color.r + (0.36 - s.color.r) * 0.7, s.color.g + (0.96 - s.color.g) * 0.7,
+                                    s.color.b + (0.88 - s.color.b) * 0.7, s.color.a * 0.75))
+            drawPolyline(s.points, color: sh, widthScale: 0.32, in: ctx)
         case .lava:
             // Exports show the cooled crust with glowing cracks.
             drawPolyline(s.points, color: CGColor(red: 0.13, green: 0.08, blue: 0.07, alpha: 1), widthScale: 1, in: ctx)
