@@ -340,6 +340,18 @@ for (name, text) in [("poppler", fixture), ("pdfkit-like", pdfKitLike(fixture))]
     }
     check(answers[8] == "-", "\(name) (8): a graph is the model's", got: answers[8] ?? "nil")
 }
+// The same page as the iPad reads it: PDFKit's own text (tools/pdfkit_probe on Codemagic's Mac),
+// with the "and" between blanks lost, words glued to the math and minus signs glued to numbers.
+let pdfKit = (try? String(contentsOfFile: root + "/tests/fixtures/calculus_p14_pdfkit.txt", encoding: .utf8)) ?? ""
+check(pdfKit.count == 1628, "PDFKit's text fixture is read whole", got: "\(pdfKit.count)")
+let onIPad = pageAnswers(pdfKit)
+check(onIPad.count == 18, "PDFKit: 18 questions split", got: "\(onIPad.keys.sorted())")
+for (n, a) in mustSolve.sorted(by: { $0.key < $1.key }) {
+    check(onIPad[n] == a, "PDFKit (\(n)): \(a)", got: onIPad[n] ?? "nil")
+}
+for (n, a) in mayLeave.sorted(by: { $0.key < $1.key }) {
+    check(onIPad[n] == a || onIPad[n] == "-", "PDFKit (\(n)): right or the model's", got: onIPad[n] ?? "nil")
+}
 let poppler = pageAnswers(fixture)
 check([12, 14, 15, 17, 18].allSatisfy { poppler[$0] == mayLeave[$0] }, "poppler: the split fractions and the quadratic in |x + 3| are solved",
       got: [12, 14, 15, 17, 18].map { "\($0): \(poppler[$0] ?? "nil")" }.joined(separator: " | "))

@@ -805,6 +805,8 @@ enum ExactMath {
         guard tokens.count >= 2 else { return false }
         let operand = operandEdges(tokens)
         for k in 1..<tokens.count where operand[k - 1].ends && operand[k].starts {
+            // A minus glued to the number after it is a subtraction ("|x² −11|", as PDFKit spaces it).
+            if "-−–".contains(tokens[k].first!) { continue }
             let coefficient = tokens[k - 1].allSatisfy(\.isNumber) && (tokens[k].first!.isLetter || tokens[k].first == "(")
             if !coefficient { return true }
         }
@@ -863,8 +865,15 @@ enum ExactMath {
         var intervals: Bool
     }
 
+    /// Words a PDF's text layer glued to the math set apart ("inequality−15 ≤x≤7", "|x−a|≤bwhere"),
+    /// so the runs of math are whole.
+    private static func unglued(_ s: String) -> String {
+        s.replacingOccurrences(of: "([A-Za-z]{2,})([-−–])(?=[0-9])", with: "$1 $2", options: .regularExpression)
+            .replacingOccurrences(of: "([≤≥<>=] ?[A-Za-z])(where|and|or)\\b", with: "$1 $2", options: .regularExpression)
+    }
+
     static func read(_ raw: String) -> Reading? {
-        let stem = MathText.restoredSquares(MathText.unifiedMath(raw))
+        let stem = unglued(MathText.restoredSquares(MathText.unifiedMath(raw)))
         let lower = stem.lowercased()
         guard !notSolving.contains(where: { lower.contains($0) }) else { return nil }
         let blanks = blanks(in: stem)
