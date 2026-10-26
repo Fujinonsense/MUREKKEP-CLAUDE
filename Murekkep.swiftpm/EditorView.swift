@@ -51,6 +51,9 @@ struct EditorContent: View {
     @State private var showAngle = false
     @State private var showNavigator = false
     @State private var showLecture = false
+    /// The break corner's game panel, over the bottom-left of the page.
+    @State private var showGames = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sidePanel: Bool { horizontalSizeClass == .regular }
 
@@ -168,16 +171,22 @@ struct EditorContent: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showLecture)
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.placingSticker != nil)
 
-                // The writing sound's switch, tucked into the bottom-left corner (off by default).
+                // The writing sound's switch, tucked into the bottom-left corner (off by default), and
+                // beside it the break corner's icon (away while a lecture is recorded).
                 VStack {
                     Spacer()
-                    HStack {
+                    HStack(spacing: 2) {
                         PaperSoundCornerButton(settings: settings)
+                        if !lecture.isRecording {
+                            GameCornerButton(isOpen: $showGames)
+                                .transition(.opacity)
+                        }
                         Spacer()
                     }
                 }
                 .padding(.leading, 6)
                 .padding(.bottom, 6 + bottomClearance)
+                .animation(.easeInOut(duration: 0.2), value: lecture.isRecording)
 
                 VStack {
                     Spacer()
@@ -203,6 +212,15 @@ struct EditorContent: View {
                     }
                     .padding(16)
                     .padding(.bottom, bottomClearance)
+                }
+
+                // The break corner's games, above their icon and clear of the drafting rail and the pen bar.
+                if showGames {
+                    GameCornerPanel { closeGames() }
+                        .padding(.leading, gamePanelLeading)
+                        .padding(.bottom, 56 + bottomClearance)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .transition(GameCorner.transition(reduceMotion: reduceMotion))
                 }
 
                 if let error = editor.loadError {
@@ -382,6 +400,9 @@ struct EditorContent: View {
         .onChange(of: lecture.takes.isEmpty) { _, empty in
             if empty { setLecturePlayer(false) }
         }
+        .onChange(of: lecture.isRecording) { _, recording in
+            if recording { closeGames() }
+        }
         .onDisappear {
             assistant.cancel()
             lecture.finish()
@@ -437,6 +458,18 @@ struct EditorContent: View {
 }
 
 private extension EditorContent {
+    /// Where the game panel's left edge stands: past the drafting rail (12…62 pt) when the rail
+    /// shows, at the margin when the page is clean; never off the right of a narrow canvas.
+    var gamePanelLeading: CGFloat {
+        let wanted: CGFloat = paletteCollapsed ? 12 : 72
+        return max(12, min(wanted, canvasSize.width - GameCorner.panelSize.width - 12))
+    }
+
+    func closeGames() {
+        guard showGames else { return }
+        withAnimation(GameCorner.animation(reduceMotion: reduceMotion)) { showGames = false }
+    }
+
     /// The pen bar's room along each edge; down the right side it keeps clear of the page badge.
     func paletteInsets(_ edge: PaletteEdge) -> EdgeInsets {
         switch edge {
