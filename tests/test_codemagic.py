@@ -50,8 +50,8 @@ def test_every_script_maps_codemagic_names_to_githubs(flow):
     assert 100 + int(out.stdout.strip()) > 109
 
 
-def test_xcode_is_pinned_to_the_one_that_uploaded(flow):
-    assert flow["environment"]["xcode"] == make_codemagic.XCODE == "26.6"
+def test_xcode_is_pinned(flow):
+    assert flow["environment"]["xcode"] == make_codemagic.XCODE == "26.5"
 
 
 def test_shaders_are_compiled_before_the_upload(flow):

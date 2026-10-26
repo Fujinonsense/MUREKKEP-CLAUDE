@@ -13,8 +13,9 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-# The Xcode the TestFlight builds are made with (26.6 built and uploaded 1.0 (201) on 2026-10-26).
-XCODE = "26.6"
+# The Xcode the TestFlight builds are made with. 26.6 (the default) built 1.0 (201), but on 2026-10-26
+# Codemagic's M2 queue for it was hours long; support suggested another version, so 26.5.
+XCODE = "26.5"
 WORKFLOW = ROOT / ".github" / "workflows" / "main.yml"
 OUT = ROOT / "codemagic.yaml"
 
@@ -71,7 +72,7 @@ def build():
                 "instance_type": "mac_mini_m2",
                 "max_build_duration": 120,
                 "environment": {
-                    # Pinned: with "latest", builds sat queued on 2026-10-26, after Xcode 27.1 and 27.2 arrived.
+                    # Pinned (see XCODE): "latest" and 26.6 sat queued on 2026-10-26.
                     "xcode": XCODE,
                     "groups": ["app_store_credentials"],
                     "vars": {"EDITION": "appstore", "TESTFLIGHT": "yes"},
