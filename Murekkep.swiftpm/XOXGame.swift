@@ -14,9 +14,11 @@ private struct StrokeLine: Shape {
 }
 
 /// XOX against the iPad: the player is X and taps or draws in a cell; the iPad answers with O after
-/// a moment's thought. The marks draw themselves on; three in a row ends the game with a line
-/// through them, and "Tekrar" starts again with the other side first.
+/// a moment's thought — Kolay mostly at random, Orta with a plan, Zor without a single mistake. The
+/// marks draw themselves on; three in a row ends the game with a line through them, and "Tekrar"
+/// starts again with the other side first. Wins are counted per difficulty.
 struct XOXGame: View {
+    @ObservedObject var store: GameProgressStore
     @State private var game = TicTacToe()
     @State private var rng = GameRandom()
     @State private var humanFirst = true
@@ -25,39 +27,69 @@ struct XOXGame: View {
     @State private var lineProgress: CGFloat = 0
     /// Counts the iPad's turns; each one runs the reply task afresh.
     @State private var pendingReply = 0
+    @State private var counted = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let human = TicTacToe.Mark.x
     private static let device = TicTacToe.Mark.o
     private static let lineWidth: CGFloat = 4
 
+    private var difficulty: GameDifficulty { store[.xox].difficulty }
+    private var wins: Int { store[.xox].best[difficulty] ?? 0 }
+
     var body: some View {
-        VStack(spacing: 10) {
-            Text(status)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(game.isOver ? Theme.ink : Color.secondary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 22)
+        VStack(spacing: 8) {
+            DifficultyPicker(difficulty: Binding(get: { store[.xox].difficulty }, set: { store.setDifficulty($0, for: .xox) }))
+            HStack {
+                Text(status)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(game.isOver ? Theme.ink : Color.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer()
+                Text(Loc.t("Galibiyet: {0}", "\(wins)"))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .frame(height: 22)
             GeometryReader { geo in
                 let side = min(geo.size.width, geo.size.height)
                 board(side: side)
                     .frame(width: side, height: side)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Button {
-                restart()
-            } label: {
-                Label(Loc.t("Tekrar"), systemImage: "arrow.counterclockwise")
-                    .font(.subheadline.weight(.semibold))
+            HStack {
+                Text(difficulty == .hard ? Loc.t("Zor: iPad hata yapmaz; berabere kalmak başarıdır.") : difficulty == .easy ? Loc.t("Kolay: iPad çoğu zaman rastgele oynar.") : Loc.t("Orta: iPad kazanmayı ve engellemeyi bilir."))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer()
+                Button {
+                    restart()
+                } label: {
+                    Label(Loc.t("Tekrar"), systemImage: "arrow.counterclockwise")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.ink)
+                .opacity(game.isOver ? 1 : 0)
+                .disabled(!game.isOver)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: game.isOver)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.ink)
-            .opacity(game.isOver ? 1 : 0)
-            .disabled(!game.isOver)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: game.isOver)
         }
         .task(id: pendingReply) {
             await reply()
+        }
+        .onChange(of: difficulty) { _, _ in
+            restart(keepTurn: true)
+        }
+        .onChange(of: game.isOver) { _, over in
+            guard over, !counted else { return }
+            counted = true
+            if case .won(let mark, _)? = game.outcome, mark == Self.human {
+                store.record(.xox, score: wins + 1, at: difficulty)
+            }
         }
     }
 
@@ -163,7 +195,7 @@ struct XOXGame: View {
         try? await Task.sleep(nanoseconds: 550_000_000)
         guard !Task.isCancelled, !game.isOver, game.turn == Self.device else { return }
         var random = rng
-        guard let move = game.bestMove(for: Self.device, rng: &random) else { return }
+        guard let move = game.move(for: Self.device, difficulty: difficulty, rng: &random) else { return }
         rng = random
         place(move)
     }
@@ -186,11 +218,13 @@ struct XOXGame: View {
         }
     }
 
-    private func restart() {
-        humanFirst.toggle()
+    /// A new game; the other side starts, unless the difficulty changed mid-game.
+    private func restart(keepTurn: Bool = false) {
+        if !keepTurn { humanFirst.toggle() }
         game = TicTacToe(first: humanFirst ? Self.human : Self.device)
         drawn = [:]
         lineProgress = 0
+        counted = false
         if !humanFirst { pendingReply += 1 }
     }
 }

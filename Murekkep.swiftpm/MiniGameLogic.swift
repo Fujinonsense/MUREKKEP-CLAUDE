@@ -1,7 +1,86 @@
 import Foundation
 
 // The break corner's games without their screens (checked in tools/gamescheck): the mandala's
-// mirror, the bubbles' rise and score, the XOX board and the iPad's moves. Foundation only.
+// mirror, the bubbles' rise and score, the XOX board and the iPad's moves, and what a player keeps
+// of every game. Foundation only. The flyer, the bubble shooter and Sudoku have files of their own.
+
+/// Kolay, Orta, Zor: each game reads it its own way.
+enum GameDifficulty: String, CaseIterable, Identifiable, Codable {
+    case easy, medium, hard
+
+    var id: String { rawValue }
+}
+
+/// What a player keeps of one game: the levels opened, the stars of each, the best score at each
+/// difficulty and the difficulty chosen. Kept in UserDefaults under `Keys`.
+struct GameProgress: Equatable {
+    var unlockedLevel = 1
+    var stars: [Int: Int] = [:]
+    var best: [GameDifficulty: Int] = [:]
+    var difficulty: GameDifficulty = .medium
+
+    var totalStars: Int { stars.values.reduce(0, +) }
+
+    func stars(at level: Int) -> Int { stars[level] ?? 0 }
+
+    func isUnlocked(_ level: Int) -> Bool { level >= 1 && level <= unlockedLevel }
+
+    /// A level played to its end: its stars stay the best they ever were, and with any star at all
+    /// the next level opens (up to `levels`).
+    mutating func complete(level: Int, stars earned: Int, levels: Int) {
+        let got = max(0, min(3, earned))
+        stars[level] = max(stars[level] ?? 0, got)
+        if got > 0 { unlockedLevel = max(unlockedLevel, min(levels, level + 1)) }
+    }
+
+    /// A round played to its end: true when `score` is the best so far at `difficulty` (a first
+    /// score of nothing is no record; a time is a record when it is shorter).
+    @discardableResult
+    mutating func record(score: Int, at difficulty: GameDifficulty, lowerIsBetter: Bool = false) -> Bool {
+        guard let old = best[difficulty] else {
+            best[difficulty] = score
+            return lowerIsBetter || score > 0
+        }
+        let better = lowerIsBetter ? score < old : score > old
+        if better { best[difficulty] = score }
+        return better
+    }
+
+    /// The UserDefaults keys, per game id ("flyer", "sudoku"…).
+    enum Keys {
+        static func unlocked(_ game: String) -> String { "break.\(game).unlocked" }
+        static func stars(_ game: String) -> String { "break.\(game).stars" }
+        static func best(_ game: String, _ difficulty: GameDifficulty) -> String { "break.\(game).best.\(difficulty.rawValue)" }
+        static func difficulty(_ game: String) -> String { "break.\(game).difficulty" }
+        /// A game left half-way (Sudoku), to go on with later.
+        static func saved(_ game: String) -> String { "break.\(game).saved" }
+        /// The bubbles' best from before the difficulties, read once when the medium best is empty.
+        static let legacyBubblesBest = "breakBubblesBest"
+    }
+}
+
+/// How big the break panel may be: compact, or one step larger that never takes more than a quarter
+/// of the canvas, so the notebook stays in view and in reach beside it.
+enum GamePanelSize {
+    static let compact = CGSize(width: 340, height: 420)
+    static let larger = CGSize(width: 400, height: 500)
+
+    /// The larger step inside a canvas with the given room kept clear at each edge: at most
+    /// 400×500, at most a quarter of the canvas, never past its edges; the compact size when even
+    /// that would not fit.
+    static func larger(in canvas: CGSize, leading: Double, trailing: Double, top: Double, bottom: Double) -> CGSize {
+        var width = min(Double(larger.width), Double(canvas.width) - leading - trailing)
+        var height = min(Double(larger.height), Double(canvas.height) - top - bottom)
+        let quarter = Double(canvas.width) * Double(canvas.height) / 4
+        if width * height > quarter {
+            let k = (quarter / (width * height)).squareRoot()
+            width *= k
+            height *= k
+        }
+        if width < Double(compact.width) || height < Double(compact.height) { return compact }
+        return CGSize(width: width.rounded(.down), height: height.rounded(.down))
+    }
+}
 
 /// A small seedable random source, so the games' checks run the same every time (SplitMix64).
 struct GameRandom: RandomNumberGenerator, Equatable {
@@ -95,10 +174,11 @@ struct Splash: Equatable {
 }
 
 /// Sixty seconds of bubbles rising through a field `size` big; each tap pops the bubble under it.
-/// The field is stepped by `advance(by:)`; nothing in it knows about the screen.
+/// The field is stepped by `advance(by:)`; nothing in it knows about the screen. The difficulty
+/// sets the pace: how fast they come and rise.
 struct BubbleField: Equatable {
     static let round: TimeInterval = 60
-    static let bestKey = "breakBubblesBest"
+    static let bestKey = GameProgress.Keys.legacyBubblesBest
     /// Bubbles narrower than this are the two-point ones.
     static let smallRadius = 20.0
     /// How far beside a bubble's edge a touch still pops it (a fingertip is wide).
@@ -110,6 +190,8 @@ struct BubbleField: Equatable {
     static let maxStep: TimeInterval = 0.1
 
     var size: CGSize
+    /// How much faster than medium everything happens: Kolay 0.8, Orta 1, Zor 1.3.
+    let pace: Double
     private(set) var bubbles: [Bubble] = []
     private(set) var splashes: [Splash] = []
     private(set) var score = 0
@@ -119,18 +201,27 @@ struct BubbleField: Equatable {
     private var nextID = 1
     private var rng: GameRandom
 
-    init(size: CGSize, seed: UInt64) {
+    init(size: CGSize, seed: UInt64, difficulty: GameDifficulty = .medium) {
         self.size = size
+        pace = Self.pace(difficulty)
         rng = GameRandom(seed: seed)
+    }
+
+    static func pace(_ difficulty: GameDifficulty) -> Double {
+        switch difficulty {
+        case .easy: return 0.8
+        case .medium: return 1
+        case .hard: return 1.3
+        }
     }
 
     var timeLeft: TimeInterval { max(0, Self.round - elapsed) }
     var isOver: Bool { elapsed >= Self.round }
     /// 0 at the start, 1 at the end: the bubbles come faster and rise faster.
     var difficulty: Double { min(1, max(0, elapsed / Self.round)) }
-    var spawnInterval: TimeInterval { Self.spawnEasy - (Self.spawnEasy - Self.spawnHard) * difficulty }
+    var spawnInterval: TimeInterval { (Self.spawnEasy - (Self.spawnEasy - Self.spawnHard) * difficulty) / pace }
     /// Points per second a new bubble rises at, before its own variation.
-    var riseSpeed: Double { 38 + 42 * difficulty }
+    var riseSpeed: Double { (38 + 42 * difficulty) * pace }
 
     /// Moves everything on by `dt` seconds (at most `maxStep`); nothing moves once the round is over.
     mutating func advance(by dt: TimeInterval) {
@@ -262,5 +353,63 @@ struct TicTacToe: Equatable {
         let corners = Self.corners.filter { cells[$0] == nil }
         if let corner = corners.randomElement(using: &rng) { return corner }
         return Self.edges.filter { cells[$0] == nil }.randomElement(using: &rng) ?? free.first
+    }
+
+    /// The iPad's answer at each difficulty: Kolay plays any free cell two times in three and only
+    /// then looks for a win or a block; Orta is `bestMove`; Zor plays perfectly (minimax), so it
+    /// never loses, but picks among its equally good moves at random.
+    func move<R: RandomNumberGenerator>(for mark: Mark, difficulty: GameDifficulty, rng: inout R) -> Int? {
+        guard !isOver, !free.isEmpty else { return nil }
+        switch difficulty {
+        case .easy:
+            if Double.random(in: 0..<1, using: &rng) < 0.65 { return free.randomElement(using: &rng) }
+            if let win = winningCell(for: mark) { return win }
+            if let block = winningCell(for: mark.other) { return block }
+            return free.randomElement(using: &rng)
+        case .medium:
+            return bestMove(for: mark, rng: &rng)
+        case .hard:
+            return perfectMoves(for: mark).randomElement(using: &rng)
+        }
+    }
+
+    /// The moves with the best outcome `mark` can force: a win over a draw over a loss, the sooner
+    /// the better. On an empty board every move draws, so all nine come back without a search.
+    func perfectMoves(for mark: Mark) -> [Int] {
+        guard !isOver else { return [] }
+        let open = free
+        if open.count == 9 { return open }
+        var best = Int.min
+        var moves: [Int] = []
+        for cell in open {
+            var next = self
+            next.cells[cell] = mark
+            next.turn = mark.other
+            let value = -next.negamax(for: mark.other, depth: 1)
+            if value > best {
+                best = value
+                moves = [cell]
+            } else if value == best {
+                moves.append(cell)
+            }
+        }
+        return moves
+    }
+
+    /// The value of the board for `mark`, who is to move: 10 − depth for a win, depth − 10 for a loss, 0 for a draw.
+    private func negamax(for mark: Mark, depth: Int) -> Int {
+        switch outcome {
+        case .won(let winner, _)?: return winner == mark ? 10 - depth : depth - 10
+        case .draw?: return 0
+        case nil: break
+        }
+        var best = Int.min
+        for cell in free {
+            var next = self
+            next.cells[cell] = mark
+            next.turn = mark.other
+            best = max(best, -next.negamax(for: mark.other, depth: depth + 1))
+        }
+        return best
     }
 }

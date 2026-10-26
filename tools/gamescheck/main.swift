@@ -198,5 +198,265 @@ for seed in 1...200 {
 check(ended == 200, "xox: 200 games against itself all end (\(ended))")
 check(draws > 20 && draws < 200, "xox: some draws, some wins, with the whim (\(draws) draws)")
 
+// MARK: XOX difficulties (TicTacToe.move, perfectMoves)
+
+check(TicTacToe().perfectMoves(for: .x).count == 9, "xox zor: every first move is as good as another")
+check(played([0, 4, 8]).perfectMoves(for: .o).sorted() == [1, 3, 5, 7], "xox zor: against two corners only an edge holds the draw")
+check(played([0, 4, 8, 2]).perfectMoves(for: .x) == [6], "xox zor: the block comes first")
+check(played([0, 4, 1]).perfectMoves(for: .o) == [2], "xox zor: a win is taken at once")
+// Zor never loses, whatever a random player does, as X or as O.
+var zorLost = 0
+var zorWon = 0
+for seed in 1...300 {
+    var r = GameRandom(seed: UInt64(seed))
+    let device: TicTacToe.Mark = seed % 2 == 0 ? .o : .x
+    var g = TicTacToe(first: .x)
+    while !g.isOver {
+        let cell = g.turn == device ? g.move(for: device, difficulty: .hard, rng: &r)! : g.free.randomElement(using: &r)!
+        g.play(cell)
+    }
+    if case .won(let w, _)? = g.outcome {
+        if w == device { zorWon += 1 } else { zorLost += 1 }
+    }
+}
+check(zorLost == 0 && zorWon > 100, "xox zor: never loses to a random player (\(zorLost) lost, \(zorWon) won of 300)")
+// Kolay loses to the Orta heuristic now and then; Orta never loses to Kolay's whims badly enough to matter.
+var kolayLost = 0
+for seed in 1...300 {
+    var r = GameRandom(seed: UInt64(seed) &* 7)
+    var g = TicTacToe(first: seed % 2 == 0 ? .x : .o)
+    while !g.isOver {
+        let cell = g.turn == .o ? g.move(for: .o, difficulty: .easy, rng: &r)! : g.move(for: .x, difficulty: .medium, rng: &r)!
+        g.play(cell)
+    }
+    if case .won(.x, _)? = g.outcome { kolayLost += 1 }
+}
+check(kolayLost > 60, "xox kolay: mostly random, so it loses often (\(kolayLost) of 300)")
+check(played([0, 3, 1]).move(for: .o, difficulty: .medium, rng: &rng) == 2, "xox orta: is today's heuristic")
+var easyMoves = Set<Int>()
+for _ in 0..<60 {
+    if let m = played([0, 3, 1]).move(for: .o, difficulty: .easy, rng: &rng) { easyMoves.insert(m) }
+}
+check(easyMoves.count > 3 && easyMoves.contains(2), "xox kolay: sometimes blocks, often wanders (\(easyMoves.sorted()))")
+
+// MARK: Bubbles at each difficulty (BubbleField.pace)
+
+check(BubbleField.pace(.easy) == 0.8 && BubbleField.pace(.medium) == 1 && BubbleField.pace(.hard) == 1.3, "bubbles: the paces")
+let hardField = BubbleField(size: fieldSize, seed: 7, difficulty: .hard)
+check(abs(hardField.spawnInterval - 1.1 / 1.3) < 1e-9 && abs(hardField.riseSpeed - 38 * 1.3) < 1e-9, "bubbles zor: faster to come and rise")
+let easyField = BubbleField(size: fieldSize, seed: 7, difficulty: .easy)
+check(abs(easyField.spawnInterval - 1.1 / 0.8) < 1e-9 && abs(easyField.riseSpeed - 38 * 0.8) < 1e-9, "bubbles kolay: slower")
+check(BubbleField(size: fieldSize, seed: 7) == BubbleField(size: fieldSize, seed: 7, difficulty: .medium) && BubbleField(size: fieldSize, seed: 7).pace == 1,
+      "bubbles: orta is the old pace")
+
+// MARK: Progression (GameProgress)
+
+var progress = GameProgress()
+check(progress.unlockedLevel == 1 && progress.isUnlocked(1) && !progress.isUnlocked(2) && progress.difficulty == .medium, "progress: a fresh game")
+progress.complete(level: 1, stars: 2, levels: 12)
+check(progress.unlockedLevel == 2 && progress.stars(at: 1) == 2 && progress.totalStars == 2, "progress: a finished level opens the next")
+progress.complete(level: 1, stars: 1, levels: 12)
+check(progress.stars(at: 1) == 2, "progress: stars never go down")
+progress.complete(level: 1, stars: 3, levels: 12)
+check(progress.stars(at: 1) == 3 && progress.unlockedLevel == 2, "progress: better stars are kept")
+progress.complete(level: 2, stars: 0, levels: 12)
+check(progress.unlockedLevel == 2 && progress.stars(at: 2) == 0, "progress: a failed level opens nothing")
+progress.complete(level: 12, stars: 5, levels: 12)
+check(progress.unlockedLevel == 12 && progress.stars(at: 12) == 3, "progress: the last level stays last, stars stop at three")
+check(progress.record(score: 0, at: .medium) == false && progress.best[.medium] == 0, "progress: a first score of nothing is no record")
+check(progress.record(score: 12, at: .medium) && progress.record(score: 12, at: .medium) == false && progress.record(score: 13, at: .medium),
+      "progress: a higher score is a record")
+check(progress.record(score: 300, at: .hard, lowerIsBetter: true) && progress.record(score: 250, at: .hard, lowerIsBetter: true)
+      && !progress.record(score: 260, at: .hard, lowerIsBetter: true) && progress.best[.hard] == 250, "progress: a shorter time is a record")
+check(progress.best[.easy] == nil, "progress: each difficulty has its own best")
+check(GameProgress.Keys.unlocked("flyer") == "break.flyer.unlocked" && GameProgress.Keys.stars("shooter") == "break.shooter.stars"
+      && GameProgress.Keys.best("bubbles", .hard) == "break.bubbles.best.hard" && GameProgress.Keys.difficulty("xox") == "break.xox.difficulty"
+      && GameProgress.Keys.saved("sudoku") == "break.sudoku.saved" && GameProgress.Keys.legacyBubblesBest == BubbleField.bestKey, "progress: the keys")
+
+// MARK: The panel's one larger step (GamePanelSize)
+
+check(GamePanelSize.compact == CGSize(width: 340, height: 420) && GamePanelSize.larger == CGSize(width: 400, height: 500), "panel: the two sizes")
+let roomy = GamePanelSize.larger(in: CGSize(width: 1180, height: 760), leading: 72, trailing: 12, top: 12, bottom: 104)
+check(roomy == CGSize(width: 400, height: 500), "panel: a landscape iPad gets the full larger step (\(roomy))")
+let tight = GamePanelSize.larger(in: CGSize(width: 1080, height: 700), leading: 72, trailing: 12, top: 12, bottom: 104)
+check(Double(tight.width) * Double(tight.height) <= 1080.0 * 700 / 4 + 1 && tight.width < 400 && tight.height < 500 && tight.width >= 340,
+      "panel: a smaller canvas gets at most a quarter of itself (\(tight))")
+check(abs(Double(tight.width) / Double(tight.height) - 0.8) < 0.01, "panel: the larger step keeps its shape when it shrinks")
+let low = GamePanelSize.larger(in: CGSize(width: 1180, height: 600), leading: 72, trailing: 12, top: 12, bottom: 104)
+check(low.height <= 484 && Double(low.width) * Double(low.height) <= 1180.0 * 600 / 4 + 1 && low.height > 420, "panel: a low canvas keeps the panel under its top (\(low))")
+check(GamePanelSize.larger(in: CGSize(width: 700, height: 600), leading: 72, trailing: 12, top: 12, bottom: 104) == GamePanelSize.compact,
+      "panel: when a quarter is less than compact, the panel stays compact")
+check(GamePanelSize.larger(in: CGSize(width: 320, height: 900), leading: 12, trailing: 12, top: 12, bottom: 104) == GamePanelSize.compact,
+      "panel: a slide-over window stays compact")
+
+// MARK: Uçan damla (FlyerWorld)
+
+let sky = CGSize(width: 316, height: 290)
+let easyFlight = FlyerSettings.settings(difficulty: .easy, level: 1)
+let hardFlight = FlyerSettings.settings(difficulty: .hard, level: 1)
+check(hardFlight.speed > easyFlight.speed && hardFlight.gap < easyFlight.gap && hardFlight.gravity > easyFlight.gravity, "flyer: zor is faster, tighter, heavier")
+check(FlyerSettings.settings(difficulty: .medium, level: 12).speed > FlyerSettings.settings(difficulty: .medium, level: 1).speed
+      && FlyerSettings.settings(difficulty: .medium, level: 12).gap < FlyerSettings.settings(difficulty: .medium, level: 1).gap, "flyer: later levels tighten")
+check(FlyerWorld.goal(level: 1) == 6 && FlyerWorld.goal(level: 12) == 28 && FlyerWorld.levels == 12, "flyer: the levels' lengths")
+var world = FlyerWorld(size: sky, level: 3, difficulty: .medium, seed: 5)
+check(world.phase == .ready && world.obstacles.count == 10 && world.lives == 3 && world.passed == 0, "flyer: a level waits for the first tap")
+check(world.obstacles.allSatisfy { $0.top >= 30 && $0.bottom <= 260 }, "flyer: every gap is inside the page")
+check(zip(world.obstacles, world.obstacles.dropFirst()).allSatisfy { abs($0.gapY - $1.gapY) <= 0.38 * 290 + 1e-9 }, "flyer: gaps stay within reach of each other")
+check(zip(world.obstacles, world.obstacles.dropFirst()).allSatisfy { abs(($1.x - $0.x) - world.settings.spacing) < 1e-9 }, "flyer: evenly spaced")
+check(world.flagX > world.obstacles.last!.x, "flyer: the flag stands after the last pencil")
+check(FlyerWorld(size: sky, level: 3, difficulty: .medium, seed: 5) == world, "flyer: the same seed gives the same level")
+world.advance(by: 0.5)
+check(world.phase == .ready && world.dropY == 145 && world.elapsed == 0, "flyer: nothing moves before the first tap")
+world.flap()
+check(world.phase == .flying && world.velocity < 0, "flyer: the first tap starts the flight upwards")
+var fallen = world
+for _ in 0..<60 { fallen.advance(by: 1.0 / 30) }
+check(fallen.lives == 2 && fallen.graceLeft > 0, "flyer: a drop that falls to the floor costs one life, then bounces safely for a moment (\(fallen.lives))")
+var crashed = world
+for _ in 0..<600 where crashed.phase == .flying { crashed.advance(by: 1.0 / 30) }
+check(crashed.phase == .failed && crashed.lives == 0, "flyer: three falls end the level")
+// Collisions: in the gap is safe, on the pencil is not.
+let pencil = FlyerObstacle(id: 0, x: world.dropX, gapY: 150, gap: 120, kind: .pencilBelow)
+func dropAt(_ y: Double) -> FlyerWorld {
+    var w = FlyerWorld(size: sky, level: 1, difficulty: .medium, seed: 1)
+    w.flap()
+    // the drop falls from 145 by gravity; steer by stepping until it is near y
+    var steps = 0
+    while w.dropY < y && steps < 200 { w.advance(by: 0.01); steps += 1 }
+    return w
+}
+check(!dropAt(150).collides(pencil), "flyer: the drop in the gap is safe")
+check(dropAt(230).collides(pencil), "flyer: the drop on the pencil is hit")
+check(!dropAt(230).collides(FlyerObstacle(id: 1, x: world.dropX + 60, gapY: 150, gap: 120, kind: .pencilAbove)), "flyer: a pencil elsewhere does not touch")
+// An autopilot that taps when below the next gap's centre flies every level at every difficulty with all three drops.
+func autopilot(level: Int, difficulty: GameDifficulty) -> FlyerWorld {
+    var w = FlyerWorld(size: sky, level: level, difficulty: difficulty, seed: UInt64(level * 31 + 1))
+    w.flap()
+    var steps = 0
+    while w.phase == .flying && steps < 20_000 {
+        let target = w.obstacles.first { !$0.passed && $0.x + FlyerObstacle.width / 2 >= w.dropX - FlyerWorld.dropRadius }?.gapY ?? Double(sky.height) / 2
+        if w.dropY > target + 10 && w.velocity > 0 { w.flap() }
+        w.advance(by: 1.0 / 60)
+        steps += 1
+    }
+    return w
+}
+for difficulty in GameDifficulty.allCases {
+    var cleared = 0
+    var starsGot = 0
+    for level in 1...FlyerWorld.levels {
+        let w = autopilot(level: level, difficulty: difficulty)
+        if w.phase == .complete { cleared += 1 }
+        starsGot += w.stars
+    }
+    check(cleared == FlyerWorld.levels && starsGot >= FlyerWorld.levels * 3 - 2, "flyer \(difficulty.rawValue): every level can be flown with three drops (\(cleared) cleared, \(starsGot) stars)")
+}
+let flown = autopilot(level: 2, difficulty: .medium)
+check(flown.passed == flown.goal && flown.progress == 1 && flown.isOver, "flyer: every pencil counts once (\(flown.passed) of \(flown.goal))")
+var late = flown
+late.flap()
+late.advance(by: 0.1)
+check(late == flown, "flyer: nothing moves after the flag")
+
+// MARK: Renk patlat (HexGrid, ShooterLevels, ShooterBoard)
+
+let hex = HexGrid(cols: 9, radius: 16)
+check(hex.width == 288 && abs(hex.rowHeight - 27.7128) < 1e-3 && hex.width(ofRow: 0) == 9 && hex.width(ofRow: 1) == 8, "shooter: the honeycomb's measures")
+check(hex.centre(ShooterCell(0, 0)) == CGPoint(x: 16, y: 16) && hex.centre(ShooterCell(1, 0)) == CGPoint(x: 32, y: 16 + hex.rowHeight), "shooter: odd rows stand half a cell right")
+check(Set(hex.neighbours(of: ShooterCell(2, 3))) == [ShooterCell(2, 2), ShooterCell(2, 4), ShooterCell(1, 2), ShooterCell(1, 3), ShooterCell(3, 2), ShooterCell(3, 3)],
+      "shooter: an even cell's six neighbours")
+check(Set(hex.neighbours(of: ShooterCell(1, 0))) == [ShooterCell(1, 1), ShooterCell(0, 0), ShooterCell(0, 1), ShooterCell(2, 0), ShooterCell(2, 1)],
+      "shooter: an odd cell at the edge has five")
+check(hex.neighbours(of: ShooterCell(0, 8)).allSatisfy(hex.contains) && !hex.contains(ShooterCell(1, 8)) && !hex.contains(ShooterCell(-1, 0)), "shooter: the edges")
+check(hex.nearestFreeCell(to: CGPoint(x: 33, y: 42), taken: []) == ShooterCell(1, 0)
+      && hex.nearestFreeCell(to: CGPoint(x: 33, y: 42), taken: [ShooterCell(1, 0)]) != ShooterCell(1, 0), "shooter: the nearest free cell")
+check(ShooterLevels.count >= 12, "shooter: at least twelve levels (\(ShooterLevels.count))")
+for (i, level) in ShooterLevels.all.enumerated() {
+    var board = ShooterBoard(level: level, difficulty: .medium, seed: 1)
+    let count = board.cells.count
+    let rowsFit = level.rows.count <= 8 && level.rows.enumerated().allSatisfy { r, text in text.count <= hex.width(ofRow: r) }
+    let hanging = board.fallOrphans(grid: hex).isEmpty
+    check(count >= 12 && rowsFit && hanging && level.shots >= 8 && level.shots <= 24 && board.cells.keys.allSatisfy { $0.row < ShooterBoard.deadRow - 2 },
+          "shooter level \(i + 1): \(count) bubbles, all hanging from the top, \(level.shots) shots")
+}
+let first = ShooterLevels.all[0]
+let kolayBoard = ShooterBoard(level: first, difficulty: .easy, seed: 1)
+let ortaBoard = ShooterBoard(level: first, difficulty: .medium, seed: 1)
+let zorBoard = ShooterBoard(level: first, difficulty: .hard, seed: 1)
+check(kolayBoard.colours == 3 && ortaBoard.colours == 4 && zorBoard.colours == 5, "shooter: three, four, five colours")
+check(kolayBoard.coloursOnBoard.count <= 3 && zorBoard.coloursOnBoard.contains(4) && !ortaBoard.coloursOnBoard.contains(4), "shooter: the colours on the board follow")
+check(kolayBoard.shotsLeft == 16 && ortaBoard.shotsLeft == 10 && zorBoard.shotsLeft == 7, "shooter: the shots per difficulty")
+check(ShooterBoard.shots(5, .hard) == 4, "shooter: zor keeps at least four shots")
+check(ortaBoard.coloursOnBoard.contains(ortaBoard.loaded) && ortaBoard.coloursOnBoard.contains(ortaBoard.next), "shooter: the pen holds a colour that is on the board")
+// A tiny level: one bubble at the top middle; a shot straight up lands beside it.
+let one = ShooterLevel(rows: ["....R...."], shots: 5)
+var tiny = ShooterBoard(level: one, difficulty: .easy, seed: 3)
+let launch = CGPoint(x: hex.width / 2, y: 11 * hex.rowHeight)
+let up = tiny.flight(from: launch, direction: CGPoint(x: 0, y: -1), grid: hex)
+check(up.landing.row == 1 && (up.landing.col == 3 || up.landing.col == 4), "shooter: straight up lands under the bubble (\(up.landing))")
+check(up.path.first == launch && up.path.count > 5 && up.path.last!.y > hex.radius && abs(Double(up.path.last!.x) - hex.width / 2) < 1e-9, "shooter: the path runs straight")
+let slant = tiny.flight(from: launch, direction: CGPoint(x: 0.8, y: -0.6), grid: hex)
+check(slant.path.allSatisfy { Double($0.x) <= hex.width - hex.radius + 1e-9 && Double($0.x) >= hex.radius - 1e-9 } && slant.path.contains { Double($0.x) > hex.width - hex.radius - 4 },
+      "shooter: a slanted shot bounces off the wall")
+check(slant.landing.row == 0 || slant.landing.row == 1, "shooter: and comes to rest at the top (\(slant.landing))")
+check(tiny.loaded == 0 && tiny.shotsLeft == 11, "shooter kolay: the pen holds the red, six shots more than orta")
+let second = tiny.shoot(from: launch, direction: CGPoint(x: 0, y: -1), grid: hex)
+check(second?.popped.isEmpty == true && second?.fell.isEmpty == true && tiny.cells.count == 2 && tiny.shotsLeft == 10 && tiny.score == 0, "shooter: two of a colour hang on")
+let third = tiny.shoot(from: launch, direction: CGPoint(x: 0, y: -1), grid: hex)
+check(third?.popped.count == 3 && tiny.cells.isEmpty && tiny.phase == .won && tiny.score == 30 && tiny.stars == 3,
+      "shooter: three of a colour pop and clear the level, three times par is three stars (\(String(describing: third?.popped)))")
+check(tiny.shoot(from: launch, direction: CGPoint(x: 0, y: -1), grid: hex) == nil, "shooter: no shot after the end")
+var downward = ShooterBoard(level: one, difficulty: .easy, seed: 3)
+check(downward.shoot(from: launch, direction: CGPoint(x: 0, y: 1), grid: hex) == nil, "shooter: no shot downwards")
+// Orphans: a bubble under the popped ones falls and scores more.
+let hanger = ShooterLevel(rows: ["...RRB...", "....G..."], shots: 5)
+var hung = ShooterBoard(level: hanger, difficulty: .easy, seed: 3)
+check(hung.fallOrphans(grid: hex).isEmpty && hung.cells.count == 4, "shooter: the green hangs from the red")
+var orphaned = ShooterBoard(level: ShooterLevel(rows: ["R........", "........", "....G...."], shots: 5), difficulty: .easy, seed: 3)
+check(orphaned.fallOrphans(grid: hex) == [ShooterCell(2, 4)] && orphaned.cells.count == 1, "shooter: a bubble hanging on nothing falls")
+// Shots run out: the level is lost with bubbles left.
+var starved = ShooterBoard(level: ShooterLevel(rows: ["RBRBRBRBR"], shots: 5), difficulty: .hard, seed: 2)
+var fired = 0
+while starved.phase == .playing && fired < 10 {
+    _ = starved.shoot(from: launch, direction: CGPoint(x: 0.3, y: -0.95), grid: hex)
+    fired += 1
+}
+check(starved.phase == .lost && starved.shotsLeft == 0 && fired == 4, "shooter zor: four shots, then the level is lost (\(starved.phase))")
+// A bubble resting at the dead row loses the level.
+var deep = ShooterBoard(level: ShooterLevel(rows: ["R........", "R.......", "R........", "R.......", "R........", "R.......", "R........", "R.......", "R........", "B......."], shots: 30), difficulty: .easy, seed: 2)
+_ = deep.shoot(from: CGPoint(x: 16, y: 11 * hex.rowHeight), direction: CGPoint(x: 0, y: -1), grid: hex)
+check(deep.phase == .lost, "shooter: a bubble at the dead row loses the level")
+check(ShooterBoard(level: first, difficulty: .medium, seed: 9) == ShooterBoard(level: first, difficulty: .medium, seed: 9), "shooter: the same seed, the same board")
+
+// MARK: Sudoku (Sudoku, SudokuSave)
+
+check(Sudoku.row(40) == 4 && Sudoku.col(40) == 4 && Sudoku.box(40) == 4 && Sudoku.box(80) == 8 && Sudoku.box(20) == 0, "sudoku: rows, columns, boxes")
+check(Sudoku.peers(of: 0).count == 20 && Sudoku.peers(of: 0).contains(10) && !Sudoku.peers(of: 0).contains(0) && !Sudoku.peers(of: 0).contains(30), "sudoku: twenty peers")
+let empty = Array(repeating: 0, count: 81)
+check(Sudoku.candidates(empty, at: 0) == Array(1...9) && Sudoku.solutionCount(empty, limit: 2) == 2 && Sudoku.solve(empty) != nil, "sudoku: an empty grid has many solutions")
+let full = Sudoku.fill(seed: 4)
+check(Sudoku.isSolved(full) && Sudoku.conflicts(full).isEmpty && Sudoku.fill(seed: 4) == full && Sudoku.fill(seed: 5) != full, "sudoku: a filled grid is a solution, the same for a seed")
+var broken = full
+broken[0] = broken[1]
+// Cell 0 now repeats cell 1's digit, which also stands once in column 0: three cells show it.
+check(Sudoku.conflicts(broken).isSuperset(of: [0, 1]) && Sudoku.conflicts(broken).count == 3 && !Sudoku.isSolved(broken), "sudoku: a repeated digit shows on every cell it clashes with")
+var gapped = full
+gapped[3] = 0
+check(!Sudoku.isFull(gapped) && !Sudoku.isSolved(gapped) && Sudoku.candidates(gapped, at: 3) == [full[3]] && Sudoku.solve(gapped) == full, "sudoku: one gap, one candidate")
+for difficulty in GameDifficulty.allCases {
+    let puzzle = Sudoku.generate(difficulty: difficulty, seed: 11)
+    let target = Sudoku.clues(difficulty)
+    check(puzzle.clueCount <= target + 6 && puzzle.clueCount >= 17, "sudoku \(difficulty.rawValue): \(puzzle.clueCount) clues for a target of \(target)")
+    check(Sudoku.solutionCount(puzzle.givens, limit: 2) == 1 && Sudoku.solve(puzzle.givens) == puzzle.solution, "sudoku \(difficulty.rawValue): one solution, the known one")
+    check(Sudoku.isSolved(puzzle.solution) && zip(puzzle.givens, puzzle.solution).allSatisfy { $0 == 0 || $0 == $1 }, "sudoku \(difficulty.rawValue): the clues are part of the solution")
+    check(Sudoku.generate(difficulty: difficulty, seed: 11) == puzzle && Sudoku.generate(difficulty: difficulty, seed: 12) != puzzle, "sudoku \(difficulty.rawValue): seeded")
+}
+check(Sudoku.generate(difficulty: .hard, seed: 11).clueCount < Sudoku.generate(difficulty: .easy, seed: 11).clueCount, "sudoku: zor keeps fewer clues than kolay")
+let puzzle = Sudoku.generate(difficulty: .medium, seed: 2)
+let save = SudokuSave(difficulty: .medium, givens: puzzle.givens, solution: puzzle.solution, entries: puzzle.givens, notes: [3: [1, 2], 40: [7]], elapsed: 95)
+let saved = save.encoded()
+check(saved != nil && SudokuSave.decode(saved!) == save, "sudoku: a half-done puzzle survives a save")
+check(SudokuSave.decode(Data("{}".utf8)) == nil && SudokuSave.decode(Data("nonsense".utf8)) == nil, "sudoku: a broken save is nothing")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

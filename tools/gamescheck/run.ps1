@@ -1,12 +1,13 @@
-# Compiles the break corner's game logic (MiniGameLogic.swift, Foundation only) with the Windows Swift
-# toolchain and checks the mandala's mirror, the bubbles' rise and score and the XOX moves.
-# usage: powershell -File tools\gamescheck\run.ps1
+# Compiles the break corner's game logic (MiniGameLogic, FlyerLogic, ShooterLogic, SudokuLogic;
+# Foundation only) with the Windows Swift toolchain and checks the mandala's mirror, the bubbles'
+# rise and score, the XOX moves at each difficulty, the progression, the flyer's levels, the bubble
+# shooter's levels and shots, and the Sudoku maker and solver. usage: powershell -File tools\gamescheck\run.ps1
 $ErrorActionPreference = "Continue"
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 $env:SDKROOT = [System.Environment]::GetEnvironmentVariable("SDKROOT", "User")
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $app = Join-Path $root "Murekkep.swiftpm"
-$files = @((Join-Path $app "MiniGameLogic.swift"))
+$files = @("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift") | ForEach-Object { Join-Path $app $_ }
 $out = Join-Path $env:TEMP "murekkep-gamescheck"
 New-Item -ItemType Directory -Force $out | Out-Null
 $exe = Join-Path $out "check.exe"

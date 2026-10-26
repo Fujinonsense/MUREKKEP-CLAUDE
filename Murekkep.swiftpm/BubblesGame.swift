@@ -1,25 +1,22 @@
 import SwiftUI
 
-/// The bubbles on screen: the field, the clock and the scores. The field is stepped from the
+/// The bubbles on screen: the field, the clock and the score. The field is stepped from the
 /// animation timeline; the published values change only when a number on screen does. The best
-/// score lives in UserDefaults under `BubbleField.bestKey`.
+/// score of each difficulty is the progress store's.
 final class BubbleGameModel: ObservableObject {
     @Published private(set) var score = 0
     @Published private(set) var secondsLeft = Int(BubbleField.round)
     @Published private(set) var isOver = false
     @Published private(set) var popped = 0
-    @Published private(set) var best: Int
-    @Published private(set) var newBest = false
     private(set) var field: BubbleField
     private var last: Date?
 
     init() {
-        field = Self.newField(size: CGSize(width: 316, height: 300))
-        best = UserDefaults.standard.integer(forKey: BubbleField.bestKey)
+        field = Self.newField(size: CGSize(width: 316, height: 300), difficulty: .medium)
     }
 
-    private static func newField(size: CGSize) -> BubbleField {
-        BubbleField(size: size, seed: UInt64(max(0, Date().timeIntervalSinceReferenceDate * 1000)))
+    private static func newField(size: CGSize, difficulty: GameDifficulty) -> BubbleField {
+        BubbleField(size: size, seed: UInt64(max(0, Date().timeIntervalSinceReferenceDate * 1000)), difficulty: difficulty)
     }
 
     func resize(_ size: CGSize) {
@@ -35,7 +32,7 @@ final class BubbleGameModel: ObservableObject {
         field.advance(by: dt)
         let left = Int(field.timeLeft.rounded(.up))
         if left != secondsLeft { secondsLeft = left }
-        if field.isOver { finish() }
+        if field.isOver { isOver = true }
     }
 
     func pause() {
@@ -48,46 +45,43 @@ final class BubbleGameModel: ObservableObject {
         popped += 1
     }
 
-    func restart() {
-        field = Self.newField(size: field.size)
+    /// A fresh round at `difficulty`.
+    func restart(difficulty: GameDifficulty) {
+        field = Self.newField(size: field.size, difficulty: difficulty)
         last = nil
         score = 0
         popped = 0
         secondsLeft = Int(BubbleField.round)
         isOver = false
-        newBest = false
-    }
-
-    private func finish() {
-        isOver = true
-        if score > best {
-            best = score
-            newBest = true
-            UserDefaults.standard.set(best, forKey: BubbleField.bestKey)
-        }
     }
 }
 
 /// Ink bubbles: they rise and sway for sixty seconds; a tap or a touch of the pencil pops the one
-/// under it with a little splash. Small bubbles are worth two, big ones one; the pace picks up.
+/// under it with a little splash. Small bubbles are worth two, big ones one; the pace picks up,
+/// and Kolay / Orta / Zor set how fast it all goes.
 struct InkBubblesGame: View {
+    @ObservedObject var store: GameProgressStore
     @StateObject private var model = BubbleGameModel()
+    @State private var newBest = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var difficulty: GameDifficulty { store[.bubbles].difficulty }
+    private var best: Int { store[.bubbles].best[difficulty] ?? 0 }
     private var paused: Bool { model.isOver || scenePhase != .active }
 
     var body: some View {
         VStack(spacing: 8) {
+            DifficultyPicker(difficulty: Binding(get: { store[.bubbles].difficulty }, set: { store.setDifficulty($0, for: .bubbles) }))
             HStack {
                 stat(Loc.t("Puan"), value: "\(model.score)")
                 Spacer()
-                Text(Self.clock(model.secondsLeft))
+                Text(GameCorner.clock(model.secondsLeft))
                     .font(.title3.monospacedDigit().weight(.semibold))
                     .foregroundStyle(model.secondsLeft <= 10 && !model.isOver ? Color.red : Color.primary)
                     .accessibilityLabel(Loc.t("Kalan süre {0} saniye", "\(model.secondsLeft)"))
                 Spacer()
-                stat(Loc.t("En iyi"), value: "\(model.best)")
+                stat(Loc.t("En iyi"), value: "\(best)")
             }
             ZStack {
                 GeometryReader { geo in
@@ -118,8 +112,15 @@ struct InkBubblesGame: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: model.isOver)
         }
+        .onChange(of: difficulty, initial: true) { _, level in
+            newBest = false
+            model.restart(difficulty: level)
+        }
         .onChange(of: paused) { _, stopped in
             if stopped { model.pause() }
+        }
+        .onChange(of: model.isOver) { _, over in
+            if over { newBest = store.record(.bubbles, score: model.score, at: difficulty) }
         }
         .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: model.popped)
     }
@@ -130,17 +131,18 @@ struct InkBubblesGame: View {
                 .font(Theme.display(.title3))
             Text(Loc.t("Puan: {0}", "\(model.score)"))
                 .font(.headline)
-            if model.newBest {
+            if newBest {
                 Text(Loc.t("Yeni rekor!"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.ink)
             } else {
-                Text(Loc.t("En iyi: {0}", "\(model.best)"))
+                Text(Loc.t("En iyi: {0}", "\(best)"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Button {
-                model.restart()
+                newBest = false
+                model.restart(difficulty: difficulty)
             } label: {
                 Label(Loc.t("Tekrar"), systemImage: "arrow.counterclockwise")
                     .font(.subheadline.weight(.semibold))
@@ -162,10 +164,6 @@ struct InkBubblesGame: View {
                 .foregroundStyle(.secondary)
         }
         .frame(minWidth: 56)
-    }
-
-    static func clock(_ seconds: Int) -> String {
-        String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
     private func draw(_ context: inout GraphicsContext, size: CGSize) {
