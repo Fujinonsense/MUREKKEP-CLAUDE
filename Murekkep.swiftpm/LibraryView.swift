@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -83,6 +84,9 @@ struct LibraryView: View {
     @State private var query = ""
     @State private var showImporter = false
     @State private var importTarget: UUID?
+    @State private var askImportSource = false
+    @State private var showPhotoPicker = false
+    @State private var pickedPhotos: [PhotosPickerItem] = []
     @State private var showSettings = false
     @State private var showVoices = false
     @State private var showTemplates = false
@@ -146,8 +150,21 @@ struct LibraryView: View {
                     Text(Loc.t("Not bulunamadı"))
                 }
             }
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
+            .confirmationDialog(Loc.t("PDF ya da fotoğraf ekle"), isPresented: $askImportSource, titleVisibility: .visible) {
+                Button(Loc.t("Dosyalar'dan (PDF ya da fotoğraf)")) { showImporter = true }
+                Button(Loc.t("Fotoğraflar'dan")) { showPhotoPicker = true }
+                Button(Loc.t("Vazgeç"), role: .cancel) {}
+            } message: {
+                Text(Loc.t("Fotoğraflar tek bir PDF olur, her fotoğraf bir sayfa."))
+            }
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf, .image], allowsMultipleSelection: true) { result in
                 importFiles(result)
+            }
+            .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhotos, maxSelectionCount: 30, matching: .images)
+            .onChange(of: pickedPhotos) { _, items in
+                guard !items.isEmpty else { return }
+                pickedPhotos = []
+                importPicked(items)
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
@@ -274,7 +291,7 @@ struct LibraryView: View {
             createNotebook: { style, section in createNotebook(style, section: section) },
             importPDF: { section in
                 importTarget = section
-                showImporter = true
+                askImportSource = true
             },
             newCourse: { creatingSection = true },
             editCourse: { editingSection = $0 },
@@ -380,29 +397,91 @@ struct LibraryView: View {
         switch result {
         case let .success(urls):
             var failed: [String] = []
-            var lastID: UUID?
-            for url in urls {
+            var added: [UUID] = []
+            // Photos picked together become one PDF; PDFs come in as they are.
+            let photos = urls.filter { Self.isPhoto($0) }
+            for url in urls where !Self.isPhoto(url) {
                 do {
-                    lastID = try store.importPDF(from: url, section: importTarget).id
+                    added.append(try store.importPDF(from: url, section: importTarget).id)
                 } catch {
                     failed.append(url.lastPathComponent)
                 }
             }
+            if !photos.isEmpty {
+                let data = photos.compactMap { url -> Data? in
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    return try? Data(contentsOf: url)
+                }
+                do {
+                    added.append(try store.importPhotos(data, title: LibraryStore.photoTitle(fileName: photos[0].lastPathComponent),
+                                                        section: importTarget).id)
+                } catch {
+                    failed += photos.map(\.lastPathComponent)
+                }
+            }
             if !failed.isEmpty {
                 errorText = Loc.t("Şu dosyalar açılamadı: ") + failed.joined(separator: ", ")
-            } else if urls.count == 1, importTarget == nil, let lastID {
-                path.append(lastID)
+            } else if added.count == 1, importTarget == nil {
+                path.append(added[0])
             }
         case let .failure(error):
             errorText = error.localizedDescription
         }
     }
 
-    /// PDFs dragged in from Files or another app.
+    private static func isPhoto(_ url: URL) -> Bool {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
+        return type.conforms(to: .image)
+    }
+
+    /// Photos picked from the Photos library, as one PDF.
+    private func importPicked(_ items: [PhotosPickerItem]) {
+        let section = importTarget
+        Task { @MainActor in
+            var photos: [Data] = []
+            for item in items {
+                if let data = try? await item.loadTransferable(type: Data.self) { photos.append(data) }
+            }
+            do {
+                let note = try store.importPhotos(photos, title: LibraryStore.photoTitle(fileName: nil), section: section)
+                if section == nil { path.append(note.id) }
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
+    }
+
+    /// PDFs and photos dragged in from Files, Photos or another app (photos dropped together become
+    /// one PDF).
     private func handleDrop(_ providers: [NSItemProvider], section: UUID?) -> Bool {
         let pdfs = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) }
-        guard !pdfs.isEmpty else { return false }
+        let photos = providers.filter {
+            !$0.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) && $0.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+        }
+        guard !pdfs.isEmpty || !photos.isEmpty else { return false }
         let library = store
+        if !photos.isEmpty {
+            let group = DispatchGroup()
+            let lock = NSLock()
+            var loaded: [Int: Data] = [:]
+            for (i, provider) in photos.enumerated() {
+                group.enter()
+                _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                    if let data {
+                        lock.lock()
+                        loaded[i] = data
+                        lock.unlock()
+                    }
+                    group.leave()
+                }
+            }
+            let name = photos[0].suggestedName
+            group.notify(queue: .main) {
+                let data = loaded.keys.sorted().compactMap { loaded[$0] }
+                _ = try? library.importPhotos(data, title: LibraryStore.photoTitle(fileName: name), section: section)
+            }
+        }
         for provider in pdfs {
             _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.pdf.identifier) { url, _ in
                 guard let url else { return }
@@ -534,7 +613,7 @@ struct LibrarySidebar: View {
     private var quickCreate: some View {
         HStack(spacing: 10) {
             quickTile(Loc.t("Defter"), "square.and.pencil", AnyShapeStyle(Theme.ink.gradient)) { actions.newNotebook(currentCourse) }
-            quickTile("PDF", "doc.badge.plus", AnyShapeStyle(Theme.ai)) { actions.importPDF(currentCourse) }
+            quickTile(Loc.t("PDF / Foto"), "doc.badge.plus", AnyShapeStyle(Theme.ai)) { actions.importPDF(currentCourse) }
             quickTile(Loc.t("Ders"), "folder.badge.plus", AnyShapeStyle(Color(red: 0.92, green: 0.55, blue: 0.10).gradient)) { actions.newCourse() }
         }
     }
@@ -676,7 +755,7 @@ struct LibrarySidebar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onDrop(of: [.pdf], isTargeted: Binding(get: { dropTarget == section.id },
+        .onDrop(of: [.pdf, .image], isTargeted: Binding(get: { dropTarget == section.id },
                                                 set: { dropTarget = $0 ? section.id : (dropTarget == section.id ? nil : dropTarget) })) { providers in
             actions.drop(providers, section.id)
         }
@@ -684,7 +763,7 @@ struct LibrarySidebar: View {
             Button {
                 actions.importPDF(section.id)
             } label: {
-                Label(Loc.t("PDF ekle"), systemImage: "doc.badge.plus")
+                Label(Loc.t("PDF ya da fotoğraf ekle"), systemImage: "doc.badge.plus")
             }
             Button {
                 actions.makeOverview(section.id, .video, [])

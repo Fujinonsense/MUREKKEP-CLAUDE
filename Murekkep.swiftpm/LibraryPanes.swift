@@ -325,7 +325,7 @@ struct HomePane: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 40)
         }
-        .onDrop(of: [.pdf], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
+        .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
         .overlay {
             if dropping {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -364,7 +364,7 @@ struct HomePane: View {
                                    overviews: studio.overviews(in: section.id).count)
                     }
                     .buttonStyle(PressableStyle())
-                    .onDrop(of: [.pdf], isTargeted: nil) { providers in actions.drop(providers, section.id) }
+                    .onDrop(of: [.pdf, .image], isTargeted: nil) { providers in actions.drop(providers, section.id) }
                     .contextMenu {
                         Button {
                             actions.editCourse(section)
@@ -552,7 +552,7 @@ struct NotesPane: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 40)
         }
-        .onDrop(of: [.pdf], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
+        .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
     }
 
     @ViewBuilder
@@ -765,7 +765,7 @@ struct CoursePane: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 40)
         }
-        .onDrop(of: [.pdf], isTargeted: $dropping) { providers in
+        .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in
             tabRaw = CourseTab.sources.rawValue
             return actions.drop(providers, section.id)
         }
@@ -825,7 +825,7 @@ struct CoursePane: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    bannerButton(Loc.t("PDF ekle"), "doc.badge.plus") { actions.importPDF(section.id) }
+                    bannerButton(Loc.t("PDF ya da fotoğraf ekle"), "doc.badge.plus") { actions.importPDF(section.id) }
                     bannerButton(Loc.t("Defter"), "square.and.pencil") { actions.newNotebook(section.id) }
                     bannerButton(Loc.t("Video özeti"), OverviewKind.video.symbol) { actions.makeOverview(section.id, .video, []) }
                     bannerButton(Loc.t("Sesli özet"), OverviewKind.audio.symbol) { actions.makeOverview(section.id, .audio, []) }

@@ -504,7 +504,6 @@ enum Translations {
         "Oynatılamadı": "Couldn't play",
         "PDF Claude'a yükleniyor…": "Uploading the PDF to Claude…",
         "PDF açılamadı. Dosya bozuk ya da şifreli olabilir.": "Couldn't open the PDF. The file may be damaged or encrypted.",
-        "PDF ekle": "Add PDF",
         "PDF içe aktar": "Import PDF",
         "PDF olarak paylaş": "Share as PDF",
         "PDF yok": "No PDFs",
@@ -1292,5 +1291,12 @@ enum Translations {
         "ör. zor, sınav tarzı sorular; işlem gerektirenler olsun, şıklar birbirine yakın olsun…": "e.g. hard, exam-style questions; include ones that need working out, with close choices…",
         "ör. tarih sırasıyla dallansın, her dalda bir örnek olsun…": "e.g. branch in date order, with one example on each branch…",
         "ör. sınava son gün tekrarı için kısa tut, formülleri ayrı topla…": "e.g. keep it short for a last-day review, gather the formulas separately…",
+        // Photos as PDFs (2026-10-26)
+        "PDF ya da fotoğraf ekle": "Add a PDF or photos",
+        "Dosyalar'dan (PDF ya da fotoğraf)": "From Files (PDF or photos)",
+        "Fotoğraflar'dan": "From Photos",
+        "Fotoğraflar tek bir PDF olur, her fotoğraf bir sayfa.": "Photos become one PDF, one page per photo.",
+        "PDF / Foto": "PDF / Photo",
+        "Fotoğraf okunamadı.": "Couldn't read the photo.",
     ]
 }

@@ -4,10 +4,12 @@ import UIKit
 
 enum LibraryError: LocalizedError {
     case unreadablePDF
+    case unreadablePhoto
 
     var errorDescription: String? {
         switch self {
         case .unreadablePDF: return Loc.t("PDF açılamadı. Dosya bozuk ya da şifreli olabilir.")
+        case .unreadablePhoto: return Loc.t("Fotoğraf okunamadı.")
         }
     }
 }
@@ -212,6 +214,23 @@ final class LibraryStore: ObservableObject {
         persist()
         makeThumbnail(for: meta, strokes: [])
         return meta
+    }
+
+    /// Photos (image file data) as one PDF, a page per photo, titled `title`.
+    @discardableResult
+    func importPhotos(_ photos: [Data], title: String, section: UUID? = nil) throws -> NoteMeta {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent(PhotoPDF.fileName(title)).appendingPathExtension("pdf")
+        guard try PhotoPDF.write(photos, to: url) > 0 else { throw LibraryError.unreadablePhoto }
+        return try importPDF(from: url, section: section)
+    }
+
+    /// The title for photos added together: the first file's name, or "Fotoğraf" and the time.
+    static func photoTitle(fileName: String?) -> String {
+        if let name = fileName.map({ ($0 as NSString).deletingPathExtension }), !name.isEmpty { return name }
+        return Loc.t("Fotoğraf") + " " + Date().formatted(date: .abbreviated, time: .shortened)
     }
 
     @discardableResult
