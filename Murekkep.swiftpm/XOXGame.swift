@@ -91,6 +91,8 @@ struct XOXGame: View {
                 store.record(.xox, score: wins + 1, at: difficulty)
             }
         }
+        .sensoryFeedback(.success, trigger: wins)
+        .sensoryFeedback(.selection, trigger: game.cells.compactMap { $0 }.count)
     }
 
     private var status: String {
@@ -137,8 +139,7 @@ struct XOXGame: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
+        .gameBoard()
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)

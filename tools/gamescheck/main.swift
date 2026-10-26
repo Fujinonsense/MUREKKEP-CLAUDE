@@ -53,13 +53,14 @@ check(MandalaSymmetry.hue(at: -6) > 0.74 && MandalaSymmetry.hue(at: -6) < 0.76, 
 
 let fieldSize = CGSize(width: 300, height: 320)
 var field = BubbleField(size: fieldSize, seed: 7)
-check(field.bubbles.isEmpty && field.score == 0 && field.timeLeft == 60 && !field.isOver, "bubbles: an empty field at the start")
-check(abs(field.spawnInterval - 1.1) < 1e-9 && abs(field.riseSpeed - 38) < 1e-9, "bubbles: easy at the start")
+check(field.bubbles.isEmpty && field.score == 0 && field.timeLeft == 60 && !field.isOver && field.combo == 1, "bubbles: an empty field at the start")
+check(abs(field.spawnInterval - 1.0) < 1e-9 && abs(field.riseSpeed - 44) < 1e-9 && field.radiusRange == 11...28 && abs(field.blotShare - 0.12) < 1e-9,
+      "bubbles: gentle at the start")
 for _ in 0..<40 { field.advance(by: 1.0 / 20) }
 check(abs(field.elapsed - 2) < 1e-9, "bubbles: two seconds in (\(field.elapsed))")
 check(field.bubbles.count >= 2, "bubbles: bubbles have come up (\(field.bubbles.count))")
 check(field.bubbles.allSatisfy { $0.x >= $0.radius && $0.x <= Double(fieldSize.width) - $0.radius }, "bubbles: every bubble is inside the width")
-check(field.bubbles.allSatisfy { $0.radius >= 13 && $0.radius <= 30 }, "bubbles: sizes in range")
+check(field.bubbles.allSatisfy { $0.kind == .blot ? ($0.radius >= 13 && $0.radius <= 21) : ($0.radius >= 11 && $0.radius <= 28) }, "bubbles: sizes in range")
 check(field.bubbles.allSatisfy { $0.y < Double(fieldSize.height) + $0.radius }, "bubbles: they rise from the bottom")
 check(Set(field.bubbles.map(\.id)).count == field.bubbles.count, "bubbles: every bubble has its own id")
 let same = { () -> BubbleField in
@@ -79,18 +80,21 @@ still.advance(by: -1)
 check(still == field, "bubbles: zero or negative steps change nothing")
 
 // Popping: the bubble under the touch goes, the nearest when two are close, nothing far away.
-let target = field.bubbles[0]
+let target = field.bubbles.first { $0.kind == .ink }!
 let before = field.bubbles.count
-let gain = field.pop(at: CGPoint(x: target.x + target.radius + 8, y: target.y))
-check(gain == target.worth && field.bubbles.count == before - 1 && !field.bubbles.contains(target), "bubbles: a touch beside the bubble's edge pops it")
-check(field.score == target.worth && field.popped == 1 && field.splashes.count == 1, "bubbles: the pop is scored and splashes")
-check((target.radius < 20 && target.worth == 2) || (target.radius >= 20 && target.worth == 1), "bubbles: small bubbles are worth two, big ones one")
-check(field.pop(at: CGPoint(x: -500, y: -500)) == nil && field.score == target.worth, "bubbles: a touch on nothing scores nothing")
+let firstPop = field.pop(at: CGPoint(x: target.x + target.radius + 8, y: target.y))
+check(firstPop == .popped(points: target.worth, combo: 1) && field.bubbles.count == before - 1 && !field.bubbles.contains(target),
+      "bubbles: a touch beside the bubble's edge pops it")
+check(field.score == target.worth && field.popped == 1 && field.splashes.count == 1 && !field.splashes[0].blot, "bubbles: the pop is scored and splashes")
+let worthRight = (target.radius < 15 && target.worth == 3) || (target.radius >= 15 && target.radius < 21 && target.worth == 2) || (target.radius >= 21 && target.worth == 1)
+check(worthRight, "bubbles: small bubbles are worth three, middling two, big one")
+check(field.pop(at: CGPoint(x: -500, y: -500)) == .miss && field.score == target.worth && field.combo == 1, "bubbles: a touch on nothing scores nothing and breaks the row")
 var crowd = BubbleField(size: fieldSize, seed: 1)
 for _ in 0..<200 { crowd.advance(by: 1.0 / 30) }
-if crowd.bubbles.count >= 2 {
-    let a = crowd.bubbles[0]
-    let b = crowd.bubbles[1]
+let inkOnly = crowd.bubbles.filter { $0.kind == .ink }
+if inkOnly.count >= 2 {
+    let a = inkOnly[0]
+    let b = inkOnly[1]
     let nearA = CGPoint(x: a.x + (b.x - a.x) * 0.1, y: a.y + (b.y - a.y) * 0.1)
     crowd.pop(at: nearA)
     let aGone = !crowd.bubbles.contains(a)
@@ -98,25 +102,75 @@ if crowd.bubbles.count >= 2 {
     check(aGone && bStays, "bubbles: the nearest bubble pops")
 }
 
-// Splashes fade, bubbles that reach the top leave, the pace picks up, the round ends at 60 s.
+// A row of quick pops multiplies: ×2, ×3, ×4 and no more; a slow one starts over.
+var rowField = BubbleField(size: fieldSize, seed: 1)
+var rowSeed: UInt64 = 1
+while rowField.bubbles.filter({ $0.kind == .ink }).count < 5 && rowSeed < 200 {
+    rowSeed += 1
+    rowField = BubbleField(size: fieldSize, seed: rowSeed)
+    for _ in 0..<100 { rowField.advance(by: 1.0 / 20) }
+}
+var combos: [Int] = []
+var multipliers: [Int] = []
+for bubble in rowField.bubbles.filter({ $0.kind == .ink }).prefix(5) {
+    if case .popped(let points, let combo) = rowField.pop(at: CGPoint(x: bubble.x, y: bubble.y)) {
+        combos.append(combo)
+        multipliers.append(points / bubble.worth)
+    }
+}
+check(combos == [1, 2, 3, 4, 4] && multipliers == combos, "bubbles: a row of quick pops multiplies ×2, ×3, ×4 and stays there (\(combos))")
+check(rowField.combo == 4 && rowField.popped == 5, "bubbles: the row is kept (\(rowField.combo))")
+for _ in 0..<12 { rowField.advance(by: 0.1) }
+if let late = rowField.bubbles.first(where: { $0.kind == .ink }) {
+    if case .popped(_, let combo) = rowField.pop(at: CGPoint(x: late.x, y: late.y)) {
+        check(combo == 1, "bubbles: a pop after more than 0.9 s starts a new row (\(combo))")
+    } else {
+        check(false, "bubbles: the late pop")
+    }
+}
+
+// Blots: a touch costs five points and three seconds and breaks the row.
+var blotField = BubbleField(size: fieldSize, seed: 2)
+var blotSeed: UInt64 = 2
+while !blotField.bubbles.contains(where: { $0.kind == .blot }) && blotSeed < 300 {
+    blotSeed += 1
+    blotField = BubbleField(size: fieldSize, seed: blotSeed)
+    for _ in 0..<80 { blotField.advance(by: 1.0 / 20) }
+}
+let blot = blotField.bubbles.first { $0.kind == .blot }!
+let scoreBefore = blotField.score
+let leftBefore = blotField.timeLeft
+let touched = blotField.pop(at: CGPoint(x: blot.x, y: blot.y))
+check(touched == .blot(points: 5, seconds: 3) && blotField.blotsHit == 1 && blotField.combo == 1, "bubbles: a touched blot costs (\(String(describing: touched)))")
+check(blotField.score == max(0, scoreBefore - 5) && abs(blotField.timeLeft - (leftBefore - 3)) < 1e-9 && blotField.splashes.last?.blot == true,
+      "bubbles: five points and three seconds gone, a dark splash")
+check(blot.worth == 0, "bubbles: a blot is worth nothing")
+
+// Splashes fade, bubbles that reach the top leave and break the row, the pace picks up and the bubbles shrink.
 var fading = field
 for _ in 0..<12 { fading.advance(by: 0.05) }
 check(fading.splashes.isEmpty, "bubbles: a splash is gone after half a second")
 var long = BubbleField(size: fieldSize, seed: 3)
 for _ in 0..<(30 * 30) { long.advance(by: 1.0 / 30) }
 check(abs(long.elapsed - 30) < 1e-6 && abs(long.difficulty - 0.5) < 1e-6, "bubbles: half way (\(long.elapsed))")
-check(abs(long.spawnInterval - 0.775) < 1e-6 && abs(long.riseSpeed - 59) < 1e-6, "bubbles: the pace picks up half way (\(long.spawnInterval), \(long.riseSpeed))")
-check(long.bubbles.allSatisfy { $0.y + $0.radius >= 0 }, "bubbles: bubbles above the top are gone")
+check(abs(long.spawnInterval - 0.675) < 1e-6 && abs(long.riseSpeed - 82) < 1e-6 && abs(long.radiusRange.upperBound - 23.1) < 1e-6 && abs(long.blotShare - 0.21) < 1e-6,
+      "bubbles: the pace picks up and the bubbles shrink half way (\(long.spawnInterval), \(long.riseSpeed))")
+check(long.bubbles.allSatisfy { $0.y + $0.radius >= 0 } && long.escaped > 0 && long.combo == 1, "bubbles: bubbles over the top are gone and counted (\(long.escaped))")
 check(long.bubbles.count < 60, "bubbles: the field does not fill up (\(long.bubbles.count))")
 for _ in 0..<(31 * 30) { long.advance(by: 1.0 / 30) }
 check(long.isOver && long.timeLeft == 0 && abs(long.elapsed - 60) < 1e-6, "bubbles: the round ends at 60 s (\(long.elapsed))")
-check(abs(long.spawnInterval - 0.45) < 1e-9 && abs(long.riseSpeed - 80) < 1e-9, "bubbles: hardest at the end")
+check(abs(long.spawnInterval - 0.35) < 1e-9 && abs(long.riseSpeed - 120) < 1e-9 && abs(long.radiusRange.lowerBound - 7.15) < 1e-9 && abs(long.blotShare - 0.3) < 1e-9,
+      "bubbles: hardest at the end")
 let frozen = long
 long.advance(by: 0.5)
 let lastBubble = long.bubbles.first
 let popAfterEnd = long.pop(at: CGPoint(x: lastBubble?.x ?? 0, y: lastBubble?.y ?? 0))
-check(long == frozen && popAfterEnd == nil, "bubbles: nothing moves or pops after the end")
-check(BubbleField.bestKey == "breakBubblesBest", "bubbles: the best score's key")
+check(long == frozen && popAfterEnd == .miss, "bubbles: nothing moves or pops after the end")
+// Blots' seconds shorten the round.
+var shortened = blotField
+for _ in 0..<2000 where !shortened.isOver { shortened.advance(by: 0.1) }
+check(shortened.isOver && abs(shortened.elapsed - 57) < 1e-6, "bubbles: a blot's three seconds end the round sooner (\(shortened.elapsed))")
+check(BubbleField.bestKey == "breakBubblesBest", "bubbles: the best score's old key")
 
 // MARK: XOX (TicTacToe)
 
@@ -239,15 +293,31 @@ for _ in 0..<60 {
 }
 check(easyMoves.count > 3 && easyMoves.contains(2), "xox kolay: sometimes blocks, often wanders (\(easyMoves.sorted()))")
 
-// MARK: Bubbles at each difficulty (BubbleField.pace)
+// MARK: Bubbles at each difficulty (BubbleField.Tuning)
 
 check(BubbleField.pace(.easy) == 0.8 && BubbleField.pace(.medium) == 1 && BubbleField.pace(.hard) == 1.3, "bubbles: the paces")
+let kolayTuning = BubbleField.Tuning.tuning(.easy)
+let zorTuning = BubbleField.Tuning.tuning(.hard)
+check(kolayTuning.reach > BubbleField.Tuning.tuning(.medium).reach && zorTuning.reach < BubbleField.Tuning.tuning(.medium).reach, "bubbles: kolay forgives a wider touch, zor a narrower")
+check(kolayTuning.blotsAtEnd < BubbleField.Tuning.tuning(.medium).blotsAtEnd && zorTuning.blotsAtStart > BubbleField.Tuning.tuning(.medium).blotsAtStart, "bubbles: zor has more blots")
 let hardField = BubbleField(size: fieldSize, seed: 7, difficulty: .hard)
-check(abs(hardField.spawnInterval - 1.1 / 1.3) < 1e-9 && abs(hardField.riseSpeed - 38 * 1.3) < 1e-9, "bubbles zor: faster to come and rise")
+check(abs(hardField.spawnInterval - 1.0 / 1.3) < 1e-9 && abs(hardField.riseSpeed - 44 * 1.3) < 1e-9 && abs(hardField.blotShare - 0.18) < 1e-9, "bubbles zor: faster to come and rise")
 let easyField = BubbleField(size: fieldSize, seed: 7, difficulty: .easy)
-check(abs(easyField.spawnInterval - 1.1 / 0.8) < 1e-9 && abs(easyField.riseSpeed - 38 * 0.8) < 1e-9, "bubbles kolay: slower")
+check(abs(easyField.spawnInterval - 1.0 / 0.8) < 1e-9 && abs(easyField.riseSpeed - 44 * 0.8) < 1e-9 && abs(easyField.blotShare - 0.06) < 1e-9, "bubbles kolay: slower, fewer blots")
 check(BubbleField(size: fieldSize, seed: 7) == BubbleField(size: fieldSize, seed: 7, difficulty: .medium) && BubbleField(size: fieldSize, seed: 7).pace == 1,
-      "bubbles: orta is the old pace")
+      "bubbles: orta is the default")
+// Over a whole round at Orta, more comes up than anyone pops: the field keeps the player busy.
+var busy = BubbleField(size: fieldSize, seed: 9)
+var spawned = 0
+var lastID = 0
+for _ in 0..<(60 * 30) {
+    busy.advance(by: 1.0 / 30)
+    if let newest = busy.bubbles.map(\.id).max(), newest > lastID {
+        spawned += newest - lastID
+        lastID = newest
+    }
+}
+check(spawned >= 95 && spawned <= 130, "bubbles orta: about a hundred bubbles in a round (\(spawned))")
 
 // MARK: Progression (GameProgress)
 
@@ -362,6 +432,7 @@ check(late == flown, "flyer: nothing moves after the flag")
 
 let hex = HexGrid(cols: 9, radius: 16)
 check(hex.width == 288 && abs(hex.rowHeight - 27.7128) < 1e-3 && hex.width(ofRow: 0) == 9 && hex.width(ofRow: 1) == 8, "shooter: the honeycomb's measures")
+check(ShooterBoard.deadRow == 9, "shooter: the dead row leaves eight rows of play in the compact panel")
 check(hex.centre(ShooterCell(0, 0)) == CGPoint(x: 16, y: 16) && hex.centre(ShooterCell(1, 0)) == CGPoint(x: 32, y: 16 + hex.rowHeight), "shooter: odd rows stand half a cell right")
 check(Set(hex.neighbours(of: ShooterCell(2, 3))) == [ShooterCell(2, 2), ShooterCell(2, 4), ShooterCell(1, 2), ShooterCell(1, 3), ShooterCell(3, 2), ShooterCell(3, 3)],
       "shooter: an even cell's six neighbours")
@@ -376,7 +447,7 @@ for (i, level) in ShooterLevels.all.enumerated() {
     let count = board.cells.count
     let rowsFit = level.rows.count <= 8 && level.rows.enumerated().allSatisfy { r, text in text.count <= hex.width(ofRow: r) }
     let hanging = board.fallOrphans(grid: hex).isEmpty
-    check(count >= 12 && rowsFit && hanging && level.shots >= 8 && level.shots <= 24 && board.cells.keys.allSatisfy { $0.row < ShooterBoard.deadRow - 2 },
+    check(count >= 12 && rowsFit && hanging && level.shots >= 8 && level.shots <= 24 && board.cells.keys.allSatisfy { $0.row < ShooterBoard.deadRow - 1 },
           "shooter level \(i + 1): \(count) bubbles, all hanging from the top, \(level.shots) shots")
 }
 let first = ShooterLevels.all[0]

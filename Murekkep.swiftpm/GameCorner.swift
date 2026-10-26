@@ -18,16 +18,26 @@ enum GameCorner {
         reduceMotion ? .opacity : .scale(scale: 0.86, anchor: .bottomLeading).combined(with: .opacity)
     }
 
-    /// The ink colours of the games' pieces: lacivert, turquoise, magenta, amber, green.
-    static let inks: [Color] = [
-        Color(hue: 0.63, saturation: 0.72, brightness: 0.86),
-        Color(hue: 0.50, saturation: 0.70, brightness: 0.78),
-        Color(hue: 0.88, saturation: 0.62, brightness: 0.84),
-        Color(hue: 0.10, saturation: 0.78, brightness: 0.92),
-        Color(hue: 0.36, saturation: 0.62, brightness: 0.70),
+    /// How the panel's pages change: the next slides in from the right as the old fades; a fade
+    /// alone with Reduce Motion.
+    static func pageTransition(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity)
+    }
+
+    /// The inks of the games' pieces: lacivert, turquoise, magenta, amber, green.
+    static let inkHues: [(hue: Double, saturation: Double, brightness: Double)] = [
+        (0.63, 0.72, 0.86), (0.50, 0.70, 0.78), (0.88, 0.62, 0.84), (0.10, 0.78, 0.92), (0.36, 0.62, 0.70),
     ]
 
-    static func ink(_ index: Int) -> Color { inks[max(0, index) % inks.count] }
+    static func ink(_ index: Int) -> Color { shade(index, light: 0) }
+
+    /// A lighter (`light` > 0) or darker (`light` < 0) shade of an ink, for gloss and rims; 1 and −1 are the ends.
+    static func shade(_ index: Int, light: Double) -> Color {
+        let ink = inkHues[max(0, index) % inkHues.count]
+        let saturation = max(0, min(1, ink.saturation - max(0, light) * 0.55))
+        let brightness = max(0, min(1, ink.brightness + light * 0.3))
+        return Color(hue: ink.hue, saturation: saturation, brightness: brightness)
+    }
 
     static func clock(_ seconds: Int) -> String {
         String(format: "%d:%02d", seconds / 60, seconds % 60)
@@ -64,7 +74,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
     var hint: String {
         switch self {
         case .mandala: return Loc.t("Çiz; her çizgi sekiz kat açılır.")
-        case .bubbles: return Loc.t("Yükselen balonlara dokun, patlat. 60 saniye.")
+        case .bubbles: return Loc.t("Balonları patlat, lekelere dokunma. 60 saniye.")
         case .xox: return Loc.t("iPad'e karşı; sen X'sin.")
         case .flyer: return Loc.t("Dokun, damla yükselsin; kalemlerin arasından geç.")
         case .shooter: return Loc.t("Nişan al, aynı renkten üçünü patlat.")
@@ -91,6 +101,8 @@ enum MiniGame: String, CaseIterable, Identifiable {
         default: return nil
         }
     }
+
+    var hasDifficulty: Bool { self != .mandala }
 }
 
 /// What the player keeps of every game, read from and written to UserDefaults.
@@ -136,6 +148,26 @@ final class GameProgressStore: ObservableObject {
         progress[game] = kept
         if best { defaults.set(score, forKey: GameProgress.Keys.best(game.id, difficulty)) }
         return best
+    }
+
+    /// One line about a game for its tile: its stars and open level, its best, its wins, its time.
+    func summary(of game: MiniGame) -> String {
+        let kept = self[game]
+        switch game {
+        case .mandala:
+            return Loc.t("Puan yok, sadece akış.")
+        case .flyer, .shooter:
+            return Loc.t("{0} yıldız", "\(kept.totalStars)") + " · " + Loc.t("Seviye {0}", "\(kept.unlockedLevel)")
+        case .bubbles:
+            return Loc.t("En iyi: {0}", "\(kept.best[kept.difficulty] ?? 0)") + " · " + kept.difficulty.title
+        case .xox:
+            return Loc.t("Galibiyet: {0}", "\(kept.best[kept.difficulty] ?? 0)") + " · " + kept.difficulty.title
+        case .sudoku:
+            if let best = kept.best[kept.difficulty] {
+                return Loc.t("En iyi süre: {0}", GameCorner.clock(best)) + " · " + kept.difficulty.title
+            }
+            return kept.difficulty.title
+        }
     }
 
     private func load(_ game: MiniGame) -> GameProgress {
@@ -214,43 +246,62 @@ struct GameCornerPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-                .padding(.horizontal, 10)
-                .frame(height: 48)
+                .padding(.horizontal, 12)
+                .frame(height: 56)
             Divider()
-            Group {
+                .overlay(Theme.hairline)
+            ZStack {
                 if let game {
                     gameView(game)
                         .id("\(game.id)-\(round)")
+                        .transition(GameCorner.pageTransition(reduceMotion: reduceMotion))
                 } else {
                     picker
+                        .transition(GameCorner.pageTransition(reduceMotion: reduceMotion))
                 }
             }
             .padding(12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
         .frame(width: size.width, height: size.height)
         .glassCard(radius: GameCorner.radius)
         .contentShape(RoundedRectangle(cornerRadius: GameCorner.radius, style: .continuous))
         // The card keeps every touch to itself: nothing reaches the page beneath it.
         .onTapGesture {}
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: game)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: game)
+    }
+
+    private var subtitle: String {
+        guard let game else { return Loc.t("Kısa bir mola; kalemle de parmakla da.") }
+        return game.hasDifficulty ? store.summary(of: game) : game.hint
     }
 
     private var header: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             if game != nil {
                 headerButton("chevron.left", label: Loc.t("Oyunlara dön")) {
                     game = nil
                 }
             } else {
-                Image(systemName: "cup.and.saucer")
-                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: "cup.and.saucer.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(Theme.ink)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Theme.ink.opacity(0.1)))
             }
-            Text(game?.title ?? Loc.t("Mola"))
-                .font(Theme.display(.headline))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(game?.title ?? Loc.t("Mola"))
+                    .font(Theme.display(.title3))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
             Spacer(minLength: 4)
             if game != nil {
                 headerButton("arrow.counterclockwise", label: Loc.t("Yeniden başlat")) {
@@ -268,71 +319,57 @@ struct GameCornerPanel: View {
     private func headerButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.primary)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.primary.opacity(0.06)))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.primary.opacity(0.8))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Material.ultraThinMaterial))
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 0.6))
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .accessibilityLabel(label)
     }
 
     private var picker: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 10) {
-                Text(Loc.t("Kısa bir mola. Kalemle de parmakla da oynanır."))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    ForEach(MiniGame.allCases) { item in
-                        gameTile(item)
-                    }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(MiniGame.allCases) { item in
+                    gameTile(item)
                 }
             }
+            .padding(.vertical, 2)
         }
     }
 
     private func gameTile(_ item: MiniGame) -> some View {
-        let kept = store[item]
-        return Button {
+        Button {
             game = item
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Theme.ink)
-                    .frame(width: 38, height: 38)
-                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.ink.opacity(0.1)))
-                Text(item.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if item.levels != nil {
-                    HStack(spacing: 3) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 9))
-                        Text("\(kept.totalStars)")
-                            .monospacedDigit()
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                } else {
-                    Text(item == .mandala ? Loc.t("Puan yok, sadece akış.") : kept.difficulty.title)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.ink.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text(store.summary(of: item))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.04)))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
+            .glassCard(radius: 16)
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .accessibilityLabel(item.title)
         .accessibilityHint(item.hint)
     }
@@ -367,6 +404,22 @@ struct DifficultyPicker: View {
     }
 }
 
+/// The frame every game's field stands in: paper, a hairline, continuous corners.
+struct GameBoardFrame: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+extension View {
+    func gameBoard() -> some View {
+        modifier(GameBoardFrame())
+    }
+}
+
 /// Three stars, `stars` of them filled in ink.
 struct StarRow: View {
     let stars: Int
@@ -384,7 +437,73 @@ struct StarRow: View {
     }
 }
 
-/// The level map of a levelled game: the difficulty, then the levels as tiles; locked ones wait.
+/// A thing to do at the end of a round or a level.
+struct ResultAction: Identifiable {
+    let title: String
+    var prominent = false
+    let action: () -> Void
+
+    var id: String { title }
+
+    init(_ title: String, prominent: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.prominent = prominent
+        self.action = action
+    }
+}
+
+/// The card at the end of a round or a level: a serif title, the stars, a line or two, the buttons.
+struct ResultCard: View {
+    let title: String
+    var stars: Int?
+    var lines: [String] = []
+    var highlight: String?
+    let actions: [ResultAction]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(title)
+                .font(Theme.display(.title3))
+                .multilineTextAlignment(.center)
+            if let stars {
+                StarRow(stars: stars, size: 20)
+            }
+            ForEach(lines, id: \.self) { line in
+                Text(line)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            if let highlight {
+                Text(highlight)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
+            }
+            HStack(spacing: 8) {
+                ForEach(actions) { item in
+                    if item.prominent {
+                        Button(item.title, action: item.action)
+                            .buttonStyle(.borderedProminent)
+                            .tint(Theme.ink)
+                    } else {
+                        Button(item.title, action: item.action)
+                            .buttonStyle(.bordered)
+                    }
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.top, 2)
+        }
+        .padding(18)
+        .frame(maxWidth: 290)
+        .glassCard(radius: 20)
+        .transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
+    }
+}
+
+/// The level map of a levelled game: the difficulty, then the levels as tiles; locked ones wait,
+/// the next one to play is ringed in ink.
 struct LevelMap: View {
     let game: MiniGame
     @ObservedObject var store: GameProgressStore
@@ -395,7 +514,7 @@ struct LevelMap: View {
         VStack(spacing: 10) {
             DifficultyPicker(difficulty: Binding(get: { store[game].difficulty }, set: { store.setDifficulty($0, for: game) }))
             HStack {
-                Text(Loc.t("Toplam {0} yıldız", "\(kept.totalStars)"))
+                Label(Loc.t("Toplam {0} yıldız", "\(kept.totalStars)"), systemImage: "star.fill")
                 Spacer()
                 Text(Loc.t("Seviye {0} açık", "\(kept.unlockedLevel)"))
             }
@@ -407,34 +526,37 @@ struct LevelMap: View {
                         levelTile(level, kept)
                     }
                 }
+                .padding(.vertical, 2)
             }
         }
     }
 
     private func levelTile(_ level: Int, _ kept: GameProgress) -> some View {
         let open = kept.isUnlocked(level)
+        let next = level == kept.unlockedLevel
         return Button {
             onStart(level)
         } label: {
             VStack(spacing: 4) {
                 if open {
                     Text("\(level)")
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(Color.primary)
+                        .font(.system(.headline, design: .rounded).monospacedDigit())
+                        .foregroundStyle(next ? Theme.ink : Color.primary)
                 } else {
                     Image(systemName: "lock.fill")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
                 StarRow(stars: kept.stars(at: level), size: 8)
+                    .opacity(open ? 1 : 0.35)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(open ? Theme.ink.opacity(0.1) : Color.primary.opacity(0.04)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(open ? Theme.ink.opacity(0.08) : Color.primary.opacity(0.035)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(next ? Theme.ink.opacity(0.7) : Theme.hairline, lineWidth: next ? 1.4 : 0.6))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
         .disabled(!open)
         .accessibilityLabel(open ? Loc.t("Seviye {0}", "\(level)") : Loc.t("Seviye {0}, kilitli", "\(level)"))
     }
@@ -449,33 +571,13 @@ struct LevelResultCard: View {
     let onLevels: () -> Void
     let onRetry: () -> Void
     let onNext: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text(won ? Loc.t("Seviye tamam!") : Loc.t("Bu sefer olmadı."))
-                .font(Theme.display(.title3))
-            if won {
-                StarRow(stars: stars, size: 18)
-            }
-            Text(detail)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                Button(Loc.t("Seviyeler"), action: onLevels)
-                    .buttonStyle(.bordered)
-                Button(Loc.t("Tekrar"), action: onRetry)
-                    .buttonStyle(.bordered)
-                if won && hasNext {
-                    Button(Loc.t("Sonraki"), action: onNext)
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.ink)
-                }
-            }
-            .font(.subheadline.weight(.semibold))
+        var actions = [ResultAction(Loc.t("Seviyeler"), action: onLevels),
+                       ResultAction(Loc.t("Tekrar"), prominent: !(won && hasNext), action: onRetry)]
+        if won && hasNext {
+            actions.append(ResultAction(Loc.t("Sonraki"), prominent: true, action: onNext))
         }
-        .padding(16)
-        .glassCard(radius: 18)
-        .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+        return ResultCard(title: won ? Loc.t("Seviye tamam!") : Loc.t("Bu sefer olmadı."), stars: won ? stars : nil, lines: [detail], actions: actions)
     }
 }

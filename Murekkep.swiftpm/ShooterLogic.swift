@@ -118,7 +118,7 @@ struct ShooterBoard: Equatable {
 
     static let cols = 9
     /// A bubble that comes to rest this far down loses the level.
-    static let deadRow = 10
+    static let deadRow = 9
     static let popSize = 3
     static let popPoints = 10
     static let fallPoints = 20

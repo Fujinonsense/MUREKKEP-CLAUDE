@@ -140,9 +140,14 @@ enum MandalaSymmetry {
 
 // MARK: - Ink bubbles
 
-/// A bubble of ink on its way up.
+/// A bubble of ink on its way up, or a blot, which must not be popped.
 struct Bubble: Equatable {
+    enum Kind: Equatable {
+        case ink, blot
+    }
+
     let id: Int
+    let kind: Kind
     /// The column it rises in (points); `x` swings around it.
     let home: Double
     var x: Double
@@ -157,81 +162,126 @@ struct Bubble: Equatable {
     let hue: Double
     var age: TimeInterval = 0
 
-    /// Small bubbles are worth more.
-    var worth: Int { radius < BubbleField.smallRadius ? 2 : 1 }
+    /// Small bubbles are worth most; a blot is worth nothing but trouble.
+    var worth: Int {
+        switch kind {
+        case .blot: return 0
+        case .ink: return radius < 15 ? 3 : radius < 21 ? 2 : 1
+        }
+    }
 }
 
-/// The splash a popped bubble leaves, for a moment.
+/// The splash a popped bubble (or a touched blot) leaves, for a moment.
 struct Splash: Equatable {
     let x: Double
     let y: Double
     let radius: Double
     let hue: Double
+    let blot: Bool
     var age: TimeInterval = 0
 
     static let life: TimeInterval = 0.45
     var done: Bool { age >= Self.life }
 }
 
-/// Sixty seconds of bubbles rising through a field `size` big; each tap pops the bubble under it.
-/// The field is stepped by `advance(by:)`; nothing in it knows about the screen. The difficulty
-/// sets the pace: how fast they come and rise.
+/// What one touch of the field did.
+enum PopResult: Equatable {
+    case popped(points: Int, combo: Int)
+    case blot(points: Int, seconds: Int)
+    case miss
+}
+
+/// Sixty seconds of bubbles rising through a field `size` big; each touch pops the bubble under it.
+/// They come faster and smaller as the clock runs, blots rise among them (a touch costs points and
+/// seconds), and quick pops in a row multiply the points. The field is stepped by `advance(by:)`;
+/// nothing in it knows about the screen.
 struct BubbleField: Equatable {
     static let round: TimeInterval = 60
     static let bestKey = GameProgress.Keys.legacyBubblesBest
-    /// Bubbles narrower than this are the two-point ones.
-    static let smallRadius = 20.0
-    /// How far beside a bubble's edge a touch still pops it (a fingertip is wide).
-    static let reach = 12.0
-    /// Seconds between bubbles at the start and at the end of a round.
-    static let spawnEasy: TimeInterval = 1.1
-    static let spawnHard: TimeInterval = 0.45
     /// One step never jumps further than this, whatever the clock says (a pause, a slow frame).
     static let maxStep: TimeInterval = 0.1
+    /// Pops within this many seconds of each other are a row; a row multiplies the points, up to `maxCombo`.
+    static let comboWindow: TimeInterval = 0.9
+    static let maxCombo = 4
+    /// A touched blot: points off the score and seconds off the clock.
+    static let blotPoints = 5
+    static let blotSeconds = 3
+
+    /// How the difficulty reads: the pace, the reach of a touch, the share of blots.
+    struct Tuning: Equatable {
+        /// How much faster than Orta everything comes and rises.
+        var pace: Double
+        /// How far beside a bubble's edge a touch still pops it (a fingertip is wide).
+        var reach: Double
+        /// The share of blots among what comes up, at the start and at the end.
+        var blotsAtStart: Double
+        var blotsAtEnd: Double
+
+        static func tuning(_ difficulty: GameDifficulty) -> Tuning {
+            switch difficulty {
+            case .easy: return Tuning(pace: 0.8, reach: 14, blotsAtStart: 0.06, blotsAtEnd: 0.18)
+            case .medium: return Tuning(pace: 1, reach: 10, blotsAtStart: 0.12, blotsAtEnd: 0.3)
+            case .hard: return Tuning(pace: 1.3, reach: 7, blotsAtStart: 0.18, blotsAtEnd: 0.4)
+            }
+        }
+    }
 
     var size: CGSize
-    /// How much faster than medium everything happens: Kolay 0.8, Orta 1, Zor 1.3.
-    let pace: Double
+    let tuning: Tuning
     private(set) var bubbles: [Bubble] = []
     private(set) var splashes: [Splash] = []
     private(set) var score = 0
     private(set) var popped = 0
+    private(set) var blotsHit = 0
+    /// Ink bubbles that got away over the top.
+    private(set) var escaped = 0
+    private(set) var combo = 1
     private(set) var elapsed: TimeInterval = 0
+    /// Seconds taken off the clock by blots.
+    private(set) var penalty: TimeInterval = 0
+    private var lastPop: TimeInterval = -10
     private var untilSpawn: TimeInterval = 0.5
     private var nextID = 1
     private var rng: GameRandom
 
     init(size: CGSize, seed: UInt64, difficulty: GameDifficulty = .medium) {
         self.size = size
-        pace = Self.pace(difficulty)
+        tuning = Tuning.tuning(difficulty)
         rng = GameRandom(seed: seed)
     }
 
-    static func pace(_ difficulty: GameDifficulty) -> Double {
-        switch difficulty {
-        case .easy: return 0.8
-        case .medium: return 1
-        case .hard: return 1.3
-        }
-    }
+    static func pace(_ difficulty: GameDifficulty) -> Double { Tuning.tuning(difficulty).pace }
 
-    var timeLeft: TimeInterval { max(0, Self.round - elapsed) }
-    var isOver: Bool { elapsed >= Self.round }
-    /// 0 at the start, 1 at the end: the bubbles come faster and rise faster.
-    var difficulty: Double { min(1, max(0, elapsed / Self.round)) }
-    var spawnInterval: TimeInterval { (Self.spawnEasy - (Self.spawnEasy - Self.spawnHard) * difficulty) / pace }
+    var pace: Double { tuning.pace }
+    /// The clock, with the blots' seconds gone.
+    var timeLeft: TimeInterval { max(0, Self.round - elapsed - penalty) }
+    var isOver: Bool { elapsed + penalty >= Self.round }
+    /// 0 at the start, 1 at the end: the bubbles come faster, rise faster and shrink.
+    var difficulty: Double { min(1, max(0, (elapsed + penalty) / Self.round)) }
+    var spawnInterval: TimeInterval { (1.0 - 0.65 * difficulty) / pace }
     /// Points per second a new bubble rises at, before its own variation.
-    var riseSpeed: Double { (38 + 42 * difficulty) * pace }
+    var riseSpeed: Double { (44 + 76 * difficulty) * pace }
+    /// The sizes new bubbles come in now: they shrink by a third over the round.
+    var radiusRange: ClosedRange<Double> {
+        let k = 1 - 0.35 * difficulty
+        return (11 * k)...(28 * k)
+    }
+    var blotShare: Double { tuning.blotsAtStart + (tuning.blotsAtEnd - tuning.blotsAtStart) * difficulty }
 
     /// Moves everything on by `dt` seconds (at most `maxStep`); nothing moves once the round is over.
     mutating func advance(by dt: TimeInterval) {
         guard !isOver, dt > 0 else { return }
-        let step = min(dt, Self.maxStep, Self.round - elapsed)
+        let step = min(dt, Self.maxStep, Self.round - elapsed - penalty)
         elapsed += step
         for i in bubbles.indices {
             bubbles[i].age += step
             bubbles[i].y -= bubbles[i].speed * step
             bubbles[i].x = bubbles[i].home + bubbles[i].sway * sin(bubbles[i].phase + bubbles[i].age * 1.7)
+        }
+        let lost = bubbles.filter { $0.y + $0.radius < 0 && $0.kind == .ink }.count
+        if lost > 0 {
+            escaped += lost
+            combo = 1
         }
         bubbles.removeAll { $0.y + $0.radius < 0 }
         for i in splashes.indices {
@@ -245,34 +295,51 @@ struct BubbleField: Equatable {
         }
     }
 
-    /// A touch at `point`: the nearest bubble under it pops and its points are scored; `nil` when
-    /// nothing was there.
+    /// A touch at `point`: the nearest bubble under it pops and scores (times the row's multiplier);
+    /// a blot costs; nothing under it breaks the row.
     @discardableResult
-    mutating func pop(at point: CGPoint) -> Int? {
-        guard !isOver else { return nil }
+    mutating func pop(at point: CGPoint) -> PopResult {
+        guard !isOver else { return .miss }
         func distance(_ b: Bubble) -> Double {
             let dx = b.x - Double(point.x)
             let dy = b.y - Double(point.y)
             return (dx * dx + dy * dy).squareRoot()
         }
-        let hit = bubbles.indices.filter { distance(bubbles[$0]) <= bubbles[$0].radius + Self.reach }
-        guard let i = hit.min(by: { distance(bubbles[$0]) < distance(bubbles[$1]) }) else { return nil }
+        let hit = bubbles.indices.filter { distance(bubbles[$0]) <= bubbles[$0].radius + tuning.reach }
+        guard let i = hit.min(by: { distance(bubbles[$0]) < distance(bubbles[$1]) }) else {
+            combo = 1
+            return .miss
+        }
         let bubble = bubbles.remove(at: i)
-        score += bubble.worth
-        popped += 1
-        splashes.append(Splash(x: bubble.x, y: bubble.y, radius: bubble.radius, hue: bubble.hue))
-        return bubble.worth
+        splashes.append(Splash(x: bubble.x, y: bubble.y, radius: bubble.radius, hue: bubble.hue, blot: bubble.kind == .blot))
+        switch bubble.kind {
+        case .blot:
+            score = max(0, score - Self.blotPoints)
+            penalty += TimeInterval(Self.blotSeconds)
+            blotsHit += 1
+            combo = 1
+            lastPop = -10
+            return .blot(points: Self.blotPoints, seconds: Self.blotSeconds)
+        case .ink:
+            combo = elapsed - lastPop <= Self.comboWindow ? min(Self.maxCombo, combo + 1) : 1
+            lastPop = elapsed
+            let points = bubble.worth * combo
+            score += points
+            popped += 1
+            return .popped(points: points, combo: combo)
+        }
     }
 
     private mutating func spawn() {
-        let radius = Double.random(in: 13...30, using: &rng)
+        let blot = Double.random(in: 0..<1, using: &rng) < blotShare
+        let radius = blot ? Double.random(in: 13...21, using: &rng) : Double.random(in: radiusRange, using: &rng)
         let margin = radius + 6
         let width = Double(size.width)
         let home = width > 2 * margin ? Double.random(in: margin...(width - margin), using: &rng) : width / 2
-        let speed = riseSpeed * Double.random(in: 0.8...1.25, using: &rng) * (28 / radius).squareRoot()
-        let hue = Double.random(in: 0.52...0.72, using: &rng)
-        bubbles.append(Bubble(id: nextID, home: home, x: home, y: Double(size.height) + radius, radius: radius, speed: speed,
-                              sway: Double.random(in: 4...12, using: &rng), phase: Double.random(in: 0...(2 * .pi), using: &rng), hue: hue))
+        let speed = riseSpeed * Double.random(in: 0.8...1.25, using: &rng) * (20 / radius).squareRoot()
+        let hue = blot ? 0.64 : Double.random(in: 0.52...0.72, using: &rng)
+        bubbles.append(Bubble(id: nextID, kind: blot ? .blot : .ink, home: home, x: home, y: Double(size.height) + radius, radius: radius,
+                              speed: speed, sway: Double.random(in: 4...12, using: &rng), phase: Double.random(in: 0...(2 * .pi), using: &rng), hue: hue))
         nextID += 1
     }
 }

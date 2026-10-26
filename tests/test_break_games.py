@@ -160,6 +160,46 @@ def test_difficulty_levels_and_progression():
     assert "static func clues(_ difficulty: GameDifficulty) -> Int" in src("SudokuLogic.swift")
 
 
+def test_the_quality_pass():
+    # The flyer flaps on Space and ↑ from a connected keyboard, through a controller that is first
+    # responder only while the level is on screen (UIKeyCommand, iOS 7+; wantsPriorityOverSystemBehavior, iOS 15+).
+    flyer = src("FlyerGame.swift")
+    assert "final class FlapKeyController: UIViewController" in flyer
+    assert 'UIKeyCommand(input: " ", modifierFlags: [], action: #selector(flap))' in flyer
+    assert "UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(flap))" in flyer
+    assert "command.wantsPriorityOverSystemBehavior = true" in flyer
+    assert "override var canBecomeFirstResponder: Bool { true }" in flyer
+    assert re.search(r"viewDidAppear[^\n]*\n[^\n]*\n\s*_ = becomeFirstResponder\(\)", flyer)
+    assert re.search(r"viewWillDisappear[^\n]*\n\s*_ = resignFirstResponder\(\)", flyer)
+    assert ".background(FlapKeys { model.flap() }.frame(width: 0, height: 0))" in flyer
+    assert 'Loc.t("Dokun ya da boşluk tuşu: damla yükselsin")' in flyer
+    # The bubbles are a challenge now: blots, a row multiplier, shrinking and quickening bubbles, three tunings.
+    logic = src("MiniGameLogic.swift")
+    assert "enum PopResult: Equatable" in logic and "case blot(points: Int, seconds: Int)" in logic
+    assert "static let comboWindow: TimeInterval = 0.9" in logic and "static let maxCombo = 4" in logic
+    assert "static let blotPoints = 5" in logic and "static let blotSeconds = 3" in logic
+    assert "var radiusRange: ClosedRange<Double>" in logic and "struct Tuning: Equatable" in logic
+    bubbles = src("BubblesGame.swift")
+    assert "case .blot(let points, let seconds):" in bubbles and 'Loc.t("Lekelere dokunma")' in bubbles
+    assert ".sensoryFeedback(.warning, trigger: model.blotsHit)" in bubbles
+    assert "private func blot(_ context: inout GraphicsContext, _ bubble: Bubble)" in bubbles
+    # The shooter fills the compact panel's width with eight rows of play and glossy bubbles.
+    assert "static let deadRow = 9" in src("ShooterLogic.swift")
+    shooter = src("ShooterGame.swift")
+    assert "GameCorner.shade(colour, light: 1)" in shooter and "GameCorner.shade(colour, light: -1)" in shooter
+    assert "case pop, fall, settle" in shooter and "guide.landing" in shooter
+    # One result card for every game, one frame for every board, pressable tiles, success haptics.
+    corner = src("GameCorner.swift")
+    assert "struct ResultCard: View" in corner and "struct GameBoardFrame: ViewModifier" in corner
+    assert corner.count("PressableStyle()") >= 3 and "func pageTransition(reduceMotion: Bool)" in corner
+    for name in ("BubblesGame.swift", "SudokuGame.swift"):
+        assert "ResultCard(title:" in src(name), name
+    for name in ("BubblesGame.swift", "FlyerGame.swift", "ShooterGame.swift", "XOXGame.swift"):
+        assert ".gameBoard()" in src(name), name
+    for name in ("FlyerGame.swift", "ShooterGame.swift", "SudokuGame.swift", "XOXGame.swift"):
+        assert ".sensoryFeedback(.success" in src(name), name
+
+
 def test_the_logic_is_foundation_only_and_checked():
     for name in LOGIC:
         logic = src(name)
@@ -175,7 +215,8 @@ def test_the_logic_is_foundation_only_and_checked():
         assert name in run, name
     main = (TOOLS / "main.swift").read_text(encoding="utf-8")
     for needle in ("MandalaSymmetry.copies", "BubbleField(size:", "TicTacToe", "xox trap", "xox zor: never loses", "GameProgress()",
-                   "GamePanelSize.larger", "autopilot(level:", "ShooterLevels.all.enumerated()", "Sudoku.generate(difficulty:", "SudokuSave.decode"):
+                   "GamePanelSize.larger", "autopilot(level:", "ShooterLevels.all.enumerated()", "Sudoku.generate(difficulty:", "SudokuSave.decode",
+                   ".blot(points: 5, seconds: 3)", "combos == [1, 2, 3, 4, 4]", "ShooterBoard.deadRow == 9"):
         assert needle in main, needle
 
 

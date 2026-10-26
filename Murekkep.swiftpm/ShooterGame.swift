@@ -28,18 +28,26 @@ struct ShooterFlight {
     let result: ShotResult
 }
 
-/// A bubble popping or falling, for half a second.
+/// A bubble popping, falling, or settling into its cell, for a moment.
 struct ShooterEffect {
     enum Kind {
-        case pop, fall
+        case pop, fall, settle
     }
 
     let kind: Kind
     let colour: Int
     let started: Date
     let origin: CGPoint
+    /// Which way a falling bubble drifts.
+    let drift: Double
 
-    static let life: TimeInterval = 0.55
+    var life: TimeInterval {
+        switch kind {
+        case .pop: return 0.4
+        case .fall: return 0.6
+        case .settle: return 0.2
+        }
+    }
 }
 
 /// The board on screen: the honeycomb laid out for the field's size, the bubble in flight, the
@@ -64,7 +72,7 @@ final class ShooterModel: ObservableObject {
     private(set) var effects: [ShooterEffect] = []
     private var level: ShooterLevel?
 
-    static let speed = 900.0
+    static let speed = 1000.0
 
     var stars: Int { board?.stars ?? 0 }
     var par: Int { board?.par ?? 0 }
@@ -86,15 +94,16 @@ final class ShooterModel: ObservableObject {
         sync()
     }
 
-    /// Lays the honeycomb out for the field: as wide as the field allows, or as tall, with room for the pen.
+    /// Lays the honeycomb out for the field: as wide as the field allows, or as tall as the rows
+    /// down to the dead line plus the pen's room.
     func layout(size: CGSize) {
         guard size.width > 0, size.height > 0 else { return }
-        let penRoom = 64.0
+        let penRoom = 44.0
         let rows = Double(ShooterBoard.deadRow)
         let radius = min(Double(size.width) / Double(2 * ShooterBoard.cols), (Double(size.height) - penRoom) / (2 + rows * 3.0.squareRoot()))
         grid = HexGrid(cols: ShooterBoard.cols, radius: max(6, radius))
         areaSize = size
-        origin = CGPoint(x: grid.width / 2, y: Double(size.height) - 30)
+        origin = CGPoint(x: grid.width / 2, y: Double(size.height) - 26)
     }
 
     /// Where the board's left edge stands in the field: centred.
@@ -119,10 +128,10 @@ final class ShooterModel: ObservableObject {
         animating = true
     }
 
-    /// The guide: the way the loaded bubble would take.
-    func guide() -> [CGPoint]? {
+    /// The guide: the way the loaded bubble would take, and where it would come to rest.
+    func guide() -> (path: [CGPoint], landing: ShooterCell)? {
         guard let aim, let board, flight == nil else { return nil }
-        return board.flight(from: origin, direction: aim, grid: grid).path
+        return board.flight(from: origin, direction: aim, grid: grid)
     }
 
     /// Lands the bubble when it gets there; lets the pops and falls fade.
@@ -131,7 +140,7 @@ final class ShooterModel: ObservableObject {
             land(flight, now: now)
         }
         if !effects.isEmpty {
-            effects.removeAll { now.timeIntervalSince($0.started) > ShooterEffect.life }
+            effects.removeAll { now.timeIntervalSince($0.started) > $0.life }
         }
         if flight == nil, effects.isEmpty, animating {
             animating = false
@@ -153,13 +162,22 @@ final class ShooterModel: ObservableObject {
         return flight.path.last ?? origin
     }
 
+    /// How far a settling bubble is from its final size, 1 → 0.
+    func settling(_ cell: ShooterCell, now: Date) -> Double {
+        guard let effect = effects.first(where: { $0.kind == .settle && $0.origin == grid.centre(cell) }) else { return 0 }
+        return max(0, 1 - now.timeIntervalSince(effect.started) / effect.life)
+    }
+
     private func land(_ flight: ShooterFlight, now: Date) {
         self.flight = nil
-        for cell in flight.result.popped {
-            effects.append(ShooterEffect(kind: .pop, colour: shown[cell] ?? flight.colour, started: now, origin: grid.centre(cell)))
+        for (i, cell) in flight.result.popped.enumerated() {
+            effects.append(ShooterEffect(kind: .pop, colour: shown[cell] ?? flight.colour, started: now, origin: grid.centre(cell), drift: Double(i % 3) - 1))
         }
-        for cell in flight.result.fell {
-            effects.append(ShooterEffect(kind: .fall, colour: shown[cell] ?? flight.colour, started: now, origin: grid.centre(cell)))
+        for (i, cell) in flight.result.fell.enumerated() {
+            effects.append(ShooterEffect(kind: .fall, colour: shown[cell] ?? flight.colour, started: now, origin: grid.centre(cell), drift: Double(i % 5) - 2))
+        }
+        if flight.result.popped.isEmpty {
+            effects.append(ShooterEffect(kind: .settle, colour: flight.colour, started: now, origin: grid.centre(flight.result.landed), drift: 0))
         }
         sync()
     }
@@ -203,8 +221,9 @@ final class ShooterModel: ObservableObject {
     }
 }
 
-/// One level: drag the pencil to aim (a dotted line shows the way, one bounce off a wall), let go to
-/// shoot; three of a colour pop, and bubbles left hanging on nothing fall for more.
+/// One level: drag the pencil to aim (a dotted line shows the way, one bounce off a wall, a ring
+/// where the bubble will rest), let go to shoot; three of a colour pop, and bubbles left hanging
+/// on nothing fall for more.
 private struct ShooterPlay: View {
     let level: Int
     let difficulty: GameDifficulty
@@ -225,12 +244,12 @@ private struct ShooterPlay: View {
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Label("\(model.shotsLeft)", systemImage: "scope")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .font(.system(.subheadline, design: .rounded).monospacedDigit().weight(.semibold))
                     .foregroundStyle(model.shotsLeft <= 2 ? Color.red : Color.primary)
                     .accessibilityLabel(Loc.t("{0} atış kaldı", "\(model.shotsLeft)"))
                 Spacer()
                 Text(Loc.t("Puan: {0}", "\(model.score)"))
-                    .font(.subheadline.monospacedDigit())
+                    .font(.system(.subheadline, design: .rounded).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             ZStack {
@@ -262,9 +281,7 @@ private struct ShooterPlay: View {
                                     onLevels: onLevels, onRetry: { model.restart(difficulty: difficulty) }, onNext: onNext)
                 }
             }
-            .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .gameBoard()
             .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: over)
         }
         .onChange(of: over) { _, done in
@@ -272,33 +289,47 @@ private struct ShooterPlay: View {
             store.complete(.shooter, level: level, stars: model.phase == .won ? model.stars : 0)
         }
         .sensoryFeedback(.impact(weight: .light, intensity: 0.5), trigger: model.score)
+        .sensoryFeedback(.success, trigger: over) { _, done in done && model.phase == .won }
     }
 
     private func draw(_ context: inout GraphicsContext, size: CGSize, now: Date) {
         let grid = model.grid
         context.translateBy(x: model.boardOffset.x, y: model.boardOffset.y)
-        // The line a bubble must not reach.
+        // The ceiling the bubbles hang from, and the line a bubble must not reach.
+        var ceiling = Path()
+        ceiling.move(to: CGPoint(x: 0, y: 1))
+        ceiling.addLine(to: CGPoint(x: grid.width, y: 1))
+        context.stroke(ceiling, with: .color(Theme.ink.opacity(0.35)), lineWidth: 2)
         let deadY = Double(grid.centre(ShooterCell(ShooterBoard.deadRow, 0)).y) - grid.radius
         var dead = Path()
         dead.move(to: CGPoint(x: 0, y: deadY))
         dead.addLine(to: CGPoint(x: grid.width, y: deadY))
-        context.stroke(dead, with: .color(Theme.ink.opacity(0.25)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        context.stroke(dead, with: .color(Color.red.opacity(0.3)), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
         for (cell, colour) in model.shown {
-            bubble(&context, at: grid.centre(cell), radius: grid.radius, colour: colour)
+            let swell = model.settling(cell, now: now)
+            bubble(&context, at: grid.centre(cell), radius: grid.radius * (1 + 0.18 * swell), colour: colour)
         }
         for effect in model.effects {
-            let t = min(1, now.timeIntervalSince(effect.started) / ShooterEffect.life)
+            let t = min(1, now.timeIntervalSince(effect.started) / effect.life)
             var fading = context
             fading.opacity = 1 - t
             switch effect.kind {
             case .pop:
-                let r = grid.radius * (1 + 1.2 * t)
+                let r = grid.radius * (1 + 1.3 * t)
                 fading.stroke(Path(ellipseIn: CGRect(x: Double(effect.origin.x) - r, y: Double(effect.origin.y) - r, width: 2 * r, height: 2 * r)),
-                              with: .color(GameCorner.ink(effect.colour)), lineWidth: 2)
+                              with: .color(GameCorner.shade(effect.colour, light: 0.6)), lineWidth: 2.5 * (1 - t) + 0.5)
                 bubble(&fading, at: effect.origin, radius: grid.radius * (1 - t), colour: effect.colour)
+                let reach = grid.radius * (0.5 + 1.8 * t)
+                for k in 0..<6 {
+                    let angle = Double(k) * .pi / 3 + effect.drift
+                    let drop = CGRect(x: Double(effect.origin.x) + cos(angle) * reach - 2.5, y: Double(effect.origin.y) + sin(angle) * reach - 2.5, width: 5, height: 5)
+                    fading.fill(Path(ellipseIn: drop), with: .color(GameCorner.ink(effect.colour)))
+                }
             case .fall:
-                let fallen = CGPoint(x: Double(effect.origin.x), y: Double(effect.origin.y) + 700 * t * t)
+                let fallen = CGPoint(x: Double(effect.origin.x) + effect.drift * 18 * t, y: Double(effect.origin.y) + 900 * t * t)
                 bubble(&fading, at: fallen, radius: grid.radius, colour: effect.colour)
+            case .settle:
+                break
             }
         }
         if let flight = model.flight {
@@ -307,54 +338,73 @@ private struct ShooterPlay: View {
         if let guide = model.guide() {
             var dots = Path()
             var left = 10.0
-            for (a, b) in zip(guide, guide.dropFirst()) {
+            var count = 0
+            for (a, b) in zip(guide.path, guide.path.dropFirst()) {
                 let dx = Double(b.x - a.x)
                 let dy = Double(b.y - a.y)
                 let step = (dx * dx + dy * dy).squareRoot()
                 var along = left
                 while along < step {
                     let p = CGPoint(x: Double(a.x) + dx * along / step, y: Double(a.y) + dy * along / step)
-                    dots.addEllipse(in: CGRect(x: p.x - 2, y: p.y - 2, width: 4, height: 4))
-                    along += 14
+                    let r = max(1.2, 2.4 - Double(count) * 0.04)
+                    dots.addEllipse(in: CGRect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r))
+                    along += 12
+                    count += 1
                 }
                 left = along - step
             }
-            context.fill(dots, with: .color(Theme.ink.opacity(0.4)))
+            context.fill(dots, with: .color(Theme.ink.opacity(0.45)))
+            let rest = grid.centre(guide.landing)
+            let ring = CGRect(x: Double(rest.x) - grid.radius + 1, y: Double(rest.y) - grid.radius + 1, width: 2 * grid.radius - 2, height: 2 * grid.radius - 2)
+            context.stroke(Path(ellipseIn: ring), with: .color(GameCorner.ink(model.loaded).opacity(0.7)), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
         }
         pen(&context)
-        // The colour after this one, beside the pen.
-        let nextAt = CGPoint(x: grid.width - grid.radius - 4, y: Double(model.origin.y))
-        bubble(&context, at: nextAt, radius: grid.radius * 0.55, colour: model.next)
-        context.draw(Text(Loc.t("Sonraki")).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: nextAt.x, y: nextAt.y - grid.radius * 0.55 - 8), anchor: .center)
+        // The colour after this one, in a small well beside the pen.
+        let wellRadius = grid.radius * 0.85
+        let well = CGPoint(x: grid.width - wellRadius - 2, y: Double(model.origin.y))
+        context.fill(Path(ellipseIn: CGRect(x: Double(well.x) - wellRadius, y: Double(well.y) - wellRadius, width: 2 * wellRadius, height: 2 * wellRadius)),
+                     with: .color(Color.primary.opacity(0.05)))
+        context.stroke(Path(ellipseIn: CGRect(x: Double(well.x) - wellRadius, y: Double(well.y) - wellRadius, width: 2 * wellRadius, height: 2 * wellRadius)),
+                       with: .color(Theme.hairline), lineWidth: 0.8)
+        bubble(&context, at: well, radius: grid.radius * 0.55, colour: model.next)
+        context.draw(Text(Loc.t("Sonraki")).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: well.x, y: Double(well.y) - wellRadius - 7), anchor: .center)
     }
 
-    /// An ink bubble: a soft gradient, a rim, a glint.
+    /// A glossy ink bubble: a gradient lit from the top left, a darker rim, a glint.
     private func bubble(_ c: inout GraphicsContext, at centre: CGPoint, radius: Double, colour: Int) {
         guard radius > 0.5 else { return }
-        let tint = GameCorner.ink(colour)
         let rect = CGRect(x: Double(centre.x) - radius, y: Double(centre.y) - radius, width: 2 * radius, height: 2 * radius)
-        c.fill(Path(ellipseIn: rect), with: .radialGradient(Gradient(colors: [tint.opacity(0.55), tint.opacity(0.95)]),
-                                                            center: centre, startRadius: 0, endRadius: CGFloat(radius)))
-        c.stroke(Path(ellipseIn: rect.insetBy(dx: 0.7, dy: 0.7)), with: .color(tint), lineWidth: 1)
-        let glint = CGRect(x: Double(centre.x) - radius * 0.5, y: Double(centre.y) - radius * 0.62, width: radius * 0.4, height: radius * 0.24)
-        c.fill(Path(ellipseIn: glint), with: .color(.white.opacity(0.5)))
+        let light = GameCorner.shade(colour, light: 1)
+        let mid = GameCorner.ink(colour)
+        let dark = GameCorner.shade(colour, light: -1)
+        let focus = CGPoint(x: Double(centre.x) - radius * 0.3, y: Double(centre.y) - radius * 0.35)
+        c.fill(Path(ellipseIn: rect), with: .radialGradient(Gradient(colors: [light, mid, dark]), center: focus, startRadius: 0, endRadius: CGFloat(radius * 1.35)))
+        c.stroke(Path(ellipseIn: rect.insetBy(dx: 0.6, dy: 0.6)), with: .color(dark.opacity(0.55)), lineWidth: 1)
+        let glint = CGRect(x: Double(centre.x) - radius * 0.62, y: Double(centre.y) - radius * 0.7, width: radius * 0.42, height: radius * 0.26)
+        c.fill(Path(ellipseIn: glint), with: .color(.white.opacity(0.65)))
+        let speck = CGRect(x: Double(centre.x) + radius * 0.25, y: Double(centre.y) + radius * 0.35, width: radius * 0.16, height: radius * 0.12)
+        c.fill(Path(ellipseIn: speck), with: .color(.white.opacity(0.25)))
     }
 
     /// The pen at the bottom, turned toward the aim, its loaded bubble at the mouth.
     private func pen(_ c: inout GraphicsContext) {
+        let r = model.grid.radius
         let angle = model.aim.map { atan2(Double($0.y), Double($0.x)) + .pi / 2 } ?? 0
         var turned = c
         turned.translateBy(x: model.origin.x, y: model.origin.y)
         turned.rotate(by: .radians(angle))
-        var nib = Path(roundedRect: CGRect(x: -8, y: 6, width: 16, height: 30), cornerRadius: 5)
-        nib.move(to: CGPoint(x: -8, y: 6))
-        nib.addLine(to: CGPoint(x: 0, y: -8))
-        nib.addLine(to: CGPoint(x: 8, y: 6))
+        let barrel = Path(roundedRect: CGRect(x: -r * 0.75, y: r * 0.3, width: r * 1.5, height: r * 2.2), cornerRadius: r * 0.45)
+        turned.fill(barrel, with: .color(Color.primary.opacity(0.09)))
+        turned.stroke(barrel, with: .color(Theme.hairline), lineWidth: 0.8)
+        var nib = Path()
+        nib.move(to: CGPoint(x: -r * 0.75, y: r * 0.3))
+        nib.addLine(to: CGPoint(x: 0, y: -r * 0.4))
+        nib.addLine(to: CGPoint(x: r * 0.75, y: r * 0.3))
         nib.closeSubpath()
-        turned.fill(nib, with: .color(Theme.ink.opacity(0.85)))
-        turned.fill(Path(CGRect(x: -8, y: 20, width: 16, height: 4)), with: .color(.white.opacity(0.35)))
+        turned.fill(nib, with: .color(Theme.ink.opacity(0.55)))
+        turned.fill(Path(CGRect(x: -r * 0.75, y: r * 1.2, width: r * 1.5, height: r * 0.25)), with: .color(Theme.ink.opacity(0.35)))
         if model.flight == nil, model.phase == .playing {
-            bubble(&c, at: model.origin, radius: model.grid.radius, colour: model.loaded)
+            bubble(&c, at: model.origin, radius: r, colour: model.loaded)
         }
     }
 }

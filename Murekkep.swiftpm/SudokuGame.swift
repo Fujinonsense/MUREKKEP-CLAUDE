@@ -19,6 +19,8 @@ final class SudokuModel: ObservableObject {
 
     var conflicts: Set<Int> { save.map { Sudoku.conflicts($0.entries) } ?? [] }
     var elapsed: Int { save?.elapsed ?? 0 }
+    /// A puzzle begun and not yet solved.
+    var inProgress: Bool { save.map { !solved && $0.entries != $0.givens } ?? false }
 
     /// A fresh puzzle, made off the main thread (a hard one takes a moment).
     func newPuzzle(difficulty: GameDifficulty) {
@@ -95,6 +97,7 @@ struct SudokuGame: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var recorded = false
     @State private var newBest = false
+    @State private var confirmNew = false
 
     var body: some View {
         if let kept = model.save {
@@ -148,7 +151,7 @@ struct SudokuGame: View {
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 1)) { timeline in
                     Text(GameCorner.clock(model.elapsed))
-                        .font(.subheadline.monospacedDigit())
+                        .font(.system(.subheadline, design: .rounded).monospacedDigit())
                         .foregroundStyle(.secondary)
                         .onChange(of: timeline.date) { _, _ in
                             if scenePhase == .active { model.tick() }
@@ -157,12 +160,15 @@ struct SudokuGame: View {
                 .accessibilityLabel(Loc.t("Süre: {0}", GameCorner.clock(model.elapsed)))
                 Spacer()
                 Button {
-                    model.abandon()
+                    if model.inProgress { confirmNew = true } else { model.abandon() }
                 } label: {
                     Label(Loc.t("Yeni"), systemImage: "plus")
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
+                .confirmationDialog(Loc.t("Bulmacayı bırakıp yenisine geçilsin mi?"), isPresented: $confirmNew, titleVisibility: .visible) {
+                    Button(Loc.t("Yeni bulmaca"), role: .destructive) { model.abandon() }
+                }
             }
             ZStack {
                 GeometryReader { geo in
@@ -172,7 +178,10 @@ struct SudokuGame: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 if model.solved {
-                    solvedCard(kept)
+                    ResultCard(title: Loc.t("Çözüldü!"),
+                               lines: [Loc.t("Süre: {0}", GameCorner.clock(kept.elapsed))],
+                               highlight: newBest ? Loc.t("Yeni rekor!") : nil,
+                               actions: [ResultAction(Loc.t("Yeni bulmaca"), prominent: true) { model.abandon() }])
                 }
             }
             .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: model.solved)
@@ -183,6 +192,7 @@ struct SudokuGame: View {
             recorded = true
             newBest = store.record(.sudoku, score: kept.elapsed, at: kept.difficulty, lowerIsBetter: true)
         }
+        .sensoryFeedback(.success, trigger: model.solved) { _, done in done }
     }
 
     private func board(_ kept: SudokuSave, side: CGFloat) -> some View {
@@ -273,11 +283,11 @@ struct SudokuGame: View {
                             .monospacedDigit()
                             .foregroundStyle(placed >= 9 ? Color.secondary : Theme.ink)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 36)
-                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.ink.opacity(0.1)))
+                            .frame(height: 32)
+                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.ink.opacity(placed >= 9 ? 0.04 : 0.1)))
                             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle())
                     .accessibilityLabel(Loc.t("Rakam {0}", "\(digit)"))
                 }
             }
@@ -288,6 +298,7 @@ struct SudokuGame: View {
                 }
                 .toggleStyle(.button)
                 .tint(Theme.ink)
+                .controlSize(.small)
                 Button {
                     model.erase()
                 } label: {
@@ -295,6 +306,7 @@ struct SudokuGame: View {
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
                 Spacer()
                 Text(model.notesMode ? Loc.t("Not modu: küçük rakamlar") : Loc.t("Hücreye dokun, rakamı seç"))
                     .font(.caption2)
@@ -303,30 +315,5 @@ struct SudokuGame: View {
                     .minimumScaleFactor(0.8)
             }
         }
-    }
-
-    private func solvedCard(_ kept: SudokuSave) -> some View {
-        VStack(spacing: 8) {
-            Text(Loc.t("Çözüldü!"))
-                .font(Theme.display(.title3))
-            Text(Loc.t("Süre: {0}", GameCorner.clock(kept.elapsed)))
-                .font(.headline)
-            if newBest {
-                Text(Loc.t("Yeni rekor!"))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
-            }
-            Button {
-                model.abandon()
-            } label: {
-                Label(Loc.t("Yeni bulmaca"), systemImage: "sparkles")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.ink)
-        }
-        .padding(16)
-        .glassCard(radius: 18)
-        .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
     }
 }

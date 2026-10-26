@@ -1387,5 +1387,13 @@ enum Translations {
         "Kolay: iPad çoğu zaman rastgele oynar.": "Easy: the iPad mostly plays at random.",
         "Orta: iPad kazanmayı ve engellemeyi bilir.": "Medium: the iPad knows how to win and block.",
         "Zor: iPad hata yapmaz; berabere kalmak başarıdır.": "Hard: the iPad makes no mistakes; a draw is a win.",
+        // Break corner quality pass (1.1, 2026-10-27)
+        "Balonları patlat, lekelere dokunma. 60 saniye.": "Pop the bubbles, leave the blots. 60 seconds.",
+        "Kısa bir mola; kalemle de parmakla da.": "A short break; with the pencil or a finger.",
+        "Lekelere dokunma": "Leave the blots",
+        "Çarpan {0}": "Multiplier {0}",
+        "{0} balon · {1} leke": "{0} bubbles · {1} blots",
+        "Dokun ya da boşluk tuşu: damla yükselsin": "Tap or press Space to lift the drop",
+        "Bulmacayı bırakıp yenisine geçilsin mi?": "Leave this puzzle for a new one?",
     ]
 }

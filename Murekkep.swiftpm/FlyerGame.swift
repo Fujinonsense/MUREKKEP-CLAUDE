@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Uçan damla: the level map, then a level in flight.
 struct FlyerGame: View {
@@ -72,7 +73,60 @@ final class FlyerModel: ObservableObject {
     }
 }
 
-/// One level: tap or touch with the pencil to lift the drop; pass the pencils and rulers to the flag.
+/// Space and ↑ on a connected keyboard flap while the level is on screen: a tiny controller that
+/// takes those keys as first responder when it appears and lets them go when it leaves, so the
+/// notebook's text and shortcuts keep their keys whenever the flyer is not showing.
+private struct FlapKeys: UIViewControllerRepresentable {
+    let onFlap: () -> Void
+
+    func makeUIViewController(context: Context) -> FlapKeyController {
+        let controller = FlapKeyController()
+        controller.onFlap = onFlap
+        return controller
+    }
+
+    func updateUIViewController(_ controller: FlapKeyController, context: Context) {
+        controller.onFlap = onFlap
+    }
+}
+
+final class FlapKeyController: UIViewController {
+    var onFlap: () -> Void = {}
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override var keyCommands: [UIKeyCommand]? {
+        let commands = [UIKeyCommand(input: " ", modifierFlags: [], action: #selector(flap)),
+                        UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(flap))]
+        for command in commands {
+            command.wantsPriorityOverSystemBehavior = true
+        }
+        return commands
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        _ = becomeFirstResponder()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        _ = resignFirstResponder()
+        super.viewWillDisappear(animated)
+    }
+
+    @objc private func flap() {
+        onFlap()
+    }
+}
+
+/// One level: tap, touch with the pencil or press Space to lift the drop; pass the pencils and
+/// rulers to the flag.
 private struct FlyerPlay: View {
     let level: Int
     let difficulty: GameDifficulty
@@ -96,7 +150,7 @@ private struct FlyerPlay: View {
                 ProgressView(value: Double(model.passed), total: Double(goal))
                     .tint(Theme.ink)
                 Text("\(model.passed)/\(goal)")
-                    .font(.caption.monospacedDigit())
+                    .font(.system(.caption, design: .rounded).monospacedDigit())
                     .foregroundStyle(.secondary)
                 HStack(spacing: 2) {
                     ForEach(0..<FlyerWorld.lives, id: \.self) { i in
@@ -132,9 +186,10 @@ private struct FlyerPlay: View {
                         }
                         .onEnded { _ in touching = false }
                 )
+                .background(FlapKeys { model.flap() }.frame(width: 0, height: 0))
                 .accessibilityLabel(Loc.t("Uçuş alanı: dokun, damla yükselsin"))
                 if model.phase == .ready {
-                    Text(Loc.t("Dokun, damla yükselsin"))
+                    Label(Loc.t("Dokun ya da boşluk tuşu: damla yükselsin"), systemImage: "hand.tap")
                         .font(.footnote.weight(.medium))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -142,6 +197,7 @@ private struct FlyerPlay: View {
                         .frame(maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, 14)
                         .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
                 if over {
                     LevelResultCard(won: model.phase == .complete, stars: model.world?.stars ?? 0,
@@ -149,10 +205,9 @@ private struct FlyerPlay: View {
                                     onLevels: onLevels, onRetry: { model.restart(level: level, difficulty: difficulty) }, onNext: onNext)
                 }
             }
-            .background(Theme.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .gameBoard()
             .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: over)
+            .animation(.easeInOut(duration: 0.2), value: model.phase == .ready)
         }
         .onChange(of: paused) { _, stopped in
             if stopped { model.pause() }
@@ -165,6 +220,8 @@ private struct FlyerPlay: View {
             }
         }
         .sensoryFeedback(.impact(weight: .light, intensity: 0.5), trigger: model.passed)
+        .sensoryFeedback(.warning, trigger: model.lives) { old, new in new < old }
+        .sensoryFeedback(.success, trigger: model.phase) { _, new in new == .complete }
     }
 
     // MARK: Drawing, in the world's own points scaled to the field
@@ -176,7 +233,7 @@ private struct FlyerPlay: View {
         context.scaleBy(x: scale, y: scale)
         let width = Double(w.size.width)
         let height = Double(w.size.height)
-        // Ruled paper.
+        // Ruled paper, and a red margin line scrolling by.
         var rules = Path()
         var y = 28.0
         while y < height {
@@ -185,6 +242,13 @@ private struct FlyerPlay: View {
             y += 28
         }
         context.stroke(rules, with: .color(Theme.rule), lineWidth: 0.7)
+        let marginSpan = width + 400
+        var marginX = (260 - w.distance * 0.6).truncatingRemainder(dividingBy: marginSpan)
+        if marginX < 0 { marginX += marginSpan }
+        var margin = Path()
+        margin.move(to: CGPoint(x: marginX - 200, y: 0))
+        margin.addLine(to: CGPoint(x: marginX - 200, y: height))
+        context.stroke(margin, with: .color(Color.red.opacity(0.12)), lineWidth: 1)
         // Ink-wash clouds drifting by, slower than the pencils.
         for (i, base) in [40.0, 170.0, 290.0].enumerated() {
             let span = width + 140
@@ -219,6 +283,7 @@ private struct FlyerPlay: View {
         let wood = CGRect(x: x - half, y: min(base, woodEnd), width: width, height: abs(base - woodEnd))
         c.fill(Path(wood), with: .color(Color(red: 0.95, green: 0.74, blue: 0.25)))
         c.fill(Path(CGRect(x: x + half - 6, y: wood.minY, width: 6, height: wood.height)), with: .color(.black.opacity(0.08)))
+        c.fill(Path(CGRect(x: x - half, y: wood.minY, width: 4, height: wood.height)), with: .color(.white.opacity(0.18)))
         var cone = Path()
         cone.move(to: CGPoint(x: x - half, y: woodEnd))
         cone.addLine(to: CGPoint(x: x + half, y: woodEnd))
