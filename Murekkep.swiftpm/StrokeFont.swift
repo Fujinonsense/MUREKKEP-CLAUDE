@@ -3,8 +3,8 @@ import Foundation
 /// A single-line technical lettering font (in the spirit of ISO 3098): every letter is a few pen
 /// strokes, so typed or converted text can be written with any brush, 3D inks included.
 ///
-/// Glyphs live on a grid where the cap height is 10 units, the x-height 7, descenders reach −3 and
-/// y points up. A glyph is "advance; path | path | …". A path is a list of "x,y" points, arcs
+/// Glyphs live on a grid where the cap height is 10 units, the x-height 7, ascenders rise a little
+/// above the capitals (10.6, as in book type), descenders reach −3 and y points up. A glyph is "advance; path | path | …". A path is a list of "x,y" points, arcs
 /// "a(cx,cy,r,from,to)" and ellipse arcs "e(cx,cy,rx,ry,from,to)" with angles in degrees; the arc
 /// runs counterclockwise when `to` > `from`, clockwise otherwise.
 enum StrokeFont {
@@ -55,17 +55,17 @@ enum StrokeFont {
         "Ü": "6.4; 0,10 0,3.2 a(3.2,3.2,3.2,180,360) 6.4,10 | 2,11.4 2,11.9 | 4.4,11.4 4.4,11.9",
         // Lowercase
         "a": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,7 5.6,0",
-        "b": "5.6; 0,10 0,0 | e(2.8,3.5,2.8,3.5,180,540)",
+        "b": "5.6; 0,10.6 0,0 | e(2.8,3.5,2.8,3.5,180,540)",
         "c": "5.4; e(2.9,3.5,2.9,3.5,40,320)",
-        "d": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,10 5.6,0",
+        "d": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,10.6 5.6,0",
         "e": "5.6; 0,3.5 5.6,3.5 e(2.8,3.5,2.8,3.5,0,315)",
-        "f": "2.8; 3.6,9.7 a(2.3,8.5,1.5,60,180) 0.8,0 | -0.8,7 3.2,7",
+        "f": "2.8; 3.6,10.3 a(2.3,9.1,1.5,60,180) 0.8,0 | -0.8,7 3.2,7",
         "g": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,7 5.6,-1 a(3.4,-1,2.2,0,-150)",
-        "h": "5.4; 0,10 0,0 | 0,4.3 a(2.7,4.3,2.7,180,0) 5.4,0",
+        "h": "5.4; 0,10.6 0,0 | 0,4.3 a(2.7,4.3,2.7,180,0) 5.4,0",
         "i": "0; 0,0 0,7 | 0,9.2 0,9.7",
         "j": "2.4; 2.4,7 2.4,-1.4 a(1,-1.4,1.4,0,-160) | 2.4,9.2 2.4,9.7",
-        "k": "5; 0,10 0,0 | 4.8,7 0,2.8 | 1.6,4 5,0",
-        "l": "0; 0,10 0,0",
+        "k": "5; 0,10.6 0,0 | 4.8,7 0,2.8 | 1.6,4 5,0",
+        "l": "0; 0,10.6 0,0",
         "m": "8; 0,7 0,0 | 0,5 a(2,5,2,180,0) 4,0 | 4,5 a(6,5,2,180,0) 8,0",
         "n": "5.4; 0,7 0,0 | 0,4.3 a(2.7,4.3,2.7,180,0) 5.4,0",
         "o": "5.8; e(2.9,3.5,2.9,3.5,90,450)",
@@ -73,12 +73,12 @@ enum StrokeFont {
         "q": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,7 5.6,-3.2",
         "r": "2.2; 0,7 0,0 | 0,4.2 a(2.8,4.2,2.8,180,80)",
         "s": "4.8; e(2.4,5.25,2.2,1.75,20,270) e(2.4,1.75,2.4,1.75,90,-160)",
-        "t": "2.0; 0.6,10 0.6,1.4 a(2.0,1.4,1.4,180,270) 3.1,0.2 | -0.6,7 2.9,7",
+        "t": "2.0; 0.6,9.3 0.6,1.4 a(2.0,1.4,1.4,180,270) 3.1,0.2 | -0.6,7 2.9,7",
         "u": "5.4; 0,7 0,2.7 a(2.7,2.7,2.7,180,360) | 5.4,7 5.4,0",
         "v": "5.6; 0,7 2.8,0 5.6,7",
         "w": "8; 0,7 2,0 4,5.6 6,0 8,7",
         "x": "5.4; 0,7 5.4,0 | 0,0 5.4,7",
-        "y": "5.6; 0,7 2.9,0.2 | 5.6,7 1.8,-3.2",
+        "y": "5.6; 0,7 2.9,0.2 | 5.6,7 2.3,-1.9 e(1.2,-1.9,1.1,1.3,0,-120)",
         "z": "5.2; 0,7 5.2,7 0,0 5.2,0",
         "ç": "5.4; e(2.9,3.5,2.9,3.5,40,320) | 3,0 3.3,-1.1 2.3,-2.2",
         "ğ": "5.6; e(2.8,3.5,2.8,3.5,0,360) | 5.6,7 5.6,-1 a(3.4,-1,2.2,0,-150) | e(2.8,9.6,1.5,1.1,180,360)",
@@ -379,6 +379,40 @@ enum StrokeFont {
     }
 }
 
+/// Typed text written like a pen rather than a plotter: strokes ease in and out and downstrokes
+/// come out a little fuller than crossbars.
+enum Lettering {
+    /// Radius at the very start and end of a stroke, as a share of the full radius.
+    static let endRadius: Float = 0.65
+
+    /// Widths for one stroke of a letter: it eases in and out over 3.5 radii (at most 30 % of
+    /// the stroke), crossbars come out at 0.84 and downstrokes at 1.06 of the pen's radius. A dot
+    /// stays round and a little bolder, so it still reads.
+    static func apply(_ pts: inout [InkPoint]) {
+        guard pts.count > 1 else { return }
+        let r = pts[0].r
+        var along: [Float] = [0]
+        along.reserveCapacity(pts.count)
+        for i in 1..<pts.count {
+            along.append(along[i - 1] + vlength(pts[i].position - pts[i - 1].position))
+        }
+        let total = along[along.count - 1]
+        guard total >= r * 1.5 else {
+            for i in pts.indices { pts[i].r = r * 1.1 }
+            return
+        }
+        let taper = min(total * 0.3, r * 3.5)
+        for i in pts.indices {
+            let d = pts[min(i + 1, pts.count - 1)].position - pts[max(i - 1, 0)].position
+            let l = vlength(d)
+            let vertical = l > 1e-5 ? abs(d.y) / l : 0
+            let t = min(1, min(along[i], total - along[i]) / taper)
+            let ease = t * t * (3 - 2 * t)
+            pts[i].r = r * (endRadius + (1 - endRadius) * ease) * (0.84 + 0.22 * vertical)
+        }
+    }
+}
+
 /// Turns font paths into strokes of a brush.
 enum StrokeText {
     struct Style: Equatable {
@@ -390,7 +424,10 @@ enum StrokeText {
     /// One stroke per pen path. Grass keeps its flower setting through `flowerLevel`.
     /// Straight pieces are filled in with points: the renderer draws a smooth curve through the
     /// points, and between far-apart corners that curve would bulge (an octagon became a circle).
-    static func strokes(_ paths: [[SIMD2<Float>]], style: Style, flowerLevel: Int, birth: Double) -> [Stroke] {
+    /// `lettered` writes typed text like a pen instead of a plotter (`Lettering`); shapes and plots
+    /// keep an even line.
+    static func strokes(_ paths: [[SIMD2<Float>]], style: Style, flowerLevel: Int, birth: Double,
+                        lettered: Bool = false) -> [Stroke] {
         let r = max(style.width * 0.5, 0.35)
         let spacing = max(0.6, r * 0.5)
         return paths.compactMap { path -> Stroke? in
@@ -410,6 +447,7 @@ enum StrokeText {
                     }
                 }
             }
+            if lettered { Lettering.apply(&pts) }
             let random = Float.random(in: 0..<1)
             let seed = style.brush == .grass ? GrassGenerator.seed(level: flowerLevel, random: random) : random
             return Stroke(brush: style.brush, color: style.color, width: style.width, birth: birth, seed: seed, points: pts)

@@ -9,7 +9,7 @@ $app = Join-Path $root "Murekkep.swiftpm"
 $files = @("InkDeskew.swift", "ChapterFinder.swift", "Questions.swift", "SpeechNumbers.swift", "ReadingOrder.swift", "Exercises.swift", "InkMeshPlan.swift", "InkLayer.swift", "PenSoundEnvelope.swift", "RecordingSync.swift", "KeyboardSpot.swift", "WordSpacing.swift", "ZoomBox.swift", "SpacedRepetition.swift", "StudyModels.swift", "StudyOffline.swift", "MindMapLayout.swift", "LocalServerFinder.swift", "TextSearch.swift", "BrainCatalog.swift", "TextPenBatch.swift", "BrainDownloadPlan.swift", "ProPlan.swift", "PenStrip.swift", "PaletteDock.swift", "GrassGenerator.swift", "PenShelf.swift", "Brushes.swift", "Localization.swift", "Translations.swift", "MathEngine.swift", "PageMath.swift") | ForEach-Object { Join-Path $app $_ }
 $out = Join-Path $env:TEMP "murekkep-swiftcheck"
 New-Item -ItemType Directory -Force $out | Out-Null
-# StrokeFont.swift without StrokeText, which needs the app's ink types.
+# StrokeFont.swift without StrokeText, which needs the app's ink types (Lettering only needs the stubs).
 $font = [IO.File]::ReadAllText((Join-Path $app "StrokeFont.swift"))
 [IO.File]::WriteAllText((Join-Path $out "StrokeFont.swift"), $font.Substring(0, $font.IndexOf("/// Turns font paths into strokes of a brush.")))
 $files += Join-Path $out "StrokeFont.swift"

@@ -333,6 +333,21 @@ check(tu.count == 2 && tu[1].lo - tu[0].hi <= 4.6, "font: a lowercase letter tuc
 check(abs(StrokeFont.width("ortak birtakım") - StrokeFont.layout("ortak birtakım").width) < 0.0001,
       "font: width and layout agree")
 
+// Typed text is written like a pen (Lettering): ends ease in and out, downstrokes are fuller than
+// crossbars, a dot stays round.
+func lettered(_ path: [SIMD2<Float>]) -> [InkPoint] {
+    var pts = path.map { InkPoint(x: $0.x, y: $0.y, r: 1.5, ink: 0.55) }
+    Lettering.apply(&pts)
+    return pts
+}
+let downstroke = lettered((0...40).map { SIMD2<Float>(0, Float($0)) })
+let crossbar = lettered((0...40).map { SIMD2<Float>(Float($0), 0) })
+check(downstroke[0].r < downstroke[20].r * 0.7 && downstroke[40].r < downstroke[20].r * 0.7,
+      "lettering: a stroke eases in and out")
+check(downstroke[20].r > crossbar[20].r * 1.2, "lettering: a downstroke is fuller than a crossbar")
+check(lettered([SIMD2<Float>(0, 0), SIMD2<Float>(0, 0.5)]).allSatisfy { $0.r > 1.5 },
+      "lettering: a dot stays round and bold")
+
 // MARK: Typing from a keyboard (KeyboardSpot)
 
 // Page lines 28 apart; the view shows y 0…600; the margin is at 60.

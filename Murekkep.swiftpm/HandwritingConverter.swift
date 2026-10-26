@@ -177,7 +177,8 @@ enum HandwritingConverter {
                 let x = spots[j].x
                 let origin = SIMD2<Float>(Float(x), Float(baseline))
                 let paths = StrokeFont.paths(word.text, origin: origin, capHeight: Float(ruling.capHeight), tracking: trackings[j])
-                added += StrokeText.strokes(paths, style: styles[j], flowerLevel: flowerLevel, birth: birth)
+                added += StrokeText.strokes(paths, style: styles[j], flowerLevel: flowerLevel, birth: birth,
+                                            lettered: true)
                 end = TextEnd(baseline: baseline, x: x + widths[j])
                 // Later lines of this batch keep clear of the words just placed.
                 blocking.append(CGRect(x: x, y: baseline - ruling.capHeight * 1.1, width: widths[j], height: ruling.capHeight * 1.3))
@@ -400,7 +401,7 @@ enum HandwritingConverter {
                 }
                 if !w.isEmpty {
                     let paths = StrokeFont.paths(w, origin: SIMD2<Float>(Float(x), Float(baseline)), capHeight: Float(cap), tracking: tracking)
-                    out += StrokeText.strokes(paths, style: thin, flowerLevel: flowerLevel, birth: birth)
+                    out += StrokeText.strokes(paths, style: thin, flowerLevel: flowerLevel, birth: birth, lettered: true)
                 }
                 x += width + CGFloat(WordSpacing.space(tracking: tracking, fontTracking: StrokeFont.tracking,
                                                        spaceAdvance: StrokeFont.spaceAdvance)) * unit
