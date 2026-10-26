@@ -74,8 +74,10 @@ def test_the_math_engine_answers_what_it_can_solve_exactly_and_checks_the_rest()
     assert "ExactMath.verify(question: q.stem, answer: final)" in model
     assert "QuestionSolving.retryNote(reason: reason, hint: hint, language: language)" in model
     assert "language: language, note: note))" in model
-    # The page's text reaches the engine and the model with lookalike characters unified and blanks marked.
-    assert "p.text = MathText.markBlanks(MathText.unifiedMath(page.text))" in model
+    # The page's text reaches the engine and the model as one function prepares it (unified characters,
+    # rebuilt fractions, marked blanks), the same one tools/mathcheck feeds the PDF's text through.
+    assert "p.text = MathText.pageForSolving(page.text)" in model
+    assert "markBlanks(rebuiltFractions(unifiedMath(text)))" in src("MathText.swift")
     assert "} else if let exact = ExactMath.solve(line) {" in src("OfflineBrain.swift")
     questions = src("Questions.swift")
     for fn in ("static func engineLine(", "static func retryNote(", "static func stepsBody("):
@@ -91,9 +93,9 @@ def test_the_whole_page_answer_gets_the_rules_and_is_tidied():
 
 def test_lost_blanks_reach_the_model():
     model = src("AssistantModel.swift")
-    assert "p.text = MathText.markBlanks(MathText.unifiedMath(page.text))" in model
+    assert "p.text = MathText.pageForSolving(page.text)" in model
     # Before the questions are split, so the blanks are in the stems.
-    assert model.index("MathText.markBlanks") < model.index("QuestionSplitter.split(sourceText)")
+    assert model.index("MathText.pageForSolving") < model.index("QuestionSplitter.split(sourceText)")
 
 
 def test_parenthesised_numbers_start_questions():

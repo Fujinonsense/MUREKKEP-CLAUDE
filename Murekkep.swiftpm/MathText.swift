@@ -506,26 +506,123 @@ enum MathText {
         return String(out)
     }
 
-    /// Runs of math tokens in a sentence ("|x − 2| < 6", "a < x < b", "a = ____"): a token is math
-    /// when it is only digits, signs, bars, brackets, blanks and single Latin letters. A run ends at a
-    /// word or at a token's trailing comma or full stop.
-    static func mathRuns(in text: String) -> [String] {
-        let signs = "0123456789+-−–*/×÷^√|()[]{}.,=<>≤≥≠±∞²³¹⁰⁴⁵⁶⁷⁸⁹_½¼¾·"
-        func isMath(_ t: String) -> Bool {
-            guard !t.isEmpty else { return false }
-            var run = 0
-            for ch in t {
-                if ch.isLetter {
-                    run += 1
-                    guard run == 1, ch.isASCII else { return false }
-                } else if signs.contains(ch) {
-                    run = 0
-                } else {
-                    return false
+    private static let mathSigns = "0123456789+-−–*/×÷^√|()[]{}.,=<>≤≥≠±∞²³¹⁰⁴⁵⁶⁷⁸⁹_½¼¾·"
+
+    /// A token of math: only digits, signs, bars, brackets, blanks and single Latin letters.
+    static func isMathToken(_ t: String) -> Bool {
+        guard !t.isEmpty else { return false }
+        var run = 0
+        for ch in t {
+            if ch.isLetter {
+                run += 1
+                guard run == 1, ch.isASCII else { return false }
+            } else if mathSigns.contains(ch) {
+                run = 0
+            } else {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// A superscript a PDF's text layer flattened ("x2 + 2", "|x − 2|2") put back: a 2 or 3 right
+    /// after a lone letter, a closing bracket or a closing bar, and before a space or a sign, is a
+    /// power. For the engine's reading only.
+    static func restoredSquares(_ text: String) -> String {
+        let chars = Array(text)
+        var out = ""
+        var bars = 0
+        for (i, ch) in chars.enumerated() {
+            if ch == "|" { bars += 1 }
+            if ch == "2" || ch == "3", i > 0 {
+                let prev = chars[i - 1]
+                let before = i > 1 ? chars[i - 2] : " "
+                let next = i + 1 < chars.count ? chars[i + 1] : " "
+                let afterOperand = (prev.isLetter && prev.isASCII && !before.isLetter) || prev == ")" || (prev == "|" && bars % 2 == 0)
+                let beforeSign = next.isWhitespace || "+-−–*/×÷=<>≤≥|),.;:".contains(next)
+                if afterOperand && beforeSign {
+                    out.append(ch == "2" ? "²" : "³")
+                    continue
                 }
             }
-            return true
+            out.append(ch)
         }
+        return out
+    }
+
+    /// A fraction a PDF's text layer split over lines ("3x" / "x2 + 2") written back as
+    /// "(3x)/(x2 + 2)" on the sentence's line, two such fractions around a lost sign kept apart by two
+    /// spaces, as poppler leaves them; a continuation starting with a stop (". Express …") follows on
+    /// the same line. Only after a line of prose that is about math (it names an inequality or an
+    /// equation, or ends in a sign), and only when the sentence goes on after the fraction, so a list
+    /// of sums, or a textbook's gap numbers on lines of their own, is never read as one.
+    static func rebuiltFractions(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        func trimmed(_ i: Int) -> String { lines[i].trimmingCharacters(in: .whitespaces) }
+        func mathOnly(_ i: Int) -> Bool {
+            let t = trimmed(i)
+            guard !t.isEmpty, t.count <= 40, t.contains(where: { $0.isNumber || $0.isLetter }),
+                  !t.contains(where: { "=<>≤≥".contains($0) }) else { return false }
+            return t.split(separator: " ").allSatisfy { isMathToken(String($0)) }
+        }
+        func prose(_ i: Int) -> Bool {
+            lines[i].split(whereSeparator: { !$0.isLetter }).filter { $0.count >= 3 }.count >= 2
+        }
+        func asksMath(_ i: Int) -> Bool {
+            let t = trimmed(i).lowercased()
+            if let last = t.last, "+-−–*/×÷=<>≤≥(".contains(last) { return true }
+            return ["inequalit", "equation", "expression", "fraction", "solve", "simplify", "evaluate",
+                    "eşitsizli", "denklem", "ifade", "kesir", "çöz", "sadeleştir"].contains { t.contains($0) }
+        }
+        func continues(_ i: Int) -> Bool {
+            guard i < lines.count else { return false }
+            let t = trimmed(i)
+            guard let f = t.first else { return false }
+            if lines[i].first == " " || ".,;".contains(f) || (f.isLetter && f.isLowercase) { return true }
+            let lower = t.lowercased()
+            return lower.hasPrefix("answer") || lower.hasPrefix("cevap")
+        }
+        var out: [String] = []
+        var i = 0
+        while i < lines.count {
+            guard prose(i), asksMath(i), i + 2 < lines.count, mathOnly(i + 1), mathOnly(i + 2) else {
+                out.append(lines[i])
+                i += 1
+                continue
+            }
+            var joined = trimmed(i) + " (" + trimmed(i + 1) + ")/(" + trimmed(i + 2) + ")"
+            var j = i + 3
+            var k = j
+            if k < lines.count, trimmed(k).isEmpty { k += 1 }
+            if k + 1 < lines.count, mathOnly(k), mathOnly(k + 1) {
+                joined += "  (" + trimmed(k) + ")/(" + trimmed(k + 1) + ")"
+                j = k + 2
+            }
+            guard continues(j) else {
+                out.append(lines[i])
+                i += 1
+                continue
+            }
+            if let f = trimmed(j).first, ".,;".contains(f) {
+                joined += trimmed(j)
+                j += 1
+            }
+            out.append(joined)
+            i = j
+        }
+        return out.joined(separator: "\n")
+    }
+
+    /// A page's text as the solver and the model read it: lookalike characters unified, split
+    /// fractions rebuilt, lost blanks marked.
+    static func pageForSolving(_ text: String) -> String {
+        markBlanks(rebuiltFractions(unifiedMath(text)))
+    }
+
+    /// Runs of math tokens in a sentence ("|x − 2| < 6", "a < x < b", "a = ____"). A run ends at a
+    /// word or at a token's trailing comma or full stop.
+    static func mathRuns(in text: String) -> [String] {
+        let isMath = isMathToken
         var runs: [String] = []
         var current: [String] = []
         func close() {

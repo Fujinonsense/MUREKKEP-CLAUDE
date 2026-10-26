@@ -327,12 +327,12 @@ final class AssistantModel: ObservableObject {
             }
             let solving = Self.wantsSolving(question: question, action: action)
             if solving {
-                // Lookalike characters of the text layer (𝑥, ⩽) as plain ones, and printed blanks it
-                // lost ("where a = and b =") written back as "____", so the engine and the model see
-                // what is asked and what is to be filled.
+                // The text layer as the engine and the model read it: lookalike characters (𝑥, ⩽) as
+                // plain ones, fractions split over lines rebuilt, printed blanks it lost ("where a = and
+                // b =") written back as "____".
                 pages = pages.map { page in
                     var p = page
-                    p.text = MathText.markBlanks(MathText.unifiedMath(page.text))
+                    p.text = MathText.pageForSolving(page.text)
                     return p
                 }
             }

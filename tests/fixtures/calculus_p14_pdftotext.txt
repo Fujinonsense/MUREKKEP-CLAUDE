@@ -1,0 +1,66 @@
+4 1. INEQUALITIES AND ABSOLUTE VALUES
+1.2. Exercises
+(1) The inequality |x - 2| < 6 can be expressed in the form a < x < b where a = and
+b = .
+(2) The inequality -15  x  7 can be expressed in the form |x - a|  b where
+a = and b = .
+(3) Solve the equation |4x + 23| = |4x - 9|. Answer: x = .
+(4) Find all numbers x which satisfy |x2 + 2| = |x2 - 11|.
+Answer: x = and x = .
+(5) Solve the inequality
+3x
+x2 + 2
+
+1
+x - 1
+. Express your answer in interval notation.
+Answer: [ , )  [ 2 , ) .
+(6) Solve the equation |x - 2|2 + 3|x - 2| - 4 = 0.
+Answer: x = and x = .
+(7) The inequality -4  x  10 can be expressed in the form |x - a|  b where a = and
+b = .
+(8) Sketch the graph of the equation x - 2 = |y - 3|.
+(9) The inequality |x + 4| < 7 can be expressed in the form a < x < b where a = and
+b = .
+(10) Solve the inequality |3x + 7| < 5. Express your answer in interval notation.
+Answer: ( , ).
+(11) Find all numbers x which satisfy |x2 - 9| = |x2 - 5|.
+Answer: x = and x = .
+(12) Solve the inequality
+2x2 - 3
+14
+
+1
+2
+. Express your answer in interval notation.
+Answer: [ , ].
+(13) Solve the inequality |x - 3|  6. Express your answer in interval notation.
+Answer: ( , ]  [ , ) .
+(14) Solve the inequality
+x
+x + 2
+
+x + 3
+x - 4
+. Express your answer in interval notation.
+Answer: ( , )  [ , ).
+(15) In interval notation the solution set for the inequality
+x + 1
+x - 2
+
+x + 2
+x + 3
+is (-, )  [ , 2 ).
+(16) Solve the inequality
+4x2 - x + 19
+x3 + x2 + 4x + 4
+ 1. Express your answer in interval notation.
+Answer: ( , ].
+(17) Solve the equation 2|x + 3|2 - 15|x + 3| + 7 = 0.
+Answer: x = , x = , x = , and x = .
+(18) Solve the inequality x  1 +
+2
+x
+. Express your answer in interval notation.
+Answer: [ , 0 )  [ , ).
+

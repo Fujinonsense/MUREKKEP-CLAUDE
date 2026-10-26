@@ -713,10 +713,28 @@ enum ExactMath {
         s.contains(where: { Relation(symbol: $0) != nil }) && !s.contains("≠")
     }
 
-    /// "a = ____" (or a bare "a =", a blank the page's text layer lost) → "a".
-    private static func blankLetter(_ run: String) -> String? {
-        guard run.range(of: "^[A-Za-z]\\s*=\\s*(?:_{2,}|…+)?$", options: .regularExpression) != nil else { return nil }
-        return String(run.first!)
+    /// Where a sign the page's text lost belongs ("-15 ⟂ x ⟂ 7"): a PDF's ≤ and ≥ come from a symbol
+    /// font that often has no text behind it, and two operands are left side by side.
+    static let gap: Character = "⟂"
+
+    /// "a = ____", "a = and", "b = .", "x = ,": a letter the question leaves to be filled.
+    private static let blankPattern = try! NSRegularExpression(
+        pattern: #"([A-Za-z])\s*=\s*(?:_{2,}|…+)?\s*(?=and|or\b|ve\b|veya\b|[,;.)]|$)"#, options: [.anchorsMatchLines])
+
+    /// The letters the question leaves to be filled, in order.
+    static func blanks(in stem: String) -> [String] {
+        let ns = stem as NSString
+        var out: [String] = []
+        for m in blankPattern.matches(in: stem, range: NSRange(location: 0, length: ns.length)) {
+            let letter = ns.substring(with: m.range(at: 1))
+            if !out.contains(letter) { out.append(letter) }
+        }
+        return out
+    }
+
+    /// "a = ____" or a bare "a =": a run that is only a blank.
+    private static func isBlankRun(_ run: String) -> Bool {
+        run.range(of: "^[A-Za-z]\\s*=\\s*(?:_{2,}|…+)?$", options: .regularExpression) != nil
     }
 
     private static func letters(_ s: String) -> Set<String> {
@@ -743,6 +761,77 @@ enum ExactMath {
         return (trimmed, rels)
     }
 
+    /// The run with a gap mark wherever two operands stand side by side with nothing between them;
+    /// nil when it has no such place, or more than two.
+    static func withGaps(_ run: String) -> String? {
+        let tokens = run.split(separator: " ").map(String.init)
+        guard tokens.count >= 2 else { return nil }
+        var bars = 0
+        var operand: [(starts: Bool, ends: Bool)] = []
+        for t in tokens {
+            let first = t.first!
+            let last = t.last!
+            let opens = first == "|" && bars % 2 == 0
+            bars += t.filter { $0 == "|" }.count
+            let closes = last == "|" && bars % 2 == 0
+            let negative = (first == "-" || first == "−") && t.count > 1 && t[t.index(after: t.startIndex)].isNumber
+            operand.append((starts: first.isNumber || first.isLetter || first == "(" || opens || negative,
+                            ends: last.isNumber || last.isLetter || last == ")" || "²³".contains(last) || closes))
+        }
+        var out = tokens[0]
+        var gaps = 0
+        for k in 1..<tokens.count {
+            if operand[k - 1].ends && operand[k].starts {
+                gaps += 1
+                out += " \(gap) " + tokens[k]
+            } else {
+                out += " " + tokens[k]
+            }
+        }
+        return gaps >= 1 && gaps <= 2 ? out : nil
+    }
+
+    /// One interval of an answer line written to be filled: "( , ]", "[ , 0 )".
+    struct Template: Equatable {
+        var loClosed: Bool
+        var hiClosed: Bool
+        var lo: Fraction?
+        var hi: Fraction?
+    }
+
+    private static let intervalPattern = try! NSRegularExpression(pattern: #"([\[(])\s*([^,\[\]()]*?)\s*,\s*([^,\[\]()]*?)\s*([\])])"#)
+
+    /// The intervals the question's answer line shows to be filled, in order.
+    static func intervalTemplate(in stem: String) -> [Template] {
+        let ns = stem as NSString
+        func number(_ s: String) -> Fraction? {
+            let t = s.trimmingCharacters(in: .whitespaces)
+            guard t.range(of: "^[-−]?[0-9]+(?:[.,][0-9]+)?(?:/[0-9]+)?$", options: .regularExpression) != nil,
+                  let e = MathParser.parse(t), let v = e.evaluate([:]) else { return nil }
+            return Fraction(v)
+        }
+        return intervalPattern.matches(in: stem, range: NSRange(location: 0, length: ns.length)).map { m in
+            Template(loClosed: ns.substring(with: m.range(at: 1)) == "[", hiClosed: ns.substring(with: m.range(at: 4)) == "]",
+                     lo: number(ns.substring(with: m.range(at: 2))), hi: number(ns.substring(with: m.range(at: 3))))
+        }
+    }
+
+    /// Whether a solution set has the template's shape: as many intervals, the same brackets, and the
+    /// numbers the template already shows.
+    static func matches(_ s: IntervalSet, _ template: [Template]) -> Bool {
+        guard !template.isEmpty, s.intervals.count == template.count else { return false }
+        for (i, t) in zip(s.intervals, template) {
+            guard i.loClosed == t.loClosed, i.hiClosed == t.hiClosed else { return false }
+            if let lo = t.lo {
+                guard let v = i.lo.exact, v.isRational, v.r == lo else { return false }
+            }
+            if let hi = t.hi {
+                guard let v = i.hi.exact, v.isRational, v.r == hi else { return false }
+            }
+        }
+        return true
+    }
+
     /// The question's math: the given relation (an equation, an inequality or a chain), the form it
     /// is to be rewritten in, and the blanks to fill, when the question is one the engine solves.
     struct Reading {
@@ -750,40 +839,72 @@ enum ExactMath {
         var variable: String
         var form: String?
         var blanks: [String]
+        /// The question asks for interval notation, or shows an interval to be filled.
+        var intervals: Bool
     }
 
     static func read(_ raw: String) -> Reading? {
-        let stem = MathText.unifiedMath(raw)
+        let stem = MathText.restoredSquares(MathText.unifiedMath(raw))
         let lower = stem.lowercased()
         guard !notSolving.contains(where: { lower.contains($0) }) else { return nil }
-        let runs = MathText.mathRuns(in: stem).map(normalizedRelations).filter(hasRelation)
-        var blanks: [String] = []
-        var others: [String] = []
-        for run in runs {
-            if let b = blankLetter(run) {
-                if !blanks.contains(b) { blanks.append(b) }
-            } else {
-                others.append(run)
+        let blanks = blanks(in: stem)
+        var runs: [String] = []
+        for run in MathText.mathRuns(in: stem).map(normalizedRelations) where !isBlankRun(run) {
+            if hasRelation(run) {
+                runs.append(run)
+            } else if let gapped = withGaps(run) {
+                runs.append(gapped)
             }
         }
-        var form: String?
-        var given: String?
-        for run in others {
-            let ls = letters(run)
-            if !blanks.isEmpty, form == nil, !run.contains(where: \.isNumber), ls.isSuperset(of: blanks), ls.count >= 2 {
-                form = run
-            } else if given == nil {
-                given = run
-            }
-        }
-        guard let given, !given.contains("_") else { return nil }
-        let vars = letters(given).subtracting(blanks)
+        // The given is the first run with a number; the form, named for the blanks, has none.
+        guard let given = runs.first(where: { $0.contains(where: \.isNumber) }) ?? runs.first, !given.contains("_") else { return nil }
+        let vars = letters(given)
         guard vars.count == 1, let variable = vars.first, variable.unicodeScalars.first!.isASCII else { return nil }
+        // "Answer: x = ." is the answer's own blank, not a letter of a form.
+        let formBlanks = blanks.filter { $0 != variable }
+        var form: String?
+        if !formBlanks.isEmpty {
+            form = runs.first { run in
+                let ls = letters(run)
+                return run != given && !run.contains(where: \.isNumber) && ls.isSuperset(of: formBlanks) && ls.count >= 2
+            }
+        }
+        let template = intervalTemplate(in: stem)
+        let intervals = lower.contains("interval") || lower.contains("aralık") || !template.isEmpty
+        let namesInequality = lower.contains("inequalit") || lower.contains("eşitsizli") || form?.contains("|") == true
+        guard let resolved = resolved(given, variable: variable, template: template, chainAllowed: namesInequality) else { return nil }
+        if let f = form, f.contains(gap) {
+            // The textbook form named beside the chain ("|x − a| ≤ b") lost the same sign.
+            form = f.replacingOccurrences(of: " \(gap) ", with: " ≤ ")
+        }
         // "x = 5" alone is a statement, not an equation to solve.
-        let coefficient = given.range(of: "[0-9][a-zA-Z]", options: .regularExpression) != nil
-        let inequality = given.contains(where: { "<>≤≥".contains($0) })
-        guard coefficient || inequality || given.contains(where: { operators.contains($0) }) else { return nil }
-        return Reading(given: given, variable: variable, form: form, blanks: blanks)
+        let coefficient = resolved.range(of: "[0-9][a-zA-Z]", options: .regularExpression) != nil
+        let inequality = resolved.contains(where: { "<>≤≥".contains($0) })
+        guard coefficient || inequality || resolved.contains(where: { operators.contains($0) }) else { return nil }
+        return Reading(given: resolved, variable: variable, form: form, blanks: formBlanks, intervals: intervals)
+    }
+
+    /// The given with its lost sign put back where that is safe: a chain "−15 ⟂ x ⟂ 7" named as an
+    /// inequality is "≤" both ways; a single gap takes the one sign whose solution has exactly the
+    /// shape of the answer's template. Otherwise nil: the question stays the model's, and is checked.
+    private static func resolved(_ given: String, variable v: String, template: [Template], chainAllowed: Bool) -> String? {
+        guard given.contains(gap) else { return given }
+        let parts = given.components(separatedBy: " \(gap) ")
+        if parts.count == 3 {
+            guard chainAllowed, parts[1] == v, let lo = MathParser.parse(parts[0]), let hi = MathParser.parse(parts[2]),
+                  lo.variables.isEmpty, hi.variables.isEmpty, let a = lo.evaluate([:]), let b = hi.evaluate([:]), a < b else { return nil }
+            return parts.joined(separator: " ≤ ")
+        }
+        guard parts.count == 2, !template.isEmpty else { return nil }
+        var fits: [String] = []
+        for rel in [Relation.le, .lt, .ge, .gt] {
+            let candidate = parts.joined(separator: " \(rel.text) ")
+            var steps: [String] = []
+            if let s = solve(given: candidate, variable: v, steps: &steps), case let .set(set) = s, matches(set, template) {
+                fits.append(candidate)
+            }
+        }
+        return fits.count == 1 ? fits[0] : nil
     }
 
     // MARK: Expressions
@@ -1323,7 +1444,7 @@ enum ExactMath {
 
     // MARK: Words
 
-    static func text(_ solution: Solution, variable v: String) -> String {
+    static func text(_ solution: Solution, variable v: String, intervals: Bool = false) -> String {
         switch solution {
         case let .roots(rs):
             if rs.isEmpty { return L("çözüm yok", "no solution") }
@@ -1337,6 +1458,7 @@ enum ExactMath {
             if s.intervals.count == 1 {
                 let i = s.intervals[0]
                 if i.isPoint { return "\(v) = \(i.lo.text)" }
+                if intervals { return s.notation }
                 if i.isBounded { return "\(i.lo.text) \(i.loClosed ? "≤" : "<") \(v) \(i.hiClosed ? "≤" : "<") \(i.hi.text)" }
                 if i.lo.exact != nil { return "\(v) \(i.loClosed ? "≥" : ">") \(i.lo.text)" }
                 return "\(v) \(i.hiClosed ? "≤" : "<") \(i.hi.text)"
@@ -1355,7 +1477,7 @@ enum ExactMath {
         if let form = reading.form {
             return rewrite(solution, form: form, blanks: reading.blanks, variable: v, given: reading.given, steps: steps)
         }
-        let answer = text(solution, variable: v)
+        let answer = text(solution, variable: v, intervals: reading.intervals)
         if steps.isEmpty { steps = [answer] }
         return Answer(answer: answer, working: Array(steps.prefix(3)), variable: v, given: reading.given)
     }

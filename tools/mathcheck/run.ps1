@@ -15,5 +15,5 @@ if (Test-Path $exe) { Remove-Item $exe -Force }
 & swiftc -O -swift-version 5 (Join-Path $PSScriptRoot "main.swift") (Join-Path $PSScriptRoot "Stubs.swift") @files -o $exe 2>&1 |
     ForEach-Object { "$_" } | Where-Object { $_ -notmatch "\.lib|\.exp|NativeCommandError|CategoryInfo|At .*run\.ps1|^\s*\+|^\s*$" }
 if (-not (Test-Path $exe)) { Write-Output "compile failed"; exit 1 }
-& $exe
+& $exe $root
 exit $LASTEXITCODE

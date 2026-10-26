@@ -297,6 +297,83 @@ check(QuestionSolving.retryNote(reason: "x = 0.3 does not satisfy the equation",
       == "YOUR FIRST ANSWER WAS WRONG: x = 0.3 does not satisfy the equation. By substitution the math engine finds that x = -7/4 (≈ -1.75) satisfies the equation; solve again towards that and check every case.",
       "retry note", got: QuestionSolving.retryNote(reason: "x = 0.3 does not satisfy the equation", hint: "x = -7/4 (≈ -1.75)", language: .english))
 
+// MARK: The page as its PDF gives it (tests/fixtures/calculus_p14_pdftotext.txt), through the app's own pipeline
+
+let root = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
+let fixture = (try? String(contentsOfFile: root + "/tests/fixtures/calculus_p14_pdftotext.txt", encoding: .utf8)) ?? ""
+check(!fixture.isEmpty, "the PDF's text fixture is read")
+
+/// The answers of a page's text, question by question, as AssistantModel prepares and solves it.
+func pageAnswers(_ text: String) -> [Int: String] {
+    var out: [Int: String] = [:]
+    for q in QuestionSplitter.split(MathText.pageForSolving(text)) {
+        out[q.number] = ExactMath.solve(q.stem)?.answer ?? "-"
+    }
+    return out
+}
+
+/// What iPadOS PDFKit may give instead of poppler: a true minus sign, single spaces where the sign
+/// was lost, and two lines joined without a space.
+func pdfKitLike(_ text: String) -> String {
+    text.replacingOccurrences(of: "(?<=[\\s|])-(?=[0-9\\s])", with: "−", options: .regularExpression)
+        .replacingOccurrences(of: "  ", with: " ")
+        .replacingOccurrences(of: " and\nb = .", with: " andb = .")
+}
+
+let mustSolve: [Int: String] = [
+    1: "a = −4, b = 8", 2: "a = −4, b = 11", 3: "x = −7/4", 4: "x = ±3√2/2", 6: "x = 1 or x = 3", 7: "a = 3, b = 7",
+    9: "a = −11, b = 3", 10: "(−4, −2/3)", 11: "x = ±√7", 13: "(−∞, −3] ∪ [9, ∞)",
+]
+// Solved right, or left to the model: never a wrong engine answer.
+let mayLeave: [Int: String] = [
+    5: "[−1/2, 1) ∪ [2, ∞)", 12: "[−√5, √5]", 14: "(−∞, −2) ∪ [−2/3, 4)", 15: "(−∞, −3) ∪ [−7/4, 2)", 16: "(−1, 3]",
+    17: "x = −10 or x = −7/2 or x = −5/2 or x = 4", 18: "[−1, 0) ∪ [2, ∞)",
+]
+for (name, text) in [("poppler", fixture), ("pdfkit-like", pdfKitLike(fixture))] {
+    let answers = pageAnswers(text)
+    check(answers.count == 18, "\(name): 18 questions split", got: "\(answers.keys.sorted())")
+    for (n, a) in mustSolve.sorted(by: { $0.key < $1.key }) {
+        check(answers[n] == a, "\(name) (\(n)): \(a)", got: answers[n] ?? "nil")
+    }
+    for (n, a) in mayLeave.sorted(by: { $0.key < $1.key }) {
+        check(answers[n] == a || answers[n] == "-", "\(name) (\(n)): right or the model's", got: answers[n] ?? "nil")
+    }
+    check(answers[8] == "-", "\(name) (8): a graph is the model's", got: answers[8] ?? "nil")
+}
+let poppler = pageAnswers(fixture)
+check([12, 14, 15, 17, 18].allSatisfy { poppler[$0] == mayLeave[$0] }, "poppler: the split fractions and the quadratic in |x + 3| are solved",
+      got: [12, 14, 15, 17, 18].map { "\($0): \(poppler[$0] ?? "nil")" }.joined(separator: " | "))
+check(poppler[5] == "-" && poppler[16] == "-", "poppler: cubic denominators stay the model's", got: "\(poppler[5] ?? "nil") \(poppler[16] ?? "nil")")
+// The pieces: squares put back, a lost sign marked, a template read, the fractions rebuilt.
+check(MathText.restoredSquares("|x2 + 2| = |x2 - 11| and |x - 2|2 + 3|x - 2| - 4 = 0 and 2|x + 3|2 - 15|x + 3|, x3 + x2, 3|2 - x| < 2, x = 2")
+      == "|x² + 2| = |x² − 11| and |x − 2|² + 3|x − 2| − 4 = 0 and 2|x + 3|² − 15|x + 3|, x³ + x², 3|2 − x| < 2, x = 2"
+      .replacingOccurrences(of: "−", with: "-"), "squares restored only after an operand",
+      got: MathText.restoredSquares("|x2 + 2| = |x2 - 11| and |x - 2|2 + 3|x - 2| - 4 = 0 and 2|x + 3|2 - 15|x + 3|, x3 + x2, 3|2 - x| < 2, x = 2"))
+check(ExactMath.withGaps("-15 x 7") == "-15 ⟂ x ⟂ 7" && ExactMath.withGaps("|x - a| b") == "|x - a| ⟂ b" && ExactMath.withGaps("| x - 3 | 6") == "| x - 3 | ⟂ 6"
+      && ExactMath.withGaps("|x - 3| < 6") == nil && ExactMath.withGaps("x x + 2 x + 3 x - 4") == nil && ExactMath.withGaps("3x") == nil,
+      "gaps: operands side by side, bars paired, nothing else", got: "\(ExactMath.withGaps("| x - 3 | 6") ?? "nil")")
+check(ExactMath.intervalTemplate(in: "Answer: ( , ]  [ , 2 ) .") == [ExactMath.Template(loClosed: false, hiClosed: true, lo: nil, hi: nil),
+                                                                       ExactMath.Template(loClosed: true, hiClosed: false, lo: nil, hi: Fraction(2))]
+      && ExactMath.intervalTemplate(in: "is (-, )  [ , 2 ).").count == 2 && ExactMath.intervalTemplate(in: "Solve (x + 1)/(x - 2) ≥ 0.").isEmpty,
+      "template: brackets and the numbers already there")
+check(ExactMath.solve("Solve the inequality |x - 3|  6. Answer: ( , )  ( , ).")?.answer == "(−∞, −3) ∪ (9, ∞)", "a lost sign: strict rays make it >",
+      got: ExactMath.solve("Solve the inequality |x - 3|  6. Answer: ( , )  ( , ).")?.answer ?? "nil")
+check(ExactMath.solve("Solve the inequality |x - 3|  6.") == nil && ExactMath.solve("Compute 3 x 4.") == nil
+      && ExactMath.solve("The numbers -15 x 7 are given.") == nil, "a lost sign with nothing to decide it stays the model's")
+check(ExactMath.solve("The inequality −15 x 7 can be expressed in the form |x − a| b where a = and b = .")?.working
+      == ["Midpoint: a = (−15 + 7)/2 = −4", "Half-width: b = (7 − (−15))/2 = 11", "So |x + 4| ≤ 11"], "the chain's steps print the inferred ≤",
+      got: "\(ExactMath.solve("The inequality −15 x 7 can be expressed in the form |x − a| b where a = and b = .")?.working ?? [])")
+let rebuilt = MathText.rebuiltFractions("(5) Solve the inequality\n3x\nx2 + 2\n\n1\nx - 1\n. Express your answer in interval notation.\nAnswer: [ , )  [ 2 , ) .\n(6) Solve the equation |x - 2|2 + 3|x - 2| - 4 = 0.")
+check(rebuilt == "(5) Solve the inequality (3x)/(x2 + 2)  (1)/(x - 1). Express your answer in interval notation.\nAnswer: [ , )  [ 2 , ) .\n(6) Solve the equation |x - 2|2 + 3|x - 2| - 4 = 0.",
+      "fractions rebuilt on the sentence's line", got: rebuilt)
+check(MathText.rebuiltFractions("Calculate the sums:\n3 + 4\n5 × 6\n(2) Next question") == "Calculate the sums:\n3 + 4\n5 × 6\n(2) Next question",
+      "a list of sums is not a fraction")
+check(MathText.rebuiltFractions("Complete the text with the words in the box.\n1\n2\npeople were waiting outside") == "Complete the text with the words in the box.\n1\n2\npeople were waiting outside",
+      "a textbook's gap numbers on their own lines are not a fraction")
+check(ExactMath.verify(question: "Solve the equation |4x + 23| = |4x - 9|. Answer: x = .", answer: "x = −1") != nil
+      && ExactMath.verify(question: "Solve the equation x3 - x = 0. Answer: x = , x = , and x = .", answer: "x = 0, x = 1, x = −1") == .holds,
+      "verify: the page's own answer blanks do not stop the check", got: "\(String(describing: ExactMath.verify(question: "Solve the equation |4x + 23| = |4x - 9|. Answer: x = .", answer: "x = −1")))")
+
 // MARK: The engine's earlier checks still hold (as tools/swiftcheck runs them)
 
 func solved(_ line: String) -> (String, [Double])? {
