@@ -50,6 +50,17 @@ def test_every_script_maps_codemagic_names_to_githubs(flow):
     assert 100 + int(out.stdout.strip()) > 109
 
 
+def test_xcode_is_pinned_to_the_one_that_uploaded(flow):
+    assert flow["environment"]["xcode"] == make_codemagic.XCODE == "26.6"
+
+
+def test_shaders_are_compiled_before_the_upload(flow):
+    names = [s["name"] for s in flow["scripts"]]
+    assert names.index("Murekkep Shaderlarini Derle") < names.index("TestFlight'a Yukle")
+    step = next(s for s in flow["scripts"] if s["name"] == "Murekkep Shaderlarini Derle")
+    assert "python3 tools/metal_check.py" in step["script"] and "ignore_failure" not in step
+
+
 def test_voice_engine_is_built_only_without_the_cache(flow):
     sherpa = next(s for s in flow["scripts"] if s["name"].startswith("Gomulu Ses Motorunu"))
     assert "if [ -d sherpa-out/sherpa-onnx.xcframework ]; then" in sherpa["script"]

@@ -465,6 +465,11 @@ jobs:
         run: |
           xcrun -sdk iphoneos metal -v >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
 
+      # The ink, sticker and layer shaders are compiled on the iPad at run time (makeLibrary(source:)).
+      # Compile them here first, so a broken shader fails the build instead of blanking every page.
+      - name: Murekkep Shaderlarini Derle
+        run: python3 tools/metal_check.py
+
       - name: Swift Paket Onbellegi
         uses: actions/cache@v4
         with:
