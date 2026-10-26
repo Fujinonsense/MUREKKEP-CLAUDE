@@ -85,6 +85,19 @@ enum InkCodec {
         }
         return pages
     }
+
+    /// The format version `data` was written with; nil when it is not an ink file at all.
+    static func formatVersion(of data: Data) -> UInt32? {
+        var r = ByteReader(data.prefix(8))
+        guard let m = try? r.u32(), m == magic, let v = try? r.u32() else { return nil }
+        return v
+    }
+
+    /// True for a file a newer Mürekkep wrote: the ink in it is fine, this build just cannot read
+    /// it (and must not write over it).
+    static func isNewerFormat(_ data: Data) -> Bool {
+        (formatVersion(of: data) ?? 0) > version
+    }
 }
 
 struct ByteWriter {

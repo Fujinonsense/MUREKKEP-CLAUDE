@@ -105,29 +105,45 @@ final class LibraryStore: ObservableObject {
 
     private var sectionsURL: URL { root.appendingPathComponent("sections.json") }
 
+    /// Entries of index.json and sections.json this build could not read (written by a newer
+    /// Mürekkep, or damaged), as they are in the file: written back with the rest, so one bad
+    /// entry never empties a list.
+    private var unreadableNotes: [Any] = []
+    private var unreadableSections: [Any] = []
+
     private func load() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        if let data = try? Data(contentsOf: sectionsURL), let list = try? decoder.decode([NoteSection].self, from: data) {
-            sections = list
+        // Each list is read entry by entry; a file that is not a list at all is copied aside
+        // before the next save replaces it.
+        if let data = try? Data(contentsOf: sectionsURL) {
+            if let read = LenientList.decode(NoteSection.self, from: data, decoder: decoder) {
+                sections = read.items
+                unreadableSections = read.unreadable
+            } else {
+                FileBackup.keep(sectionsURL)
+            }
         }
         guard let data = try? Data(contentsOf: indexURL) else { return }
-        if let list = try? decoder.decode([NoteMeta].self, from: data) {
-            notes = list.sorted { $0.modified > $1.modified }
+        if let read = LenientList.decode(NoteMeta.self, from: data, decoder: decoder) {
+            notes = read.items.sorted { $0.modified > $1.modified }
+            unreadableNotes = read.unreadable
+        } else {
+            FileBackup.keep(indexURL)
         }
     }
 
     private func persist() {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(notes) else { return }
+        guard let data = try? LenientList.encode(notes, unreadable: unreadableNotes, encoder: encoder) else { return }
         try? data.write(to: indexURL, options: .atomic)
     }
 
     private func persistSections() {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(sections) else { return }
+        guard let data = try? LenientList.encode(sections, unreadable: unreadableSections, encoder: encoder) else { return }
         try? data.write(to: sectionsURL, options: .atomic)
     }
 
@@ -216,14 +232,23 @@ final class LibraryStore: ObservableObject {
         return meta
     }
 
-    /// Photos (image file data) as one PDF, a page per photo, titled `title`.
+    /// Photos (image file data) as one PDF, a page per photo, titled `title`. The PDF is written
+    /// off the main thread (`progress` gets each photo's count and the total, on the main thread);
+    /// the note is added here, on the main actor.
+    @MainActor
     @discardableResult
-    func importPhotos(_ photos: [Data], title: String, section: UUID? = nil) throws -> NoteMeta {
+    func importPhotos(_ photos: [Data], title: String, section: UUID? = nil,
+                      progress: @escaping (Int, Int) -> Void = { _, _ in }) async throws -> NoteMeta {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent(PhotoPDF.fileName(title)).appendingPathExtension("pdf")
-        guard try PhotoPDF.write(photos, to: url) > 0 else { throw LibraryError.unreadablePhoto }
+        let pages = try await Task.detached(priority: .userInitiated) {
+            try PhotoPDF.write(photos, to: url) { done, total in
+                DispatchQueue.main.async { progress(done, total) }
+            }
+        }.value
+        guard pages > 0 else { throw LibraryError.unreadablePhoto }
         return try importPDF(from: url, section: section)
     }
 

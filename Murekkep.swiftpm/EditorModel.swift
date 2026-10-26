@@ -181,6 +181,9 @@ final class EditorModel: ObservableObject {
     @Published var zoomWindowOn = false
     @Published private(set) var pageCount: Int
     @Published private(set) var loadError: String?
+    /// The ink file could not be read (damaged, or written by a newer Mürekkep): the note opens
+    /// without it and nothing is written over it, so edits are refused with a word in the banner.
+    @Published private(set) var inkReadOnly = false
 
     let store: LibraryStore
     let settings: AppSettings
@@ -240,8 +243,23 @@ final class EditorModel: ObservableObject {
         }
 
         var loaded: [[Stroke]] = []
-        if let data = try? Data(contentsOf: store.inkURL(for: meta.id)) {
-            loaded = (try? InkCodec.decode(data)) ?? []
+        var inkError: String?
+        var readOnly = false
+        let inkURL = store.inkURL(for: meta.id)
+        if let data = try? Data(contentsOf: inkURL) {
+            do {
+                loaded = try InkCodec.decode(data)
+            } catch {
+                // The file stays as it is: the note opens read-only, so no save replaces ink a newer
+                // build (or a repair) could still read. A damaged file also gets a copy next to it.
+                readOnly = true
+                if InkCodec.isNewerFormat(data) {
+                    inkError = Loc.t("Bu not daha yeni bir Mürekkep sürümüyle kaydedilmiş; bu sürüm onu açamıyor. Yazılar dosyada duruyor; görmek için uygulamayı güncelle.")
+                } else {
+                    FileBackup.keep(inkURL)
+                    inkError = Loc.t("Bu notun mürekkep dosyası okunamadı. Dosya olduğu gibi saklandı ve yanına bir kopyası alındı; not salt okunur açıldı.")
+                }
+            }
         }
         if meta.kind == .notebook {
             let count = max(1, meta.pageCount, loaded.count)
@@ -258,7 +276,9 @@ final class EditorModel: ObservableObject {
         pages = (0..<sizes.count).map { i in
             PageInk(strokes: i < loaded.count ? loaded[i] : [], version: 1)
         }
-        loadError = error
+        let problems = [error, inkError].compactMap { $0 }
+        loadError = problems.isEmpty ? nil : problems.joined(separator: "\n\n")
+        inkReadOnly = readOnly
 
         var c: [Brush: InkColor] = [:]
         var w: [Brush: Float] = [:]
@@ -362,8 +382,17 @@ final class EditorModel: ObservableObject {
 
     // MARK: Editing
 
+    /// False, with a word to the user, while the note is read-only; the canvas is then redrawn from
+    /// the pages, without what it just drew.
+    private func allowsEdit() -> Bool {
+        guard inkReadOnly else { return true }
+        banner = Loc.t("Not salt okunur: yeni yazılar kaydedilmez.")
+        onInkChange?()
+        return false
+    }
+
     func addStroke(_ stroke: Stroke, toPage page: Int) {
-        guard pages.indices.contains(page) else { return }
+        guard pages.indices.contains(page), allowsEdit() else { return }
         let before = pages[page].strokes
         pages[page].strokes.append(stroke)
         record(InkEdit(page: page, before: before, after: pages[page].strokes))
@@ -398,7 +427,7 @@ final class EditorModel: ObservableObject {
 
     /// Removes and adds strokes on a page as one undoable step.
     func replaceStrokes(page: Int, removing ids: Set<Int>, adding new: [Stroke]) {
-        guard pages.indices.contains(page), !(ids.isEmpty && new.isEmpty) else { return }
+        guard pages.indices.contains(page), !(ids.isEmpty && new.isEmpty), allowsEdit() else { return }
         let before = pages[page].strokes
         pages[page].strokes = before.filter { !ids.contains($0.id) } + new
         record(InkEdit(page: page, before: before, after: pages[page].strokes))
@@ -496,7 +525,7 @@ final class EditorModel: ObservableObject {
     }
 
     func beginSelectionEdit() {
-        guard let sel = selection, pages.indices.contains(sel.page) else { return }
+        guard let sel = selection, pages.indices.contains(sel.page), allowsEdit() else { return }
         selectionSnapshot = (strokes: pages[sel.page].strokes, ids: sel.ids, stickers: pages[sel.page].stickers)
     }
 
@@ -662,7 +691,7 @@ final class EditorModel: ObservableObject {
 
     /// Applies `body` to a page as one undoable step (strokes and stickers).
     private func change(page: Int, _ body: (inout PageInk) -> Void) {
-        guard pages.indices.contains(page) else { return }
+        guard pages.indices.contains(page), allowsEdit() else { return }
         let before = pages[page]
         body(&pages[page])
         let after = pages[page]
@@ -1105,12 +1134,12 @@ final class EditorModel: ObservableObject {
     }
 
     func beginErase(page: Int) {
-        guard pages.indices.contains(page) else { return }
+        guard pages.indices.contains(page), allowsEdit() else { return }
         eraseSnapshot = (page, pages[page].strokes, pages[page].stickers)
     }
 
     func erase(page: Int, from a: SIMD2<Float>, to b: SIMD2<Float>) {
-        guard pages.indices.contains(page) else { return }
+        guard pages.indices.contains(page), !inkReadOnly else { return }
         let radius = eraserSize / 2
         var changed = false
         var result: [Stroke] = []
@@ -1275,7 +1304,7 @@ final class EditorModel: ObservableObject {
     }
 
     func addPage() {
-        guard !isPDF else { return }
+        guard !isPDF, allowsEdit() else { return }
         var sizes = layout.pageSizes
         sizes.append(NoteMeta.a4)
         layout = DocumentLayout(pageSizes: sizes)
@@ -1289,7 +1318,7 @@ final class EditorModel: ObservableObject {
 
     /// Changes the template of every page of a notebook.
     func setPaper(_ style: PaperStyle) {
-        guard !isPDF, meta.paper != style else { return }
+        guard !isPDF, meta.paper != style, allowsEdit() else { return }
         meta.paper = style
         store.update(meta)
         markDirty()
@@ -1338,7 +1367,8 @@ final class EditorModel: ObservableObject {
     func saveNow() {
         saveWork?.cancel()
         saveWork = nil
-        guard dirty else { return }
+        // A read-only note's files are never written: they hold ink this build could not read.
+        guard dirty, !inkReadOnly else { return }
         dirty = false
         let snapshot = pages.map(\.strokes)
         let stickers = pages.map(\.stickers)
@@ -1407,6 +1437,8 @@ final class EditorModel: ObservableObject {
         let wasDirty = dirty
         saveLastPage()
         saveNow()
+        // A read-only note keeps its search text and thumbnail too: both would come out empty.
+        guard !inkReadOnly else { return }
         // The handwriting becomes searchable text (only pages whose ink changed are read).
         let ink = pages.map(\.strokes)
         let noteID = meta.id

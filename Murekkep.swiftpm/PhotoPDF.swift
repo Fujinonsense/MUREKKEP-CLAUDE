@@ -34,13 +34,15 @@ enum PhotoPDF {
 
     #if canImport(UIKit)
     /// Writes the photos (image file data, any format UIKit reads) as a PDF. Photos it cannot read
-    /// are skipped; it returns how many pages it wrote.
+    /// are skipped; it returns how many pages it wrote. `progress` gets how many photos are done
+    /// and how many there are, after each one. Decoding and scaling take a while, so this belongs
+    /// on a background thread (the renderers are fine there).
     @discardableResult
-    static func write(_ photos: [Data], to url: URL) throws -> Int {
+    static func write(_ photos: [Data], to url: URL, progress: (Int, Int) -> Void = { _, _ in }) throws -> Int {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842))
         var pages = 0
         try renderer.writePDF(to: url) { ctx in
-            for data in photos {
+            for (i, data) in photos.enumerated() {
                 autoreleasepool {
                     guard let photo = UIImage(data: data), photo.size.width > 0, photo.size.height > 0 else { return }
                     let page = CGRect(origin: .zero, size: pageSize(for: photo.size))
@@ -48,6 +50,7 @@ enum PhotoPDF {
                     scaled(photo).draw(in: page)
                     pages += 1
                 }
+                progress(i + 1, photos.count)
             }
         }
         return pages

@@ -1304,5 +1304,10 @@ enum Translations {
         "Bu plan bulunduğun ülkenin App Store'unda satılmıyor.": "This plan isn't sold in your country's App Store.",
         "Bu iPad'de ya da Apple hesabında satın almaya izin verilmiyor; Ekran Süresi kısıtlamalarına bak.": "Purchases aren't allowed on this iPad or Apple Account; check the Screen Time restrictions.",
         "Satın alma tamamlanamadı. Biraz sonra yeniden dene.": "The purchase couldn't be completed. Try again in a moment.",
+        // Safe files and photo progress (1.1, 2026-10-26)
+        "Bu notun mürekkep dosyası okunamadı. Dosya olduğu gibi saklandı ve yanına bir kopyası alındı; not salt okunur açıldı.": "This note's ink file couldn't be read. The file was kept as it is, with a copy next to it; the note opened read-only.",
+        "Bu not daha yeni bir Mürekkep sürümüyle kaydedilmiş; bu sürüm onu açamıyor. Yazılar dosyada duruyor; görmek için uygulamayı güncelle.": "This note was saved by a newer version of Mürekkep, which this version can't open. The ink is still in the file; update the app to see it.",
+        "Not salt okunur: yeni yazılar kaydedilmez.": "Read-only note: new writing isn't saved.",
+        "Fotoğraflar PDF'e dönüştürülüyor ({0}/{1})": "Converting photos to a PDF ({0}/{1})",
     ]
 }

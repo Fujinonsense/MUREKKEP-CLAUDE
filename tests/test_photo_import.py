@@ -23,14 +23,43 @@ def test_the_add_button_offers_files_and_photos():
 def test_photos_become_one_pdf():
     view = src("LibraryView.swift")
     files = view[view.index("private func importFiles"):view.index("private static func isPhoto")]
-    assert "store.importPhotos(" in files and "store.importPDF(" in files
-    assert "importPhotos(photos, title: LibraryStore.photoTitle(fileName: nil)" in view
+    assert "convertPhotos(" in files and "store.importPDF(" in files
+    assert "convertPhotos(photos, title: LibraryStore.photoTitle(fileName: nil)" in view
+    assert "store.importPhotos(photos, title: title, section: section)" in view[view.index("private func convertPhotos"):]
     store = src("LibraryStore.swift")
-    assert "func importPhotos(_ photos: [Data], title: String, section: UUID? = nil) throws -> NoteMeta" in store
-    assert "PhotoPDF.write(photos, to: url)" in store
+    assert "func importPhotos(_ photos: [Data], title: String, section: UUID? = nil," in store
+    assert "progress: @escaping (Int, Int) -> Void = { _, _ in }) async throws -> NoteMeta" in store
+    assert "PhotoPDF.write(photos, to: url) { done, total in" in store
     pdf = src("PhotoPDF.swift")
     assert "UIGraphicsPDFRenderer" in pdf and "beginPage(withBounds:" in pdf
     assert "jpegData(compressionQuality:" in pdf  # pages stay compressed
+
+
+def test_photos_are_converted_off_the_main_thread_with_a_count():
+    # Thirty photos decoded, scaled and compressed on the main actor froze the library (1.1).
+    store = src("LibraryStore.swift")
+    convert = store[store.index("func importPhotos("):store.index("static func photoTitle")]
+    assert "@MainActor" in store[store.index("func importPhotos(") - 120:store.index("func importPhotos(")]
+    assert "try await Task.detached(priority: .userInitiated) {" in convert
+    assert "DispatchQueue.main.async { progress(done, total) }" in convert
+    # The note lands in the library on the main actor, after the PDF is written.
+    assert convert.index(".value") < convert.index("return try importPDF(from: url, section: section)")
+    pdf = src("PhotoPDF.swift")
+    assert "progress: (Int, Int) -> Void = { _, _ in }) throws -> Int" in pdf
+    assert "autoreleasepool {" in pdf and "progress(i + 1, photos.count)" in pdf
+    view = src("LibraryView.swift")
+    assert "@State private var photoProgress: PhotoImportProgress?" in view
+    assert 'Loc.t("Fotoğraflar PDF\'e dönüştürülüyor ({0}/{1})", "\\(p.done)", "\\(p.total)")' in view
+    assert "photoProgressBanner" in view[view.index(".overlay(alignment: .bottom) {"):][:120]
+    # Every way photos come in shows the count and converts them off the main thread.
+    for start in ("private func importFiles", "private func importPicked", "private func handleDrop"):
+        part = view[view.index(start):]
+        assert "convertPhotos(" in part[:2600], start
+    files = view[view.index("private func importFiles"):view.index("private func finishImport")]
+    assert "await Task.detached(priority: .userInitiated) {" in files  # the files are read there too
+    convert_view = view[view.index("private func convertPhotos"):view.index("private func showPhotoProgress")]
+    assert "defer { showPhotoProgress(nil) }" in convert_view
+    assert "photoProgress = PhotoImportProgress(done: done, total: total)" in convert_view
 
 
 def test_photos_can_be_dropped_everywhere_a_pdf_can():
@@ -40,7 +69,7 @@ def test_photos_can_be_dropped_everywhere_a_pdf_can():
     assert src("LibraryPanes.swift").count(".onDrop(of: [.pdf, .image],") == 4
     view = src("LibraryView.swift")
     drop = view[view.index("private func handleDrop"):]
-    assert "UTType.image.identifier" in drop and "importPhotos(" in drop
+    assert "UTType.image.identifier" in drop and "convertPhotos(" in drop
 
 
 def test_photo_texts_are_translated():

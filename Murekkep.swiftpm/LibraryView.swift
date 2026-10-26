@@ -71,6 +71,12 @@ struct StudioRequest: Identifiable {
     let preselected: [UUID]
 }
 
+/// How far photos picked together have come on their way into one PDF.
+struct PhotoImportProgress: Equatable {
+    var done: Int
+    var total: Int
+}
+
 struct LibraryView: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var settings: AppSettings
@@ -87,6 +93,7 @@ struct LibraryView: View {
     @State private var askImportSource = false
     @State private var showPhotoPicker = false
     @State private var pickedPhotos: [PhotosPickerItem] = []
+    @State private var photoProgress: PhotoImportProgress?
     @State private var showSettings = false
     @State private var showVoices = false
     @State private var showTemplates = false
@@ -139,7 +146,12 @@ struct LibraryView: View {
                     }
                 }
             }
-            .overlay(alignment: .bottom) { finishedBanner }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 10) {
+                    photoProgressBanner
+                    finishedBanner
+                }
+            }
             .modifier(LibraryBackdrop())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: UUID.self) { id in
@@ -386,6 +398,27 @@ struct LibraryView: View {
         }
     }
 
+    /// Photos becoming a PDF: the count, so thirty photos do not look like a hang.
+    @ViewBuilder
+    private var photoProgressBanner: some View {
+        if let p = photoProgress {
+            HStack(spacing: 14) {
+                ProgressView()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(Loc.t("Fotoğraflar PDF'e dönüştürülüyor ({0}/{1})", "\(p.done)", "\(p.total)"))
+                        .font(.subheadline.weight(.bold))
+                    ProgressView(value: Double(p.done), total: Double(max(p.total, 1)))
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: 520)
+            .glassCard(radius: 22)
+            .padding(.bottom, 24)
+            .padding(.horizontal, 16)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     // MARK: Actions
 
     private func createNotebook(_ style: PaperStyle, section: UUID?) {
@@ -398,35 +431,53 @@ struct LibraryView: View {
         case let .success(urls):
             var failed: [String] = []
             var added: [UUID] = []
+            let target = importTarget
             // Photos picked together become one PDF; PDFs come in as they are.
             let photos = urls.filter { Self.isPhoto($0) }
             for url in urls where !Self.isPhoto(url) {
                 do {
-                    added.append(try store.importPDF(from: url, section: importTarget).id)
+                    added.append(try store.importPDF(from: url, section: target).id)
                 } catch {
                     failed.append(url.lastPathComponent)
                 }
             }
-            if !photos.isEmpty {
-                let data = photos.compactMap { url -> Data? in
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    return try? Data(contentsOf: url)
-                }
+            guard !photos.isEmpty else {
+                finishImport(added: added, failed: failed, section: target)
+                return
+            }
+            let title = LibraryStore.photoTitle(fileName: photos[0].lastPathComponent)
+            let pdfsAdded = added
+            let pdfsFailed = failed
+            showPhotoProgress(PhotoImportProgress(done: 0, total: photos.count))
+            Task { @MainActor in
+                // The files are read off the main thread too: thirty photos are many megabytes.
+                let data = await Task.detached(priority: .userInitiated) {
+                    photos.compactMap { url -> Data? in
+                        let scoped = url.startAccessingSecurityScopedResource()
+                        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                        return try? Data(contentsOf: url)
+                    }
+                }.value
+                var added = pdfsAdded
+                var failed = pdfsFailed
                 do {
-                    added.append(try store.importPhotos(data, title: LibraryStore.photoTitle(fileName: photos[0].lastPathComponent),
-                                                        section: importTarget).id)
+                    added.append(try await convertPhotos(data, title: title, section: target).id)
                 } catch {
                     failed += photos.map(\.lastPathComponent)
                 }
-            }
-            if !failed.isEmpty {
-                errorText = Loc.t("Şu dosyalar açılamadı: ") + failed.joined(separator: ", ")
-            } else if added.count == 1, importTarget == nil {
-                path.append(added[0])
+                finishImport(added: added, failed: failed, section: target)
             }
         case let .failure(error):
             errorText = error.localizedDescription
+        }
+    }
+
+    /// After an import: the files that failed, or straight into the one note that came in.
+    private func finishImport(added: [UUID], failed: [String], section: UUID?) {
+        if !failed.isEmpty {
+            errorText = Loc.t("Şu dosyalar açılamadı: ") + failed.joined(separator: ", ")
+        } else if added.count == 1, section == nil {
+            path.append(added[0])
         }
     }
 
@@ -438,18 +489,34 @@ struct LibraryView: View {
     /// Photos picked from the Photos library, as one PDF.
     private func importPicked(_ items: [PhotosPickerItem]) {
         let section = importTarget
+        showPhotoProgress(PhotoImportProgress(done: 0, total: items.count))
         Task { @MainActor in
             var photos: [Data] = []
             for item in items {
                 if let data = try? await item.loadTransferable(type: Data.self) { photos.append(data) }
             }
             do {
-                let note = try store.importPhotos(photos, title: LibraryStore.photoTitle(fileName: nil), section: section)
+                let note = try await convertPhotos(photos, title: LibraryStore.photoTitle(fileName: nil), section: section)
                 if section == nil { path.append(note.id) }
             } catch {
                 errorText = error.localizedDescription
             }
         }
+    }
+
+    /// Photos picked together, as one PDF: the store writes it off the main thread while the count
+    /// shows over the library; the note is added here, on the main actor, when they are done.
+    @MainActor
+    private func convertPhotos(_ photos: [Data], title: String, section: UUID?) async throws -> NoteMeta {
+        showPhotoProgress(PhotoImportProgress(done: 0, total: photos.count))
+        defer { showPhotoProgress(nil) }
+        return try await store.importPhotos(photos, title: title, section: section) { done, total in
+            photoProgress = PhotoImportProgress(done: done, total: total)
+        }
+    }
+
+    private func showPhotoProgress(_ progress: PhotoImportProgress?) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { photoProgress = progress }
     }
 
     /// PDFs and photos dragged in from Files, Photos or another app (photos dropped together become
@@ -479,7 +546,9 @@ struct LibraryView: View {
             let name = photos[0].suggestedName
             group.notify(queue: .main) {
                 let data = loaded.keys.sorted().compactMap { loaded[$0] }
-                _ = try? library.importPhotos(data, title: LibraryStore.photoTitle(fileName: name), section: section)
+                Task { @MainActor in
+                    _ = try? await convertPhotos(data, title: LibraryStore.photoTitle(fileName: name), section: section)
+                }
             }
         }
         for provider in pdfs {
