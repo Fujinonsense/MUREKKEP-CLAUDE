@@ -67,6 +67,11 @@ struct Fraction: Equatable, Hashable {
         return max(a, 1)
     }
 
+    static func lcm(_ a: Int, _ b: Int) -> Int {
+        let (m, overflow) = (a / gcd(a, b)).multipliedReportingOverflow(by: b)
+        return overflow ? a : m
+    }
+
     var isZero: Bool { ok && num == 0 }
     var sign: Int { num > 0 ? 1 : (num < 0 ? -1 : 0) }
     var isInteger: Bool { den == 1 }
@@ -298,8 +303,17 @@ struct RPoly: Equatable {
         return acc
     }
 
-    /// "4x + 23", "x² − 9", "−x/2 + 3", for the working shown to the model.
+    /// "4x + 23", "x² − 9", "(2x² − 3)/14", for the working shown under the answer.
     func text(_ variable: String) -> String {
+        var q = 1
+        for f in c {
+            q = Fraction.lcm(q, f.den)
+        }
+        if q > 1 {
+            let inner = scaled(Fraction(q)).text(variable)
+            let terms = c.filter { !$0.isZero }.count
+            return terms == 1 ? "\(inner)/\(q)" : "(\(inner))/\(q)"
+        }
         var parts: [String] = []
         for k in stride(from: degree, through: 0, by: -1) {
             let f = coefficient(k)
@@ -699,9 +713,9 @@ enum ExactMath {
         s.contains(where: { Relation(symbol: $0) != nil }) && !s.contains("≠")
     }
 
-    /// "a = ____" → "a".
+    /// "a = ____" (or a bare "a =", a blank the page's text layer lost) → "a".
     private static func blankLetter(_ run: String) -> String? {
-        guard run.range(of: "^[A-Za-z]\\s*=\\s*_{2,}$", options: .regularExpression) != nil else { return nil }
+        guard run.range(of: "^[A-Za-z]\\s*=\\s*(?:_{2,}|…+)?$", options: .regularExpression) != nil else { return nil }
         return String(run.first!)
     }
 
@@ -738,7 +752,8 @@ enum ExactMath {
         var blanks: [String]
     }
 
-    static func read(_ stem: String) -> Reading? {
+    static func read(_ raw: String) -> Reading? {
+        let stem = MathText.unifiedMath(raw)
         let lower = stem.lowercased()
         guard !notSolving.contains(where: { lower.contains($0) }) else { return nil }
         let runs = MathText.mathRuns(in: stem).map(normalizedRelations).filter(hasRelation)
@@ -934,6 +949,149 @@ enum ExactMath {
         return p1.intersection(q1).union(p2.intersection(q2))
     }
 
+    // MARK: Steps
+
+    /// p with integer coefficients and a positive leading one (and, `reduced`, no common factor);
+    /// the relation follows a sign flip. The steps keep the common factor: "8x = −14", as written.
+    static func integerized(_ p: RPoly, _ rel: Relation, reduced: Bool = true) -> (RPoly, Relation) {
+        guard !p.isZero, p.ok else { return (p, rel) }
+        var q = 1
+        for f in p.c {
+            q = Fraction.lcm(q, f.den)
+        }
+        var scaled = p.scaled(Fraction(q))
+        if reduced {
+            var g = 0
+            for f in scaled.c {
+                g = Fraction.gcd(g, abs(f.num))
+            }
+            if g > 1 { scaled = scaled.scaled(Fraction(1, g)) }
+        }
+        return scaled.lead.sign < 0 ? (-scaled, rel.flipped) : (scaled, rel)
+    }
+
+    /// "− 2" or "+ 5", for a factor (x − 2).
+    private static func signed(_ v: ExactNumber) -> String {
+        v.sign < 0 ? "− \((-v).text)" : "+ \(v.text)"
+    }
+
+    private static func caseLabel(_ k: Int) -> String {
+        L("Durum \(k): ", "Case \(k): ")
+    }
+
+    /// How p = 0 is solved, as a teacher writes it: "8x = −14 ⇒ x = −7/4", "x² = 9/2 ⇒ x = ±3√2/2",
+    /// "(x − 2)(x − 3) = 0 ⇒ x = 2 veya x = 3", "Δ = 20 ⇒ x = (2 ± √20)/2 = 1 ± √5".
+    static func equationSteps(_ p: RPoly, variable v: String) -> String {
+        let (q, _) = integerized(p, .eq, reduced: false)
+        switch q.degree {
+        case -1:
+            return L("her \(v) için doğru", "true for every \(v)")
+        case 0:
+            return L("çözüm yok", "no solution")
+        case 1:
+            let a = q.coefficient(1)
+            let c = q.coefficient(0)
+            let root = ExactNumber(-c / a)
+            if a == .one { return "\(v) = \(root.text)" }
+            return "\(a.text)\(v) = \((-c).text) ⇒ \(v) = \(root.text)"
+        case 2:
+            let a = q.coefficient(2)
+            let b = q.coefficient(1)
+            let c = q.coefficient(0)
+            guard let rs = roots(q), case let .list(list) = rs else { return q.text(v) + " = 0" }
+            let result = text(.roots(list), variable: v)
+            if b.isZero {
+                let lead = a == .one ? "" : "\(a.text)\(v)² = \((-c).text) ⇒ "
+                return lead + "\(v)² = \((-c / a).text) ⇒ " + result
+            }
+            if a == .one, list.count == 2, list.allSatisfy(\.isRational) {
+                return "(\(v) \(signed(-list[0])))(\(v) \(signed(-list[1]))) = 0 ⇒ " + result
+            }
+            let d = b * b - Fraction(4) * a * c
+            let twoA = Fraction(2) * a
+            if d.sign < 0 { return "Δ = \(d.text) < 0 ⇒ " + result }
+            if d.isZero { return "Δ = 0 ⇒ \(v) = \((-b).text)/\(twoA.text) = \(list[0].text)" }
+            var s = "Δ = \(d.text) ⇒ \(v) = (\((-b).text) ± √\(d.text))/\(twoA.text)"
+            if let sd = ExactNumber.sqrt(d) {
+                let half = sd * twoA.reciprocal
+                s += half.isRational ? " ⇒ " + result : " = \(ExactNumber(-b / twoA).text) ± \(half.text)"
+            }
+            return s
+        default:
+            return q.text(v) + " = 0"
+        }
+    }
+
+    /// How p rel 0 is solved: "2x > 4 ⇒ x > 2", "x² − 9 ≤ 0 ⇒ kökler: x = −3, x = 3 ⇒ −3 ≤ x ≤ 3".
+    static func inequalitySteps(_ p: RPoly, _ rel: Relation, variable v: String) -> String? {
+        let (q, r) = integerized(p, rel, reduced: false)
+        guard let set = solvePoly(q, r) else { return nil }
+        let result = text(.set(set), variable: v)
+        switch q.degree {
+        case -1, 0:
+            return result
+        case 1:
+            let a = q.coefficient(1)
+            let c = q.coefficient(0)
+            if a == .one { return result }
+            return "\(a.text)\(v) \(r.text) \((-c).text) ⇒ " + result
+        case 2:
+            guard let rs = roots(q), case let .list(list) = rs else { return nil }
+            let rootsText = list.isEmpty ? L("kök yok", "no root") : list.map { "\(v) = \($0.text)" }.joined(separator: ", ")
+            return "\(q.text(v)) \(r.text) 0 ⇒ " + L("kökler: ", "roots: ") + rootsText + " ⇒ " + result
+        default:
+            return nil
+        }
+    }
+
+    /// "lo rel₁ a₁x + a₀ rel₂ hi" taken apart: the constant moved, then the coefficient divided.
+    private static func chainSteps(lo: Fraction, _ relLo: Relation, _ a: RPoly, _ relHi: Relation, hi: Fraction,
+                                   variable v: String, steps: inout [String]) {
+        guard a.degree == 1 else { return }
+        let a1 = a.coefficient(1)
+        let a0 = a.coefficient(0)
+        var l = lo
+        var h = hi
+        var rl = relLo
+        var rh = relHi
+        if !a0.isZero {
+            l = l - a0
+            h = h - a0
+            let move = a0.sign > 0
+                ? L("Her taraftan \(a0.text) çıkar: ", "Subtract \(a0.text) from each part: ")
+                : L("Her tarafa \((-a0).text) ekle: ", "Add \((-a0).text) to each part: ")
+            let middle = a1 == .one ? v : "\(a1.text)\(v)"
+            steps.append(move + "\(l.text) \(rl.text) \(middle) \(rh.text) \(h.text)")
+        }
+        if a1 != .one {
+            l = l / a1
+            h = h / a1
+            var line = L("\(a1.text) ile böl: ", "Divide by \(a1.text): ")
+            if a1.sign < 0 {
+                (l, h) = (h, l)
+                (rl, rh) = (rh.flipped, rl.flipped)
+                line = L("\(a1.text) ile böl (negatif: yönler döner): ", "Divide by \(a1.text) (negative: the signs flip): ")
+            }
+            steps.append(line + "\(l.text) \(rl.text) \(v) \(rh.text) \(h.text)")
+        }
+    }
+
+    /// "Durum 1: A = B ⇒ …", "Durum 2: A = −(B) ⇒ …", with B's sign checked when it has the unknown.
+    private static func caseSteps(_ a: RPoly, _ b: RPoly, check: Bool, variable v: String, steps: inout [String]) {
+        for (k, sign) in [(1, Fraction.one), (2, -Fraction.one)] {
+            let rhs = b.scaled(sign)
+            let rhsText = sign == .one ? b.text(v) : (b.isConstant ? rhs.constant.text : "−(\(b.text(v)))")
+            var line = caseLabel(k) + "\(a.text(v)) = \(rhsText) ⇒ " + equationSteps(a - rhs, variable: v)
+            if check, let rs = roots(a - rhs), case let .list(list) = rs {
+                for r in list {
+                    guard let bv = b.evaluate(r) else { continue }
+                    line += " (\(b.text(v)) = \(bv.text)" + (bv.sign >= 0 ? " ≥ 0 ✓)" : " < 0 ✗)")
+                }
+            }
+            steps.append(line)
+        }
+    }
+
     // MARK: Solving a relation
 
     private static func solution(_ rs: Roots, excluding: [ExactNumber] = []) -> Solution {
@@ -945,36 +1103,56 @@ enum ExactMath {
         }
     }
 
-    static func solveRelation(_ l: RExpr, _ rel: Relation, _ r: RExpr) -> Solution? {
+    static func solveRelation(_ l: RExpr, _ rel: Relation, _ r: RExpr, variable v: String, steps: inout [String]) -> Solution? {
         // k₁|A| rel k₂|B| with different insides: (k₁A)² rel (k₂B)², i.e. (k₁A − k₂B)(k₁A + k₂B) rel 0.
         if let k1 = l.num.pureAbs, let k2 = r.num.pureAbs, let a = l.num.inner, let b = r.num.inner, a != b,
            k1.sign > 0, k2.sign > 0, l.den == .one, r.den == .one {
-            let p = a.scaled(k1) - b.scaled(k2)
-            let q = a.scaled(k1) + b.scaled(k2)
+            let ka = a.scaled(k1)
+            let kb = b.scaled(k2)
+            let p = ka - kb
+            let q = ka + kb
             if rel == .eq {
                 guard let rp = roots(p), let rq = roots(q) else { return nil }
+                caseSteps(ka, kb, check: false, variable: v, steps: &steps)
                 if rp == .every || rq == .every { return .identity }
                 guard case let .list(x) = rp, case let .list(y) = rq else { return nil }
                 return .roots(sorted(x + y))
             }
-            return solveProduct(p, q, rel).map(Solution.set)
+            guard let s = solveProduct(p, q, rel) else { return nil }
+            let (pi, _) = integerized(p, rel)
+            let (qi, _) = integerized(q, rel)
+            steps.append("|\(ka.text(v))| \(rel.text) |\(kb.text(v))| ⇒ (\(ka.text(v)) − (\(kb.text(v))))(\(ka.text(v)) + \(kb.text(v))) \(rel.text) 0")
+            steps.append("(\(pi.text(v)))(\(qi.text(v))) \(rel.text) 0 ⇒ " + text(.set(s), variable: v))
+            return .set(s)
         }
         guard let e = l - r, e.ok else { return nil }
         if e.num.isPoly {
             let n = e.num.poly
             if e.den == .one {
                 if rel == .eq {
+                    steps.append(equationSteps(n, variable: v))
                     return roots(n).map { solution($0) }
                 }
+                guard let line = inequalitySteps(n, rel, variable: v) else { return nil }
+                steps.append(line)
                 return solvePoly(n, rel).map(Solution.set)
             }
             // n / d: the roots of d are outside the domain.
             guard let dr = roots(e.den), case let .list(excluded) = dr else { return nil }
+            let (ni, ri) = integerized(n, rel)
+            let (di, _) = integerized(e.den, .eq)
+            let zeros = excluded.isEmpty ? L("yok", "none") : excluded.map { "\(v) = \($0.text)" }.joined(separator: ", ")
             if rel == .eq {
+                steps.append(L("Pay: ", "Numerator: ") + equationSteps(n, variable: v))
+                steps.append(L("Payda sıfır olamaz: ", "The denominator may not be zero: ") + zeros)
                 return roots(n).map { solution($0, excluding: excluded) }
             }
             guard let s = solveProduct(n, e.den, rel) else { return nil }
-            return .set(excluded.reduce(s) { $0.excluding($1) })
+            let set = excluded.reduce(s) { $0.excluding($1) }
+            steps.append("(\(ni.text(v)))/(\(di.text(v))) \(ri.text) 0")
+            steps.append(L("Pay sıfır: ", "Numerator zero: ") + equationSteps(n, variable: v) + "; " + L("payda sıfır (tanımsız): ", "denominator zero (undefined): ") + zeros)
+            steps.append(L("İşaret tablosu: ", "Sign chart: ") + text(.set(set), variable: v))
+            return .set(set)
         }
         guard e.den == .one, let a = e.num.inner else { return nil }
         switch e.num.tDegree {
@@ -983,19 +1161,26 @@ enum ExactMath {
             let c1 = e.num.term(1)
             guard c1.isConstant, !c1.constant.isZero else { return nil }
             let b = (-e.num.term(0)).scaled(c1.constant.reciprocal)
-            return solveAbs(a, c1.constant.sign < 0 ? rel.flipped : rel, b)
+            return solveAbs(a, c1.constant.sign < 0 ? rel.flipped : rel, b, variable: v, steps: &steps)
         case 2:
             guard e.num.terms.allSatisfy(\.isConstant) else { return nil }
-            return solveAbsPoly(a, RPoly(e.num.terms.map(\.constant)), rel)
+            return solveAbsPoly(a, RPoly(e.num.terms.map(\.constant)), rel, variable: v, steps: &steps)
         default:
             return nil
         }
     }
 
     /// |A| rel B.
-    static func solveAbs(_ a: RPoly, _ rel: Relation, _ b: RPoly) -> Solution? {
+    static func solveAbs(_ a: RPoly, _ rel: Relation, _ b: RPoly, variable v: String, steps: inout [String]) -> Solution? {
+        let aText = a.text(v)
+        let bText = b.text(v)
+        let minusB = b.isConstant ? (-b.constant).text : "−(\(bText))"
         switch rel {
         case .eq:
+            if b.isConstant, b.constant.sign < 0 {
+                steps.append("|\(aText)| = \(bText): " + L("mutlak değer negatif olamaz, çözüm yok", "an absolute value is never negative, no solution"))
+                return .roots([])
+            }
             var out: [ExactNumber] = []
             var sets: IntervalSet?
             for sign in [Fraction.one, -Fraction.one] {
@@ -1012,38 +1197,65 @@ enum ExactMath {
                     }
                 }
             }
+            caseSteps(a, b, check: !b.isConstant, variable: v, steps: &steps)
             if let sets { return .set(sets.union(IntervalSet(out.map(Interval.point)))) }
             return .roots(sorted(out))
         case .lt, .le:
             // −B < A < B
             let strict: Relation = rel == .lt ? .gt : .ge
             guard let s1 = solvePoly(a + b, strict), let s2 = solvePoly(b - a, strict) else { return nil }
+            steps.append("|\(aText)| \(rel.text) \(bText) ⇒ \(minusB) \(rel.text) \(aText) \(rel.text) \(bText)")
+            if b.isConstant, a.degree == 1 {
+                chainSteps(lo: -b.constant, rel, a, rel, hi: b.constant, variable: v, steps: &steps)
+            } else if let upper = inequalitySteps(b - a, strict, variable: v), let lower = inequalitySteps(a + b, strict, variable: v) {
+                steps.append("\(aText) \(rel.text) \(bText) ⇒ " + upper)
+                steps.append("\(aText) \(rel.flipped.text) \(minusB) ⇒ " + lower)
+            }
             return .set(s1.intersection(s2))
         case .gt, .ge:
             // A > B or A < −B
             guard let s1 = solvePoly(a - b, rel), let s2 = solvePoly(a + b, rel.flipped) else { return nil }
+            steps.append("|\(aText)| \(rel.text) \(bText) ⇒ \(aText) \(rel.text) \(bText) " + L("veya", "or") + " \(aText) \(rel.flipped.text) \(minusB)")
+            if let first = inequalitySteps(a - b, rel, variable: v), let second = inequalitySteps(a + b, rel.flipped, variable: v) {
+                steps.append("\(aText) \(rel.text) \(bText) ⇒ " + first)
+                steps.append("\(aText) \(rel.flipped.text) \(minusB) ⇒ " + second)
+            }
             return .set(s1.union(s2))
         }
     }
 
     /// p(t) rel 0 with t = |A|.
-    static func solveAbsPoly(_ a: RPoly, _ p: RPoly, _ rel: Relation) -> Solution? {
+    static func solveAbsPoly(_ a: RPoly, _ p: RPoly, _ rel: Relation, variable v: String, steps: inout [String]) -> Solution? {
+        let (pi, ri) = integerized(p, rel)
+        steps.append("t = |\(a.text(v))| ⇒ \(pi.text("t")) \(ri.text) 0")
         if rel == .eq {
             guard let tr = roots(p) else { return nil }
             guard case let .list(ts) = tr else { return .identity }
+            let rejected = ts.filter { $0.sign < 0 }
+            var line = equationSteps(p, variable: "t")
+            if !rejected.isEmpty {
+                let out = rejected.map { "t = \($0.text)" }.joined(separator: ", ")
+                line += L(" (t ≥ 0: \(out) olmaz)", " (t ≥ 0, so \(out) is out)")
+            }
+            steps.append(line)
             var out: [ExactNumber] = []
+            var last: [String] = []
             for t in ts where t.sign >= 0 {
+                var found: [ExactNumber] = []
                 for sign in [Fraction.one, -Fraction.one] {
                     if t.isRational {
                         guard let rs = roots(a - RPoly(constant: t.r * sign)), case let .list(list) = rs else { return nil }
-                        out += list
+                        found += list
                     } else {
                         // a₁x + a₀ = ±t
                         guard a.degree == 1 else { return nil }
-                        out.append(((t * sign) + (-a.coefficient(0))) * a.coefficient(1).reciprocal)
+                        found.append(((t * sign) + (-a.coefficient(0))) * a.coefficient(1).reciprocal)
                     }
                 }
+                last.append("|\(a.text(v))| = \(t.text) ⇒ " + text(.roots(sorted(found)), variable: v))
+                out += found
             }
+            if !last.isEmpty { steps.append(last.joined(separator: "; ")) }
             return .roots(sorted(out))
         }
         guard let ts = solvePoly(p, rel) else { return nil }
@@ -1055,6 +1267,8 @@ enum ExactMath {
                 out = out.union(s)
             }
         }
+        if let line = inequalitySteps(p, rel, variable: "t") { steps.append(line + " (t ≥ 0)") }
+        steps.append("|\(a.text(v))| " + L("buna göre: ", "accordingly: ") + text(.set(out), variable: v))
         return .set(out)
     }
 
@@ -1072,19 +1286,38 @@ enum ExactMath {
         return s
     }
 
-    /// The solution of a relation or a chain written on the page.
-    static func solve(given: String, variable: String) -> Solution? {
+    /// The solution of a relation or a chain written on the page, and the steps to it.
+    static func solve(given: String, variable v: String, steps: inout [String]) -> Solution? {
         guard let (parts, rels) = splitRelation(given) else { return nil }
         var sides: [RExpr] = []
         for p in parts {
-            guard let x = expression(p, variable: variable) else { return nil }
+            guard let x = expression(p, variable: v) else { return nil }
             sides.append(x)
         }
         if rels.count == 1 {
-            return solveRelation(sides[0], rels[0], sides[1])
+            return solveRelation(sides[0], rels[0], sides[1], variable: v, steps: &steps)
         }
-        guard rels.allSatisfy({ $0 != .eq }), let s1 = solveRelation(sides[0], rels[0], sides[1]),
-              let s2 = solveRelation(sides[1], rels[1], sides[2]), case let .set(a) = s1, case let .set(b) = s2 else { return nil }
+        guard rels.allSatisfy({ $0 != .eq }) else { return nil }
+        // lo rel₁ a₁x + a₀ rel₂ hi: taken apart like a textbook.
+        let middle = sides[1]
+        if middle.den == .one, middle.num.isPoly, middle.num.poly.degree == 1, sides[0].num.isPoly, sides[2].num.isPoly,
+           sides[0].den == .one, sides[2].den == .one, sides[0].num.poly.isConstant, sides[2].num.poly.isConstant,
+           let s1 = solveRelation(sides[0], rels[0], sides[1], variable: v, steps: &steps),
+           let s2 = solveRelation(sides[1], rels[1], sides[2], variable: v, steps: &steps), case let .set(a) = s1, case let .set(b) = s2 {
+            steps.removeAll()
+            let a1 = middle.num.poly
+            if a1 != .x {
+                chainSteps(lo: sides[0].num.poly.constant, rels[0], a1, rels[1], hi: sides[2].num.poly.constant, variable: v, steps: &steps)
+            }
+            return .set(a.intersection(b))
+        }
+        var first: [String] = []
+        var second: [String] = []
+        guard let s1 = solveRelation(sides[0], rels[0], sides[1], variable: v, steps: &first),
+              let s2 = solveRelation(sides[1], rels[1], sides[2], variable: v, steps: &second),
+              case let .set(a) = s1, case let .set(b) = s2 else { return nil }
+        steps.append("\(parts[0]) \(rels[0].text) \(parts[1]) ⇒ " + text(.set(a), variable: v))
+        steps.append("\(parts[1]) \(rels[1].text) \(parts[2]) ⇒ " + text(.set(b), variable: v))
         return .set(a.intersection(b))
     }
 
@@ -1112,18 +1345,24 @@ enum ExactMath {
         }
     }
 
-    /// The engine's answer to a question's stem, nil when the engine cannot be certain.
+    /// The engine's answer to a question's stem, nil when the engine cannot be certain. The working
+    /// is one to three lines a teacher would write, in the answer's language.
     static func solve(_ stem: String) -> Answer? {
-        guard let reading = read(stem), let solution = solve(given: reading.given, variable: reading.variable) else { return nil }
+        guard let reading = read(stem) else { return nil }
+        var steps: [String] = []
+        guard let solution = solve(given: reading.given, variable: reading.variable, steps: &steps) else { return nil }
         let v = reading.variable
         if let form = reading.form {
-            return rewrite(solution, form: form, blanks: reading.blanks, variable: v, given: reading.given)
+            return rewrite(solution, form: form, blanks: reading.blanks, variable: v, given: reading.given, steps: steps)
         }
-        return Answer(answer: text(solution, variable: v), working: working(reading.given, variable: v), variable: v, given: reading.given)
+        let answer = text(solution, variable: v)
+        if steps.isEmpty { steps = [answer] }
+        return Answer(answer: answer, working: Array(steps.prefix(3)), variable: v, given: reading.given)
     }
 
     /// "a = −4, b = 8": the solution written in the form the question names.
-    private static func rewrite(_ solution: Solution, form: String, blanks: [String], variable v: String, given: String) -> Answer? {
+    private static func rewrite(_ solution: Solution, form: String, blanks: [String], variable v: String, given: String,
+                                steps: [String]) -> Answer? {
         guard case let .set(s) = solution, s.intervals.count == 1, let i = s.intervals.first, i.isBounded,
               let lo = i.lo.exact, let hi = i.hi.exact, let (parts, rels) = splitRelation(form) else { return nil }
         var values: [String: ExactNumber] = [:]
@@ -1144,66 +1383,35 @@ enum ExactMath {
             let radius = diff * Fraction(1, 2)
             values[center] = flip ? -mid : mid
             values[parts[1]] = radius
-            work = ["\(center) = (\(lo.text) + \(hi.text))/2 = \(values[center]!.text)",
-                    "\(parts[1]) = (\(hi.text) − \(parenthesized(lo)))/2 = \(radius.text)"]
+            let inner = mid.isZero ? v : (mid.sign < 0 ? "\(v) + \((-mid).text)" : "\(v) − \(mid.text)")
+            work = [L("Orta nokta: ", "Midpoint: ") + "\(center) = (\(lo.text) + \(hi.text))/2 = \(values[center]!.text)",
+                    L("Yarı genişlik: ", "Half-width: ") + "\(parts[1]) = (\(hi.text) − \(parenthesized(lo)))/2 = \(radius.text)",
+                    L("Yani ", "So ") + "|\(inner)| \(rels[0].text) \(radius.text)"]
+            if given.contains("|"), let first = steps.first {
+                work = [first] + work.prefix(2)
+            }
         } else {
             // a < x < b
             guard parts.count == 3, parts[1] == v, parts[0].count == 1, parts[2].count == 1, rels[0] == rels[1] else { return nil }
             let ascending = rels[0] == .lt || rels[0] == .le
             values[parts[0]] = ascending ? lo : hi
             values[parts[2]] = ascending ? hi : lo
-            work = working(given, variable: v)
+            work = steps
         }
         var answer: [String] = []
         for b in blanks {
             guard let value = values[b] else { return nil }
             answer.append("\(b) = \(value.text)")
         }
-        return Answer(answer: answer.joined(separator: ", "), working: work, variable: v, given: given)
+        let line = answer.joined(separator: ", ")
+        if !form.contains("|") {
+            work = (work.count > 2 ? [work[0], work[work.count - 1]] : work) + [line]
+        }
+        return Answer(answer: line, working: Array(work.prefix(3)), variable: v, given: given)
     }
 
     private static func parenthesized(_ v: ExactNumber) -> String {
         v.sign < 0 ? "(\(v.text))" : v.text
-    }
-
-    /// The lines of working the engine can state for the common shapes, for the model's steps.
-    static func working(_ given: String, variable v: String) -> [String] {
-        guard let (parts, rels) = splitRelation(given), rels.count == 1 else { return [] }
-        let rel = rels[0]
-        func inside(_ s: String) -> String? {
-            guard s.hasPrefix("|"), s.hasSuffix("|"), s.count >= 3 else { return nil }
-            let body = String(s.dropFirst().dropLast())
-            return body.contains("|") ? nil : body
-        }
-        func caseText(_ p: RPoly) -> String {
-            guard let rs = roots(p) else { return "?" }
-            switch rs {
-            case .every: return L("her \(v)", "every \(v)")
-            case let .list(list): return text(.roots(sorted(list)), variable: v)
-            }
-        }
-        if let a = inside(parts[0]), let b = inside(parts[1]), rel == .eq,
-           let pa = expression(a, variable: v), let pb = expression(b, variable: v), pa.num.isPoly, pb.num.isPoly {
-            return ["\(a) = \(b) → \(caseText(pa.num.poly - pb.num.poly))",
-                    "\(a) = −(\(b)) → \(caseText(pa.num.poly + pb.num.poly))"]
-        }
-        if let a = inside(parts[0]), !parts[1].contains("|"), !parts[1].contains(where: \.isLetter),
-           let pa = expression(a, variable: v), pa.num.isPoly, let c = expression(parts[1], variable: v), c.num.isPoly,
-           c.num.poly.isConstant {
-            let k = c.num.poly.constant
-            let cText = parts[1]
-            switch rel {
-            case .eq:
-                guard k.sign >= 0 else { return [L("mutlak değer negatif olamaz", "an absolute value is never negative")] }
-                return ["\(a) = \(cText) → \(caseText(pa.num.poly - RPoly(constant: k)))",
-                        "\(a) = −\(cText) → \(caseText(pa.num.poly + RPoly(constant: k)))"]
-            case .lt, .le:
-                return ["−\(cText) \(rel.text) \(a) \(rel.text) \(cText)"]
-            case .gt, .ge:
-                return ["\(a) \(rel.text) \(cText) " + L("veya", "or") + " \(a) \(rel.flipped.text) −\(cText)"]
-            }
-        }
-        return []
     }
 
     // MARK: Checking the model's answer

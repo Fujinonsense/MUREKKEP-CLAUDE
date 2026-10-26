@@ -327,11 +327,12 @@ final class AssistantModel: ObservableObject {
             }
             let solving = Self.wantsSolving(question: question, action: action)
             if solving {
-                // Printed blanks the text layer lost ("where a = and b =") are written back as "____",
-                // so the model sees what it is to fill.
+                // Lookalike characters of the text layer (𝑥, ⩽) as plain ones, and printed blanks it
+                // lost ("where a = and b =") written back as "____", so the engine and the model see
+                // what is asked and what is to be filled.
                 pages = pages.map { page in
                     var p = page
-                    p.text = MathText.markBlanks(page.text)
+                    p.text = MathText.markBlanks(MathText.unifiedMath(page.text))
                     return p
                 }
             }
@@ -644,34 +645,29 @@ final class AssistantModel: ObservableObject {
     /// without options (`math` says the page is one, or the question's own signs do) goes to the math
     /// teacher: the result comes first, a few steps under it, its second thoughts and filler dropped.
     /// When the math engine solves the question exactly (an equation, an inequality, blanks to fill),
-    /// its result is the answer line and the model only lays out the steps towards it; when it
+    /// its result and its own working are the block, at once, and the model is not asked; when it
     /// cannot, the model's result is checked by substitution, tried once more with what the engine
     /// found if it fails, and a result the engine still cannot confirm is said so, never shown as fact.
     @MainActor
     private func solveWithBrain(_ questions: [PageQuestion], language: AnswerLanguage, math: Bool) async throws {
         let exam = QuestionSolving.brainInstructions(language: language)
         let teacher = QuestionSolving.mathInstructions(language: language)
+        var modelAnswered = false
         for (i, q) in questions.enumerated() {
             try Task.checkCancellation()
             let label = brainTitle + " · " + Loc.t("Soru {0}/{1}", "\(i + 1)", "\(questions.count)")
             let worded = q.options.count < 2 && (math || BrainBudget.isMath(q.promptText))
-            let exact = worded ? AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) : nil
-            let request: BrainRuntime.Request
-            if let exact {
-                request = BrainRuntime.Request(system: QuestionSolving.stepsInstructions(language: language),
-                                               prompt: QuestionSolving.stepsPrompt(q, answer: exact.answer, working: exact.working, language: language),
-                                               thinking: BrainBudget.mathSteps, maxAnswerTokens: 240, temperature: 0.5)
-            } else {
-                request = BrainRuntime.Request(system: worded ? teacher : exam, prompt: q.promptText,
+            if worded, let exact = AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) {
+                appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working, language: language))
+                continue
+            }
+            let request = BrainRuntime.Request(system: worded ? teacher : exam, prompt: q.promptText,
                                                thinking: worded ? BrainBudget.mathQuestion : BrainBudget.thinking(for: q.promptText),
                                                maxAnswerTokens: 400, temperature: 0.6)
-            }
             do {
                 var answer = try await runBrain(request, label: label)
-                if let exact {
-                    let steps = MathText.withoutFiller(MathText.tidy(answer), question: q.stem)
-                    appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: steps, language: language))
-                } else if worded {
+                modelAnswered = true
+                if worded {
                     var note: String?
                     if let final = QuestionSolving.finalAnswer(of: answer),
                        case let .fails(reason, hint)? = AnswerLanguage.$bound.withValue(language, operation: { ExactMath.verify(question: q.stem, answer: final) }) {
@@ -700,14 +696,9 @@ final class AssistantModel: ObservableObject {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                // The first question failing means the model could not start: the caller falls back.
-                if i == 0 { throw error }
-                if let exact {
-                    // The model could not write the steps; the engine's result stands, with its own working.
-                    appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working.joined(separator: "\n"), language: language))
-                } else {
-                    appendToAnswer("**\(q.number))** ⚠️ " + error.localizedDescription + "\n\n")
-                }
+                // The model's first question failing means it could not start: the caller falls back.
+                if !modelAnswered { throw error }
+                appendToAnswer("**\(q.number))** ⚠️ " + error.localizedDescription + "\n\n")
             }
         }
         status = nil
@@ -780,7 +771,7 @@ final class AssistantModel: ObservableObject {
             try Task.checkCancellation()
             // A worded math question the engine solves exactly needs no model: its working is the steps.
             if q.options.count < 2, let exact = AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) {
-                appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working.joined(separator: "\n"), language: language))
+                appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working, language: language))
                 continue
             }
             status = Loc.t("Soru {0}/{1} çözülüyor…", "\(i + 1)", "\(questions.count)")

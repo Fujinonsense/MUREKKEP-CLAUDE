@@ -176,22 +176,6 @@ enum QuestionSolving {
             + language.directive
     }
 
-    /// For the downloaded model when the math engine has already fixed the result exactly: the model
-    /// writes only the short steps that lead to it, never an answer line of its own.
-    static func stepsInstructions(language: AnswerLanguage) -> String {
-        "Sen titiz bir matematik öğretmenisin. Sorunun kesin sonucu hesap motorundan geldi ve soruyla birlikte verildi; sonuç doğrudur, onu değiştirme, yeniden hesaplama, sorgulama. Yalnızca bu sonuca götüren en fazla üç kısa adımı madde madde yaz (1. 2. 3.); verilmişse YOL satırındaki durumları kullan. Giriş cümlesi, başlık, \"Cevap:\" satırı, tereddüt ya da OCR yorumu yazma; ilk satır doğrudan 1. adım olsun. LaTeX kullanma ($, \\frac, \\le, \\sqrt yazma); ≤ ≥ ≠ × ÷ √ ² ³ π ∞ gibi Unicode kullan, kesirleri −7/4 gibi yaz. "
-            + language.directive
-    }
-
-    /// The question with the engine's result and working under it, for `stepsInstructions`.
-    static func stepsPrompt(_ q: PageQuestion, answer: String, working: [String], language: AnswerLanguage) -> String {
-        var s = q.promptText + "\n\n" + (language == .english ? "EXACT RESULT (from the math engine): " : "KESİN SONUÇ (hesap motorundan): ") + answer
-        if !working.isEmpty {
-            s += "\n" + (language == .english ? "WORKING: " : "YOL: ") + working.joined(separator: "; ")
-        }
-        return s
-    }
-
     /// Put under the question when the model's first answer failed the engine's check, so the second
     /// try starts from what substitution showed.
     static func retryNote(reason: String, hint: String?, language: AnswerLanguage) -> String {
@@ -228,6 +212,22 @@ enum QuestionSolving {
         answer.components(separatedBy: "\n").compactMap(finalAnswer(in:)).last
     }
 
+    /// The steps as one block: a line already written is not written again (a small model sometimes
+    /// repeats its whole list), and blank lines do not pile up.
+    static func stepsBody(_ lines: [String]) -> String {
+        var seen = Set<String>()
+        var out: [String] = []
+        for line in lines {
+            let key = line.trimmingCharacters(in: .whitespaces)
+            if key.isEmpty {
+                if out.last?.trimmingCharacters(in: .whitespaces).isEmpty == false { out.append("") }
+            } else if seen.insert(key).inserted {
+                out.append(line)
+            }
+        }
+        return out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// "**3)** **Cevap: −4 < x < 8**" and the steps under it: the last "Cevap:"/"Answer:" line of the
     /// answer comes first, the other lines follow as the steps. A `note` (the engine's check failing)
     /// is shown after the answer, so a number the engine could not confirm is never stated as fact.
@@ -241,7 +241,7 @@ enum QuestionSolving {
                 steps.append(line)
             }
         }
-        let body = steps.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = stepsBody(steps)
         var head = "**\(q.number))** "
         guard let final else { return head + body + "\n\n" }
         head += "**\(language == .english ? "Answer" : "Cevap"): \(final)**"
@@ -249,11 +249,9 @@ enum QuestionSolving {
         return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"
     }
 
-    /// "**3)** **Cevap: x = −7/4**" from the math engine, with the model's steps under it; any answer
-    /// line the model wrote of its own is dropped, the engine's is the one shown.
-    static func engineLine(_ q: PageQuestion, answer: String, steps: String, language: AnswerLanguage) -> String {
-        let body = steps.components(separatedBy: "\n").filter { finalAnswer(in: $0) == nil }
-            .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    /// "**3)** **Cevap: x = −7/4**" from the math engine, with the engine's own working under it.
+    static func engineLine(_ q: PageQuestion, answer: String, steps: [String], language: AnswerLanguage) -> String {
+        let body = stepsBody(steps.filter { finalAnswer(in: $0) == nil })
         let head = "**\(q.number))** **\(language == .english ? "Answer" : "Cevap"): \(answer)**"
         return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"
     }

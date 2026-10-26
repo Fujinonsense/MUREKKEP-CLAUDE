@@ -167,10 +167,6 @@ enum BrainBudget {
     /// that runs out no longer spills half a page of reasoning into the answer.
     static let mathQuestion = 768
 
-    /// The steps under a result the math engine already fixed: nothing to work out, only to lay out,
-    /// so a third of a worded question's budget (about 13 seconds on the iPad).
-    static let mathSteps = 256
-
     static func isMath(_ text: String) -> Bool {
         let digits = text.filter(\.isNumber).count
         let operators = text.filter { "+−×÷*/=^√<>≤≥∫∑π%²³".contains($0) }.count

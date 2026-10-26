@@ -20,9 +20,21 @@ func exact(_ stem: String) -> String {
     ExactMath.solve(stem)?.answer ?? "-"
 }
 
+func steps(_ stem: String) -> [String] {
+    ExactMath.solve(stem)?.working ?? []
+}
+
+var solvedStems: [String] = []
+
 func expect(_ stem: String, _ answer: String, _ name: String) {
     let got = exact(stem)
     check(got == answer, name, got: got)
+    if got != "-" { solvedStems.append(stem) }
+}
+
+func expectSteps(_ stem: String, _ lines: [String], _ name: String) {
+    let got = steps(stem)
+    check(got == lines, name, got: got.joined(separator: " | "))
 }
 
 AnswerLanguage.bound = .english
@@ -40,37 +52,90 @@ if case let .solved(_, _, roots, _, _)? = MathEngine.analyze("|4x+23|=|4x-9|") {
 
 // MARK: The page's exercises, exactly
 
-expect("The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____.", "a = −4, b = 8", "ex 1: |x − 2| < 6 as a < x < b")
-expect("The inequality −15 ≤ x ≤ 7 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.", "a = −4, b = 11", "ex 2: −15 ≤ x ≤ 7 as |x − a| ≤ b")
-expect("Solve the equation |4x + 23| = |4x − 9|.", "x = −7/4", "ex 3: |4x + 23| = |4x − 9|")
-expect("Solve the equation |x² + 2| = |x² − 11|.", "x = ±3√2/2", "ex 4: |x² + 2| = |x² − 11|")
-expect("Solve the equation |2x − 5| = 7.", "x = −1 or x = 6", "ex 5: |2x − 5| = 7")
-expect("Solve the equation |x − 2|² + 3|x − 2| − 4 = 0.", "x = 1 or x = 3", "ex 6: a quadratic in |x − 2|")
-expect("The inequality −4 ≤ x ≤ 10 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.", "a = 3, b = 7", "ex 7: −4 ≤ x ≤ 10 as |x − a| ≤ b")
-expect("Solve the equation |x + 1| = 3x − 5.", "x = 3", "ex 8: |x + 1| = 3x − 5 keeps only the root with 3x − 5 ≥ 0")
-expect("Solve the inequality |x + 4| < 7.", "−11 < x < 3", "ex 9: |x + 4| < 7")
-expect("Solve the inequality |3x + 7| < 5.", "−4 < x < −2/3", "ex 10: |3x + 7| < 5")
-expect("Solve the equation |x² − 9| = |x² − 5|.", "x = ±√7", "ex 11: |x² − 9| = |x² − 5|")
-expect("Solve the inequality |(2x² − 3)/14| ≤ 1/2.", "−√5 ≤ x ≤ √5", "ex 12: |(2x² − 3)/14| ≤ 1/2")
-expect("Solve the inequality |x − 3| ≥ 6.", "(−∞, −3] ∪ [9, ∞)", "ex 13: |x − 3| ≥ 6")
-expect("Solve the inequality |2x + 1| > 3.", "(−∞, −2) ∪ (1, ∞)", "ex 14: |2x + 1| > 3")
-expect("Solve the inequality |x² − 4| ≤ 5.", "−3 ≤ x ≤ 3", "ex 15: |x² − 4| ≤ 5")
-expect("Solve the inequality |5 − 2x| ≤ 1.", "2 ≤ x ≤ 3", "ex 16: |5 − 2x| ≤ 1")
-expect("Solve the equation x² − 2x − 4 = 0.", "x = 1 − √5 or x = 1 + √5", "ex 17: a quadratic with surd roots")
+let ex = [
+    "The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____.",
+    "The inequality −15 ≤ x ≤ 7 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.",
+    "Solve the equation |4x + 23| = |4x − 9|.",
+    "Solve the equation |x² + 2| = |x² − 11|.",
+    "Solve the equation |2x − 5| = 7.",
+    "Solve the equation |x − 2|² + 3|x − 2| − 4 = 0.",
+    "The inequality −4 ≤ x ≤ 10 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.",
+    "Solve the equation |x + 1| = 3x − 5.",
+    "Solve the inequality |x + 4| < 7.",
+    "Solve the inequality |3x + 7| < 5.",
+    "Solve the equation |x² − 9| = |x² − 5|.",
+    "Solve the inequality |(2x² − 3)/14| ≤ 1/2.",
+    "Solve the inequality |x − 3| ≥ 6.",
+    "Solve the inequality |2x + 1| > 3.",
+    "Solve the inequality |x² − 4| ≤ 5.",
+    "Solve the inequality |5 − 2x| ≤ 1.",
+    "Solve the equation x² − 2x − 4 = 0.",
+]
+expect(ex[0], "a = −4, b = 8", "ex 1: |x − 2| < 6 as a < x < b")
+expect(ex[1], "a = −4, b = 11", "ex 2: −15 ≤ x ≤ 7 as |x − a| ≤ b")
+expect(ex[2], "x = −7/4", "ex 3: |4x + 23| = |4x − 9|")
+expect(ex[3], "x = ±3√2/2", "ex 4: |x² + 2| = |x² − 11|")
+expect(ex[4], "x = −1 or x = 6", "ex 5: |2x − 5| = 7")
+expect(ex[5], "x = 1 or x = 3", "ex 6: a quadratic in |x − 2|")
+expect(ex[6], "a = 3, b = 7", "ex 7: −4 ≤ x ≤ 10 as |x − a| ≤ b")
+expect(ex[7], "x = 3", "ex 8: |x + 1| = 3x − 5 keeps only the root with 3x − 5 ≥ 0")
+expect(ex[8], "−11 < x < 3", "ex 9: |x + 4| < 7")
+expect(ex[9], "−4 < x < −2/3", "ex 10: |3x + 7| < 5")
+expect(ex[10], "x = ±√7", "ex 11: |x² − 9| = |x² − 5|")
+expect(ex[11], "−√5 ≤ x ≤ √5", "ex 12: |(2x² − 3)/14| ≤ 1/2")
+expect(ex[12], "(−∞, −3] ∪ [9, ∞)", "ex 13: |x − 3| ≥ 6")
+expect(ex[13], "(−∞, −2) ∪ (1, ∞)", "ex 14: |2x + 1| > 3")
+expect(ex[14], "−3 ≤ x ≤ 3", "ex 15: |x² − 4| ≤ 5")
+expect(ex[15], "2 ≤ x ≤ 3", "ex 16: |5 − 2x| ≤ 1")
+expect(ex[16], "x = 1 − √5 or x = 1 + √5", "ex 17: a quadratic with surd roots")
+
+// MARK: The engine's own steps, as a teacher writes them (English)
+
+expectSteps(ex[0], ["|x − 2| < 6 ⇒ −6 < x − 2 < 6", "Add 2 to each part: −4 < x < 8", "a = −4, b = 8"], "steps 1: the bars removed, then the blanks")
+expectSteps(ex[1], ["Midpoint: a = (−15 + 7)/2 = −4", "Half-width: b = (7 − (−15))/2 = 11", "So |x + 4| ≤ 11"], "steps 2: midpoint and half-width")
+expectSteps(ex[2], ["Case 1: 4x + 23 = 4x − 9 ⇒ no solution", "Case 2: 4x + 23 = −(4x − 9) ⇒ 8x = −14 ⇒ x = −7/4"], "steps 3: the two cases")
+expectSteps(ex[3], ["Case 1: x² + 2 = x² − 11 ⇒ no solution", "Case 2: x² + 2 = −(x² − 11) ⇒ 2x² = 9 ⇒ x² = 9/2 ⇒ x = ±3√2/2"], "steps 4: a square in the cases")
+expectSteps(ex[4], ["Case 1: 2x − 5 = 7 ⇒ 2x = 12 ⇒ x = 6", "Case 2: 2x − 5 = −7 ⇒ 2x = −2 ⇒ x = −1"], "steps 5: |A| = c")
+expectSteps(ex[5], ["t = |x − 2| ⇒ t² + 3t − 4 = 0", "(t + 4)(t − 1) = 0 ⇒ t = −4 or t = 1 (t ≥ 0, so t = −4 is out)", "|x − 2| = 1 ⇒ x = 1 or x = 3"],
+            "steps 6: the quadratic in t")
+expectSteps(ex[7], ["Case 1: x + 1 = 3x − 5 ⇒ 2x = 6 ⇒ x = 3 (3x − 5 = 4 ≥ 0 ✓)", "Case 2: x + 1 = −(3x − 5) ⇒ 4x = 4 ⇒ x = 1 (3x − 5 = −2 < 0 ✗)"],
+            "steps 8: each case checked against the right side")
+expectSteps(ex[8], ["|x + 4| < 7 ⇒ −7 < x + 4 < 7", "Subtract 4 from each part: −11 < x < 3"], "steps 9: |A| < c")
+expectSteps(ex[9], ["|3x + 7| < 5 ⇒ −5 < 3x + 7 < 5", "Subtract 7 from each part: −12 < 3x < −2", "Divide by 3: −4 < x < −2/3"], "steps 10: subtract, then divide")
+expectSteps(ex[11], ["|(2x² − 3)/14| ≤ 1/2 ⇒ −1/2 ≤ (2x² − 3)/14 ≤ 1/2",
+                     "(2x² − 3)/14 ≤ 1/2 ⇒ x² − 5 ≤ 0 ⇒ roots: x = −√5, x = √5 ⇒ −√5 ≤ x ≤ √5",
+                     "(2x² − 3)/14 ≥ −1/2 ⇒ x² + 2 ≥ 0 ⇒ roots: no root ⇒ all real numbers (ℝ)"], "steps 12: a quadratic inside the bars")
+expectSteps(ex[12], ["|x − 3| ≥ 6 ⇒ x − 3 ≥ 6 or x − 3 ≤ −6", "x − 3 ≥ 6 ⇒ x ≥ 9", "x − 3 ≤ −6 ⇒ x ≤ −3"], "steps 13: |A| ≥ c")
+expectSteps(ex[15], ["|2x − 5| ≤ 1 ⇒ −1 ≤ 2x − 5 ≤ 1", "Add 5 to each part: 4 ≤ 2x ≤ 6", "Divide by 2: 2 ≤ x ≤ 3"], "steps 16: add, then divide")
+expectSteps(ex[16], ["Δ = 20 ⇒ x = (2 ± √20)/2 = 1 ± √5"], "steps 17: the discriminant")
+for stem in solvedStems {
+    let n = steps(stem).count
+    check(n >= 1 && n <= 3, "every solved exercise has 1–3 step lines: \"\(stem)\"", got: "\(n)")
+    check(!steps(stem).contains { $0.lowercased().contains("note") || $0.contains("Correction") }, "no self-correction in the steps of \"\(stem)\"")
+}
 
 // MARK: More shapes
 
 expect("Solve 2x + 3 = 7.", "x = 2", "linear equation")
+expectSteps("Solve 2x + 3 = 7.", ["2x = 4 ⇒ x = 2"], "steps: linear equation")
 expect("Solve x² − 5x + 6 = 0.", "x = 2 or x = 3", "quadratic with rational roots")
+expectSteps("Solve x² − 5x + 6 = 0.", ["(x − 2)(x − 3) = 0 ⇒ x = 2 or x = 3"], "steps: factored")
+expectSteps("Solve 2x² − 10x + 12 = 0.", ["Δ = 4 ⇒ x = (10 ± √4)/4 ⇒ x = 2 or x = 3"], "steps: a quadratic with a leading coefficient keeps its numbers")
 expect("Solve the equation x² + 1 = 0.", "no solution", "no real root")
+expectSteps("Solve the equation x² + 1 = 0.", ["x² = −1 ⇒ no solution"], "steps: a negative square")
 expect("Solve the inequality x² − 4x + 4 ≤ 0.", "x = 2", "a double root as an inequality")
 expect("Solve the inequality x² + 1 < 0.", "no solution (∅)", "an inequality with no solution")
 expect("Solve the inequality x² ≥ 0.", "all real numbers (ℝ)", "an inequality that always holds")
 expect("Solve the inequality −3 < 2x + 1 ≤ 5.", "−2 < x ≤ 2", "a chain")
+expectSteps("Solve the inequality −3 < 2x + 1 ≤ 5.", ["Subtract 1 from each part: −4 < 2x ≤ 4", "Divide by 2: −2 < x ≤ 2"], "steps: a chain taken apart")
 expect("Solve the inequality 2x − 1 > 3.", "x > 2", "a half line")
+expectSteps("Solve the inequality 2x − 1 > 3.", ["2x > 4 ⇒ x > 2"], "steps: a half line")
 expect("Solve the equation |x − 1| = −2.", "no solution", "|x − 1| = −2 has no solution")
+expectSteps("Solve the equation |x − 1| = −2.", ["|x − 1| = −2: an absolute value is never negative, no solution"], "steps: a negative absolute value")
 expect("Solve the equation |x| = x.", "x ≥ 0", "|x| = x holds for x ≥ 0")
 expect("Solve the inequality (x + 1)/(x − 3) ≥ 0.", "(−∞, −1] ∪ (3, ∞)", "rational inequality, the pole stays out")
+expectSteps("Solve the inequality (x + 1)/(x − 3) ≥ 0.", ["(x + 1)/(x − 3) ≥ 0", "Numerator zero: x = −1; denominator zero (undefined): x = 3", "Sign chart: (−∞, −1] ∪ (3, ∞)"],
+            "steps: rational inequality")
 expect("Solve the inequality 1/(x − 2) < 3.", "(−∞, 2) ∪ (7/3, ∞)", "rational inequality with a constant")
 expect("Solve the equation (x² − 1)/(x − 1) = 2.", "no solution", "a rational equation whose only root is a pole")
 expect("Solve |x − 1| ≤ 2x.", "x ≥ 1/3", "|A| ≤ B with x on the right")
@@ -83,13 +148,28 @@ expect("Solve the equation 2x = 7.", "x = 7/2", "a fraction, never 3.5")
 expect("Solve 0,5x = 2.", "x = 4", "a decimal comma in the coefficient")
 expect("Solve x <= 3.", "x ≤ 3", "ASCII <=")
 
-// Turkish wording, Turkish answers.
+// The page's text layer, as a PDF gives it: italic math letters, ⩽, lost blanks, a bare "a =".
+expect("The inequality |𝑥 − 2| < 6 can be expressed in the form 𝑎 < 𝑥 < 𝑏 where 𝑎 = and 𝑏 =", "a = −4, b = 8", "text layer: italic letters and blanks lost")
+expect("The inequality −15 ⩽ 𝑥 ⩽ 7 can be expressed in the form |𝑥 − 𝑎| ⩽ 𝑏 where 𝑎 = and 𝑏 = .", "a = −4, b = 11", "text layer: ⩽ and a bare \"a =\"")
+expect("Solve the equation ∣4𝑥 + 23∣ = ∣4𝑥 − 9∣.", "x = −7/4", "text layer: the divides sign as a bar")
+expect("The inequality |x – 2| < 6 can be expressed in the form a < x < b where a = ___ and b = ___.", "a = −4, b = 8", "text layer: en dash and short blanks")
+expect(MathText.markBlanks(MathText.unifiedMath("The inequality |𝑥 − 2| < 6 can be expressed in the form 𝑎 < 𝑥 < 𝑏 where 𝑎 = and 𝑏 =")),
+       "a = −4, b = 8", "text layer: through the app's own unifying and blank marking")
+check(MathText.unifiedMath("𝑥² ⩽ 𝟗 and 𝐀") == "x² ≤ 9 and A" && MathText.unifiedMath("Questions 1–2 refer to") == "Questions 1–2 refer to",
+      "unified math: letters, digits and signs; a directive's dash stays", got: MathText.unifiedMath("𝑥² ⩽ 𝟗 and 𝐀"))
+
+// Turkish wording, Turkish answers and steps.
 AnswerLanguage.bound = .turkish
 expect("|x − 2| < 6 eşitsizliğini çözünüz.", "−4 < x < 8", "tr: an inequality")
 expect("|2x + 1| = 5 denkleminin çözüm kümesini bulunuz.", "x = −3 veya x = 2", "tr: an equation with two roots")
 expect("x² + 1 = 0 denklemini çözünüz.", "çözüm yok", "tr: no solution")
 expect("−15 ≤ x ≤ 7 eşitsizliğini |x − a| ≤ b biçiminde yazınız: a = ____, b = ____.", "a = −4, b = 11", "tr: the blanks")
 expect("|x − 2| < 6 eşitsizliğini sağlayan x değerlerini bulunuz.", "−4 < x < 8", "tr: \"sağlayan\" still solves")
+expectSteps(ex[0], ["|x − 2| < 6 ⇒ −6 < x − 2 < 6", "Her tarafa 2 ekle: −4 < x < 8", "a = −4, b = 8"], "tr steps 1")
+expectSteps(ex[1], ["Orta nokta: a = (−15 + 7)/2 = −4", "Yarı genişlik: b = (7 − (−15))/2 = 11", "Yani |x + 4| ≤ 11"], "tr steps 2")
+expectSteps(ex[2], ["Durum 1: 4x + 23 = 4x − 9 ⇒ çözüm yok", "Durum 2: 4x + 23 = −(4x − 9) ⇒ 8x = −14 ⇒ x = −7/4"], "tr steps 3")
+expectSteps(ex[9], ["|3x + 7| < 5 ⇒ −5 < 3x + 7 < 5", "Her taraftan 7 çıkar: −12 < 3x < −2", "3 ile böl: −4 < x < −2/3"], "tr steps 10")
+expectSteps(ex[12], ["|x − 3| ≥ 6 ⇒ x − 3 ≥ 6 veya x − 3 ≤ −6", "x − 3 ≥ 6 ⇒ x ≥ 9", "x − 3 ≤ −6 ⇒ x ≤ −3"], "tr steps 13")
 AnswerLanguage.bound = .english
 
 // MARK: Questions the engine leaves to the model
@@ -101,19 +181,6 @@ for stem in ["Show that x = 2 satisfies x² − 4 = 0.", "Find a and b if 2a + b
     check(exact(stem) == "-", "the model's: \"\(stem)\"", got: exact(stem))
 }
 
-// MARK: The working the engine states for the model's steps
-
-let ex3 = ExactMath.solve("Solve the equation |4x + 23| = |4x − 9|.")
-check(ex3?.working == ["4x + 23 = 4x − 9 → no solution", "4x + 23 = −(4x − 9) → x = −7/4"], "working: the two cases of |A| = |B|", got: "\(ex3?.working ?? [])")
-let ex2 = ExactMath.solve("The inequality −15 ≤ x ≤ 7 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.")
-check(ex2?.working == ["a = (−15 + 7)/2 = −4", "b = (7 − (−15))/2 = 11"], "working: midpoint and half-width", got: "\(ex2?.working ?? [])")
-let ex9 = ExactMath.solve("Solve the inequality |x + 4| < 7.")
-check(ex9?.working == ["−7 < x + 4 < 7"], "working: the bars removed", got: "\(ex9?.working ?? [])")
-check(ExactMath.solve("Solve the equation |2x − 5| = 7.")?.working == ["2x − 5 = 7 → x = 6", "2x − 5 = −7 → x = −1"], "working: |A| = c",
-      got: "\(ExactMath.solve("Solve the equation |2x − 5| = 7.")?.working ?? [])")
-check(ExactMath.solve("Solve the inequality |x − 3| ≥ 6.")?.working == ["x − 3 ≥ 6 or x − 3 ≤ −6"], "working: |A| ≥ c",
-      got: "\(ExactMath.solve("Solve the inequality |x − 3| ≥ 6.")?.working ?? [])")
-
 // MARK: Exact numbers
 
 check(ExactNumber.sqrt(Fraction(72))?.text == "6√2" && ExactNumber.sqrt(Fraction(9, 2))?.text == "3√2/2"
@@ -124,6 +191,8 @@ check(Fraction(0.3)?.text == "3/10" && Fraction(-1.75)?.text == "−7/4" && Frac
 check((Fraction(1, 3) + Fraction(1, 6)).text == "1/2" && (Fraction(2, 3) * Fraction(3, 4)).text == "1/2", "exact: fraction arithmetic")
 check(((ExactNumber(Fraction(1)) + ExactNumber.sqrt(Fraction(5))!)!).sign == 1
       && ((ExactNumber(Fraction(-3)) + ExactNumber.sqrt(Fraction(5))!)!).sign == -1, "exact: the sign of a + b√n")
+check(RPoly([Fraction(-3, 14), .zero, Fraction(1, 7)]).text("x") == "(2x² − 3)/14" && RPoly([.zero, Fraction(1, 2)]).text("x") == "x/2",
+      "poly text: a common denominator", got: RPoly([Fraction(-3, 14), .zero, Fraction(1, 7)]).text("x"))
 
 // MARK: Checking the model's answer by substitution
 
@@ -157,7 +226,7 @@ check(ExactMath.verify(question: "Solve the equation x³ − x = 0.", answer: "x
 check(ExactMath.claimed(in: "x ∈ {1, 3}", variable: "x") == [1, 3] && ExactMath.claimed(in: "x = 2 because 2·2 = 4", variable: "x") == [2],
       "verify: sets and reasons are read")
 
-// MARK: Filler dropped from the shown steps
+// MARK: Filler and second thoughts dropped from the model's steps
 
 let shown = """
 Here is the solution to the equation: To solve the equation |4x + 23| = |4x − 9|, we consider the definition of absolute value.
@@ -186,24 +255,44 @@ check(MathText.withoutFiller("Here is the solution: 8x = −14, so x = −7/4.\n
       got: MathText.withoutFiller("Here is the solution: 8x = −14, so x = −7/4.\nCevap: çözüm yok", question: q3))
 check(MathText.mathRuns(in: "The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____.")
       == ["|x − 2| < 6", "a < x < b", "a = ____", "b = ____"], "math runs of a question", got: "\(MathText.mathRuns(in: "The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____."))")
+// What the iPad showed for question 2: the model's wandering steps, the self-correction dropped.
+let wandering = """
+• Start with the given inequality: −15 ≤ x ≤ 7.
+• Add 1 to all parts to center the interval around a = 1: −16 ≤ x − 1 ≤ 8.
+• Note: The correct transformation requires |x − a| ≤ b where a = (−15 + 7)/2 = −4 and b = (7 − (−15))/2 = 22/2 = 11.
+• Not: aslında b = 11.
+• Correction: a = −4.
+• Wait, the midpoint is −4.
+• Thus, |x − (−4)| ≤ 11, which simplifies to |x + 4| ≤ 11.
+"""
+let tidied = MathText.tidy(wandering)
+check(tidied == """
+• Start with the given inequality: −15 ≤ x ≤ 7.
+• Add 1 to all parts to center the interval around a = 1: −16 ≤ x − 1 ≤ 8.
+• Thus, |x − (−4)| ≤ 11, which simplifies to |x + 4| ≤ 11.
+""", "tidy: Note, Not, Correction and Wait lines go", got: tidied)
+check(MathText.tidy("Not defteri: x = 2.") == "Not defteri: x = 2.", "tidy: \"not\" without a colon is a word")
 
 // MARK: The answer line
 
 let q = PageQuestion(number: 3, stem: q3, options: [], passage: nil)
-check(QuestionSolving.engineLine(q, answer: "x = −7/4", steps: "1. 4x + 23 = −(4x − 9)\n2. 8x = −14\nAnswer: x = 0.3", language: .english)
-      == "**3)** **Answer: x = −7/4**\n1. 4x + 23 = −(4x − 9)\n2. 8x = −14\n\n", "engine line: the engine's answer, the model's own answer line dropped",
-      got: QuestionSolving.engineLine(q, answer: "x = −7/4", steps: "1. 4x + 23 = −(4x − 9)\n2. 8x = −14\nAnswer: x = 0.3", language: .english))
-check(QuestionSolving.engineLine(q, answer: "x = −7/4", steps: "", language: .turkish) == "**3)** **Cevap: x = −7/4**\n\n", "engine line: no steps")
+check(QuestionSolving.engineLine(q, answer: "x = −7/4", steps: ["Case 1: 4x + 23 = 4x − 9 ⇒ no solution", "Case 2: 4x + 23 = −(4x − 9) ⇒ 8x = −14 ⇒ x = −7/4"], language: .english)
+      == "**3)** **Answer: x = −7/4**\nCase 1: 4x + 23 = 4x − 9 ⇒ no solution\nCase 2: 4x + 23 = −(4x − 9) ⇒ 8x = −14 ⇒ x = −7/4\n\n",
+      "engine line: the engine's answer and its working",
+      got: QuestionSolving.engineLine(q, answer: "x = −7/4", steps: ["Case 1: 4x + 23 = 4x − 9 ⇒ no solution", "Case 2: 4x + 23 = −(4x − 9) ⇒ 8x = −14 ⇒ x = −7/4"], language: .english))
+check(QuestionSolving.engineLine(q, answer: "x = −7/4", steps: [], language: .turkish) == "**3)** **Cevap: x = −7/4**\n\n", "engine line: no steps")
+// The page's first block, as the iPad showed it: the model's list written twice is shown once.
+let twice = "Answer: −4 < x < 8\n1. Subtract 2: −6 < x − 2 < 6.\n2. Add 2: −4 < x < 8.\n3. Identify a and b.\n\n1. Subtract 2: −6 < x − 2 < 6.\n2. Add 2: −4 < x < 8.\n3. Identify a and b.\n"
+check(QuestionSolving.openLine(PageQuestion(number: 1, stem: ex[0], options: [], passage: nil), answer: twice, language: .english)
+      == "**1)** **Answer: −4 < x < 8**\n1. Subtract 2: −6 < x − 2 < 6.\n2. Add 2: −4 < x < 8.\n3. Identify a and b.\n\n", "open line: repeated steps shown once",
+      got: QuestionSolving.openLine(PageQuestion(number: 1, stem: ex[0], options: [], passage: nil), answer: twice, language: .english))
+check(QuestionSolving.engineLine(q, answer: "x = 1", steps: ["a", "a", "", "", "b", "a"], language: .english) == "**3)** **Answer: x = 1**\na\n\nb\n\n",
+      "engine line: no repeats, no piled blank lines", got: QuestionSolving.engineLine(q, answer: "x = 1", steps: ["a", "a", "", "", "b", "a"], language: .english))
 check(QuestionSolving.openLine(q, answer: "Answer: x = 0.3\n1. Guess.", language: .english, note: "x = 0.3 does not satisfy the equation")
       == "**3)** **Answer: x = 0.3** ⚠️ x = 0.3 does not satisfy the equation\n1. Guess.\n\n", "open line: the failed check is said",
       got: QuestionSolving.openLine(q, answer: "Answer: x = 0.3\n1. Guess.", language: .english, note: "x = 0.3 does not satisfy the equation"))
 check(QuestionSolving.finalAnswer(of: "Answer: x = 1\nsteps\nAnswer: x = 2") == "x = 2" && QuestionSolving.finalAnswer(of: "1. no answer") == nil,
       "the last answer line of an answer")
-let prompt = QuestionSolving.stepsPrompt(q, answer: "x = −7/4", working: ["4x + 23 = 4x − 9 → no solution", "4x + 23 = −(4x − 9) → x = −7/4"], language: .english)
-check(prompt == "3. \(q3)\n\nEXACT RESULT (from the math engine): x = −7/4\nWORKING: 4x + 23 = 4x − 9 → no solution; 4x + 23 = −(4x − 9) → x = −7/4",
-      "steps prompt: the question, the result and the working", got: prompt)
-check(QuestionSolving.stepsInstructions(language: .english).contains("değiştirme") && QuestionSolving.stepsInstructions(language: .english).hasSuffix("RESPONSE LANGUAGE: English."),
-      "steps instructions")
 check(QuestionSolving.retryNote(reason: "x = 0.3 does not satisfy the equation", hint: "x = -7/4 (≈ -1.75)", language: .english)
       == "YOUR FIRST ANSWER WAS WRONG: x = 0.3 does not satisfy the equation. By substitution the math engine finds that x = -7/4 (≈ -1.75) satisfies the equation; solve again towards that and check every case.",
       "retry note", got: QuestionSolving.retryNote(reason: "x = 0.3 does not satisfy the equation", hint: "x = -7/4 (≈ -1.75)", language: .english))

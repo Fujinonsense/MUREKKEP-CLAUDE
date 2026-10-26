@@ -64,22 +64,23 @@ def test_the_math_engine_answers_what_it_can_solve_exactly_and_checks_the_rest()
     for fn in ("static func solve(_ stem: String) -> Answer?", "static func verify(question: String, answer: String) -> Verdict?"):
         assert fn in exact
     model = src("AssistantModel.swift")
-    assert "let exact = worded ? AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) : nil" in model
-    assert "thinking: BrainBudget.mathSteps" in model
-    assert "QuestionSolving.engineLine(q, answer: exact.answer, steps: steps, language: language)" in model
+    # An engine-solved question is shown at once with the engine's own working; the model is not asked.
+    engine = "if worded, let exact = AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) {"
+    assert engine in model
+    shown = "appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working, language: language))"
+    assert model.count(shown) == 2  # the downloaded model's loop and Apple's, the fallback
+    block = model.split(engine)[1].split("let request = BrainRuntime.Request")[0]
+    assert shown in block and "continue" in block and "runBrain" not in block
     assert "ExactMath.verify(question: q.stem, answer: final)" in model
     assert "QuestionSolving.retryNote(reason: reason, hint: hint, language: language)" in model
     assert "language: language, note: note))" in model
-    # Apple's model, the fallback, shows the engine's result too; the facts block carries it as well.
-    assert "QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working.joined(separator: \"\\n\"), language: language)" in model
+    # The page's text reaches the engine and the model with lookalike characters unified and blanks marked.
+    assert "p.text = MathText.markBlanks(MathText.unifiedMath(page.text))" in model
     assert "} else if let exact = ExactMath.solve(line) {" in src("OfflineBrain.swift")
-    assert "static let mathSteps = 256" in src("BrainCatalog.swift")
     questions = src("Questions.swift")
-    for fn in ("static func stepsInstructions(language: AnswerLanguage)", "static func engineLine(", "static func retryNote("):
+    for fn in ("static func engineLine(", "static func retryNote(", "static func stepsBody("):
         assert fn in questions
-    steps = questions.split("static func stepsInstructions")[1].split("static func stepsPrompt")[0]
-    for phrase in ("onu değiştirme", "en fazla üç kısa adım", '\\"Cevap:\\" satırı', "LaTeX kullanma"):
-        assert phrase in steps, phrase
+    assert "stepsInstructions" not in questions and "mathSteps" not in src("BrainCatalog.swift")
 
 
 def test_the_whole_page_answer_gets_the_rules_and_is_tidied():
@@ -90,7 +91,7 @@ def test_the_whole_page_answer_gets_the_rules_and_is_tidied():
 
 def test_lost_blanks_reach_the_model():
     model = src("AssistantModel.swift")
-    assert "p.text = MathText.markBlanks(page.text)" in model
+    assert "p.text = MathText.markBlanks(MathText.unifiedMath(page.text))" in model
     # Before the questions are split, so the blanks are in the stems.
     assert model.index("MathText.markBlanks") < model.index("QuestionSplitter.split(sourceText)")
 

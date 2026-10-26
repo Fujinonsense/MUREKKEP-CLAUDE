@@ -406,8 +406,9 @@ enum MathText {
     private static let doubts = [
         "wait", "hmm", "hold on", "actually", "correction", "oops", "sorry", "let me", "on second thought",
         "never mind", "scratch that", "i think", "maybe", "perhaps", "no wait", "but wait", "re-check", "recheck",
-        "double-check", "dur", "bekle", "bir dakika", "bir saniye", "aslında", "düzeltme", "pardon", "yanlış yazdım",
-        "yanlış hesapladım", "tekrar kontrol", "yeniden kontrol", "sanırım", "galiba", "belki", "hayır,", "yok,",
+        "double-check", "note:", "note that", "dur", "bekle", "bir dakika", "bir saniye", "aslında", "düzeltme", "pardon",
+        "yanlış yazdım", "yanlış hesapladım", "tekrar kontrol", "yeniden kontrol", "sanırım", "galiba", "belki", "hayır,",
+        "yok,", "not:",
     ]
 
     private static let listMarker = try! NSRegularExpression(pattern: #"^\s*(?:[-*•]\s+|\d{1,2}[.)]\s+)?"#)
@@ -464,6 +465,46 @@ enum MathText {
     /// A "Cevap:"/"Answer:" line is the answer, never filler.
     private static let answerLabel = try! NSRegularExpression(
         pattern: #"^[\s*_#>-]*(?:cevap|yan[ıi]t|answer|sonu[çc]|result)\s*[:：]"#, options: [.caseInsensitive])
+
+    /// A page's lookalike characters as the plain ones the engine reads: mathematical italic and
+    /// bold letters (𝑥 → x) and digits, fullwidth signs, ⩽ ≦ → ≤, ⩾ ≧ → ≥, ∣ → |, odd hyphens → -,
+    /// odd spaces → a space, zero-width marks dropped. Dashes stay (−, – are read as they are, and
+    /// "1–2" in a directive must stay a dash).
+    static func unifiedMath(_ text: String) -> String {
+        var out = String.UnicodeScalarView()
+        func put(_ c: UInt32) {
+            if let u = Unicode.Scalar(c) { out.append(u) }
+        }
+        for u in text.unicodeScalars {
+            let v = u.value
+            switch v {
+            case 0x1D400...0x1D6A3:
+                // Mathematical Latin letters: 13 styles of A–Z then a–z.
+                let i = (v - 0x1D400) % 52
+                put(i < 26 ? 65 + i : 97 + i - 26)
+            case 0x1D7CE...0x1D7FF: put(48 + (v - 0x1D7CE) % 10)
+            case 0xFF10...0xFF19: put(48 + v - 0xFF10)
+            case 0xFF21...0xFF3A: put(65 + v - 0xFF21)
+            case 0xFF41...0xFF5A: put(97 + v - 0xFF41)
+            case 0x210E: put(0x68)
+            case 0x2A7D, 0x2266: put(0x2264)
+            case 0x2A7E, 0x2267: put(0x2265)
+            case 0x2223, 0xFF5C, 0x2502: put(0x7C)
+            case 0x2010, 0x2011, 0x2012, 0x2043, 0xFE63, 0xFF0D: put(0x2D)
+            case 0xFF1D: put(0x3D)
+            case 0xFF1C: put(0x3C)
+            case 0xFF1E: put(0x3E)
+            case 0xFF08: put(0x28)
+            case 0xFF09: put(0x29)
+            case 0xFF0B: put(0x2B)
+            case 0xFF0F: put(0x2F)
+            case 0x00A0, 0x2002, 0x2003, 0x2007, 0x2008, 0x2009, 0x200A, 0x202F: put(0x20)
+            case 0x200B, 0x200C, 0x200D, 0xFEFF: continue
+            default: out.append(u)
+            }
+        }
+        return String(out)
+    }
 
     /// Runs of math tokens in a sentence ("|x − 2| < 6", "a < x < b", "a = ____"): a token is math
     /// when it is only digits, signs, bars, brackets, blanks and single Latin letters. A run ends at a
