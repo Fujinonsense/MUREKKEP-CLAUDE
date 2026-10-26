@@ -211,9 +211,7 @@ enum AppleModelBridge {
             answerProperty,
         ])
         let schema = try GenerationSchema(root: root, dependencies: [])
-        let instructions = gaps > 0
-            ? "You solve one item of a textbook exercise. Read the instruction and the sentence, decide what belongs in each numbered gap, then fill every gap in order. Use only the allowed words when they are given. Never answer with an option letter."
-            : "Sen dikkatli bir öğretmensin. Alıştırmanın yönergesini ve varsa notları oku, maddeyi çöz. Şık harfi yalnızca izin verilen cevaplar harfse yaz. " + language.directive
+        let instructions = ExerciseSplitter.unitInstructions(gaps: gaps > 0, language: language)
         let options = GenerationOptions(temperature: 0.1, maximumResponseTokens: 300)
         var shown = exercise
         var previous = before

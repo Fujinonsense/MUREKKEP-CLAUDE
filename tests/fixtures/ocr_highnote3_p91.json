@@ -1,0 +1,1843 @@
+{
+ "note": "High Note 3 student book, PDF page index 91 (06 Revision, scanned) rendered at 1530x2189 px. Boxes: EasyOCR line detections (stand-in for Vision observations), pixels, top-left origin, [x, y, w, h], text as read. The item numbers, superscript gap numbers and speaker names are small boxes of their own.",
+ "width": 1530,
+ "height": 2189,
+ "lines": [
+  {
+   "text": "Jack",
+   "box": [
+    734,
+    1902,
+    54,
+    28
+   ]
+  },
+  {
+   "text": "who would never %",
+   "box": [
+    128,
+    736,
+    208,
+    28
+   ]
+  },
+  {
+   "text": "wouldn't make",
+   "box": [
+    927,
+    340,
+    171,
+    33
+   ]
+  },
+  {
+   "text": "(knock) on the door; the",
+   "box": [
+    1069,
+    955,
+    267,
+    31
+   ]
+  },
+  {
+   "text": "3",
+   "box": [
+    739,
+    957,
+    18,
+    22
+   ]
+  },
+  {
+   "text": "don't know talk (talk) to me, I (get)_",
+   "box": [
+    991,
+    821,
+    388,
+    36
+   ]
+  },
+  {
+   "text": "She is a really nice girl",
+   "box": [
+    344,
+    701,
+    244,
+    33
+   ]
+  },
+  {
+   "text": "Choose the correct words to describe the",
+   "box": [
+    142,
+    1077,
+    460,
+    31
+   ]
+  },
+  {
+   "text": "time because of the way he'd behaved.",
+   "box": [
+    126,
+    896,
+    410,
+    30
+   ]
+  },
+  {
+   "text": "long",
+   "box": [
+    1160,
+    1085,
+    60,
+    37
+   ]
+  },
+  {
+   "text": "got",
+   "box": [
+    297,
+    672,
+    44,
+    31
+   ]
+  },
+  {
+   "text": "(lend) you the money:",
+   "box": [
+    857,
+    1315,
+    246,
+    36
+   ]
+  },
+  {
+   "text": "You should never",
+   "box": [
+    768,
+    476,
+    194,
+    30
+   ]
+  },
+  {
+   "text": "really",
+   "box": [
+    338,
+    672,
+    68,
+    30
+   ]
+  },
+  {
+   "text": "(not put up) with",
+   "box": [
+    1265,
+    1797,
+    194,
+    36
+   ]
+  },
+  {
+   "text": "3",
+   "box": [
+    698,
+    170,
+    24,
+    32
+   ]
+  },
+  {
+   "text": "frown /",
+   "box": [
+    118,
+    1415,
+    86,
+    32
+   ]
+  },
+  {
+   "text": "Well; ifls",
+   "box": [
+    806,
+    1584,
+    104,
+    28
+   ]
+  },
+  {
+   "text": "Complete the conversation with the second conditional form of",
+   "box": [
+    738,
+    1372,
+    714,
+    32
+   ]
+  },
+  {
+   "text": "Complete the sentences with the words from the box:",
+   "box": [
+    740,
+    176,
+    606,
+    32
+   ]
+  },
+  {
+   "text": "words in brackets, and sentences 5-8 with the first conditional",
+   "box": [
+    740,
+    722,
+    704,
+    32
+   ]
+  },
+  {
+   "text": "Ifyou 11",
+   "box": [
+    801,
+    2005,
+    92,
+    36
+   ]
+  },
+  {
+   "text": "(pay) me back by Saturday;",
+   "box": [
+    1151,
+    1285,
+    298,
+    36
+   ]
+  },
+  {
+   "text": "with someone can make you feel lonely at",
+   "box": [
+    945,
+    609,
+    466,
+    36
+   ]
+  },
+  {
+   "text": "things",
+   "box": [
+    237,
+    404,
+    77,
+    37
+   ]
+  },
+  {
+   "text": "supposed to help at the gymnastics club",
+   "box": [
+    172,
+    341,
+    433,
+    36
+   ]
+  },
+  {
+   "text": "Ifyou lose your",
+   "box": [
+    768,
+    542,
+    172,
+    32
+   ]
+  },
+  {
+   "text": "(feel) embarrassed_",
+   "box": [
+    850,
+    1050,
+    212,
+    32
+   ]
+  },
+  {
+   "text": "He's got problems at home:",
+   "box": [
+    803,
+    1859,
+    300,
+    38
+   ]
+  },
+  {
+   "text": "go",
+   "box": [
+    984,
+    230,
+    34,
+    26
+   ]
+  },
+  {
+   "text": "back   crazy",
+   "box": [
+    794,
+    224,
+    127,
+    33
+   ]
+  },
+  {
+   "text": "(get) a well-paid job.",
+   "box": [
+    847,
+    1247,
+    236,
+    36
+   ]
+  },
+  {
+   "text": "as she",
+   "box": [
+    1216,
+    1088,
+    72,
+    28
+   ]
+  },
+  {
+   "text": "grin",
+   "box": [
+    197,
+    1410,
+    58,
+    42
+   ]
+  },
+  {
+   "text": "teacher and",
+   "box": [
+    804,
+    1614,
+    136,
+    30
+   ]
+  },
+  {
+   "text": "hug",
+   "box": [
+    405,
+    1413,
+    56,
+    40
+   ]
+  },
+  {
+   "text": "(go) to the teacher; my",
+   "box": [
+    1193,
+    1651,
+    254,
+    38
+   ]
+  },
+  {
+   "text": "straight St_",
+   "box": [
+    126,
+    536,
+    112,
+    30
+   ]
+  },
+  {
+   "text": "2m",
+   "box": [
+    128,
+    406,
+    34,
+    28
+   ]
+  },
+  {
+   "text": "so she 1b",
+   "box": [
+    270,
+    800,
+    110,
+    28
+   ]
+  },
+  {
+   "text": "06",
+   "box": [
+    31,
+    39,
+    110,
+    84
+   ]
+  },
+  {
+   "text": "first",
+   "box": [
+    768,
+    638,
+    50,
+    28
+   ]
+  },
+  {
+   "text": "(lose) my temper;",
+   "box": [
+    1074,
+    1021,
+    198,
+    33
+   ]
+  },
+  {
+   "text": "as",
+   "box": [
+    1136,
+    1092,
+    30,
+    24
+   ]
+  },
+  {
+   "text": "of your sister: You might",
+   "box": [
+    1178,
+    344,
+    266,
+    32
+   ]
+  },
+  {
+   "text": "eyebrow /",
+   "box": [
+    491,
+    1727,
+    114,
+    41
+   ]
+  },
+  {
+   "text": "italics for each sentence",
+   "box": [
+    738,
+    782,
+    274,
+    30
+   ]
+  },
+  {
+   "text": "3 shake your head _",
+   "box": [
+    98,
+    1732,
+    200,
+    30
+   ]
+  },
+  {
+   "text": "Thanks!",
+   "box": [
+    802,
+    2102,
+    90,
+    30
+   ]
+  },
+  {
+   "text": "up",
+   "box": [
+    1336,
+    230,
+    34,
+    28
+   ]
+  },
+  {
+   "text": "1",
+   "box": [
+    101,
+    219,
+    20,
+    30
+   ]
+  },
+  {
+   "text": "help him too_",
+   "box": [
+    804,
+    2066,
+    144,
+    30
+   ]
+  },
+  {
+   "text": "Ifyou fancy someone, you should ask them out but don't worry",
+   "box": [
+    769,
+    273,
+    696,
+    39
+   ]
+  },
+  {
+   "text": "'Will you \"cover_for me this afternoon at the",
+   "box": [
+    134,
+    278,
+    468,
+    32
+   ]
+  },
+  {
+   "text": "ask",
+   "box": [
+    740,
+    226,
+    44,
+    28
+   ]
+  },
+  {
+   "text": "Just because you're",
+   "box": [
+    768,
+    409,
+    216,
+    32
+   ]
+  },
+  {
+   "text": "at",
+   "box": [
+    508,
+    378,
+    28,
+    24
+   ]
+  },
+  {
+   "text": "they",
+   "box": [
+    232,
+    636,
+    59,
+    36
+   ]
+  },
+  {
+   "text": "unless he",
+   "box": [
+    1254,
+    1220,
+    108,
+    30
+   ]
+  },
+  {
+   "text": "(explain) what you saw:",
+   "box": [
+    1038,
+    1616,
+    266,
+    32
+   ]
+  },
+  {
+   "text": "liked, and",
+   "box": [
+    126,
+    640,
+    110,
+    28
+   ]
+  },
+  {
+   "text": "form of the words in brackets. Then choose the correct word in",
+   "box": [
+    738,
+    753,
+    700,
+    29
+   ]
+  },
+  {
+   "text": "(not buy) a new house as long as",
+   "box": [
+    881,
+    1218,
+    362,
+    38
+   ]
+  },
+  {
+   "text": "5",
+   "box": [
+    694,
+    1366,
+    24,
+    32
+   ]
+  },
+  {
+   "text": "He",
+   "box": [
+    768,
+    1222,
+    36,
+    26
+   ]
+  },
+  {
+   "text": "fun",
+   "box": [
+    930,
+    226,
+    42,
+    26
+   ]
+  },
+  {
+   "text": "Alex   Yes, he's, unfortunately; the bully:",
+   "box": [
+    737,
+    1756,
+    434,
+    37
+   ]
+  },
+  {
+   "text": "good",
+   "box": [
+    447,
+    375,
+    61,
+    32
+   ]
+  },
+  {
+   "text": "him to apologise to the student he was bullying, it might",
+   "box": [
+    803,
+    2035,
+    622,
+    36
+   ]
+  },
+  {
+   "text": "up but he hadn't made an",
+   "box": [
+    312,
+    408,
+    276,
+    30
+   ]
+  },
+  {
+   "text": "very",
+   "box": [
+    765,
+    850,
+    57,
+    34
+   ]
+  },
+  {
+   "text": "That'$ n0 excuse: If |",
+   "box": [
+    804,
+    1902,
+    220,
+    30
+   ]
+  },
+  {
+   "text": "Alex",
+   "box": [
+    736,
+    1968,
+    56,
+    28
+   ]
+  },
+  {
+   "text": "If / Unless a stranger",
+   "box": [
+    768,
+    954,
+    222,
+    33
+   ]
+  },
+  {
+   "text": "but it is only temporary_",
+   "box": [
+    832,
+    638,
+    256,
+    33
+   ]
+  },
+  {
+   "text": "He didn't",
+   "box": [
+    506,
+    472,
+    102,
+    26
+   ]
+  },
+  {
+   "text": "out. The",
+   "box": [
+    472,
+    640,
+    92,
+    26
+   ]
+  },
+  {
+   "text": "with you_",
+   "box": [
+    918,
+    440,
+    102,
+    30
+   ]
+  },
+  {
+   "text": "Ihadn't felt much 12s",
+   "box": [
+    128,
+    864,
+    230,
+    30
+   ]
+  },
+  {
+   "text": "started 6g",
+   "box": [
+    289,
+    639,
+    109,
+    31
+   ]
+  },
+  {
+   "text": "temper",
+   "box": [
+    1145,
+    225,
+    83,
+    32
+   ]
+  },
+  {
+   "text": "(have) problems;",
+   "box": [
+    1109,
+    1899,
+    198,
+    38
+   ]
+  },
+  {
+   "text": "Alex",
+   "box": [
+    738,
+    1442,
+    56,
+    26
+   ]
+  },
+  {
+   "text": "2",
+   "box": [
+    741,
+    891,
+    16,
+    22
+   ]
+  },
+  {
+   "text": "8",
+   "box": [
+    741,
+    1291,
+    16,
+    22
+   ]
+  },
+  {
+   "text": "When people",
+   "box": [
+    836,
+    822,
+    148,
+    32
+   ]
+  },
+  {
+   "text": "Hi Jack What",
+   "box": [
+    806,
+    1442,
+    146,
+    28
+   ]
+  },
+  {
+   "text": "club, Georgie?",
+   "box": [
+    128,
+    312,
+    152,
+    30
+   ]
+  },
+  {
+   "text": "Complete the story with one word in each gap:",
+   "box": [
+    144,
+    224,
+    506,
+    32
+   ]
+  },
+  {
+   "text": "(ask)",
+   "box": [
+    1364,
+    2008,
+    62,
+    30
+   ]
+  },
+  {
+   "text": "3",
+   "box": [
+    743,
+    413,
+    16,
+    22
+   ]
+  },
+  {
+   "text": "Yes; it has and I've no idea what to do.",
+   "box": [
+    802,
+    1546,
+    416,
+    30
+   ]
+  },
+  {
+   "text": "Really? Your best friend?",
+   "box": [
+    806,
+    1721,
+    268,
+    33
+   ]
+  },
+  {
+   "text": "about someone doesn't mean they'Ul",
+   "box": [
+    1063,
+    408,
+    408,
+    38
+   ]
+  },
+  {
+   "text": "dogs",
+   "box": [
+    1329,
+    950,
+    70,
+    42
+   ]
+  },
+  {
+   "text": "thought about that; but if/6",
+   "box": [
+    815,
+    1651,
+    308,
+    36
+   ]
+  },
+  {
+   "text": "Alex",
+   "box": [
+    736,
+    1864,
+    56,
+    26
+   ]
+  },
+  {
+   "text": "her %",
+   "box": [
+    126,
+    800,
+    68,
+    26
+   ]
+  },
+  {
+   "text": "shiver",
+   "box": [
+    118,
+    1762,
+    72,
+    28
+   ]
+  },
+  {
+   "text": "put",
+   "box": [
+    1090,
+    224,
+    47,
+    33
+   ]
+  },
+  {
+   "text": "(be) you,",
+   "box": [
+    984,
+    1584,
+    106,
+    32
+   ]
+  },
+  {
+   "text": "get into",
+   "box": [
+    769,
+    371,
+    92,
+    36
+   ]
+  },
+  {
+   "text": "after school. Michael was very",
+   "box": [
+    128,
+    376,
+    322,
+    30
+   ]
+  },
+  {
+   "text": "After",
+   "box": [
+    768,
+    1022,
+    58,
+    28
+   ]
+  },
+  {
+   "text": "whisper",
+   "box": [
+    477,
+    2067,
+    93,
+    38
+   ]
+  },
+  {
+   "text": "for him at the",
+   "box": [
+    432,
+    866,
+    150,
+    26
+   ]
+  },
+  {
+   "text": "him or her; you should apologise.",
+   "box": [
+    769,
+    569,
+    366,
+    38
+   ]
+  },
+  {
+   "text": "trouble",
+   "box": [
+    1240,
+    226,
+    82,
+    28
+   ]
+  },
+  {
+   "text": "(be) through with me_",
+   "box": [
+    1013,
+    1683,
+    244,
+    36
+   ]
+  },
+  {
+   "text": "Alex",
+   "box": [
+    736,
+    2104,
+    56,
+    26
+   ]
+  },
+  {
+   "text": "If l were VOU,",
+   "box": [
+    770,
+    344,
+    146,
+    30
+   ]
+  },
+  {
+   "text": "to her about why he couldn't be",
+   "box": [
+    230,
+    440,
+    342,
+    30
+   ]
+  },
+  {
+   "text": "when she",
+   "box": [
+    501,
+    672,
+    107,
+    28
+   ]
+  },
+  {
+   "text": "nervous",
+   "box": [
+    820,
+    854,
+    94,
+    24
+   ]
+  },
+  {
+   "text": "Untilyou can",
+   "box": [
+    928,
+    1288,
+    142,
+    30
+   ]
+  },
+  {
+   "text": "Michael had fallen for & girl who he really",
+   "box": [
+    127,
+    603,
+    445,
+    36
+   ]
+  },
+  {
+   "text": "up with him.",
+   "box": [
+    456,
+    799,
+    135,
+    31
+   ]
+  },
+  {
+   "text": "Im really at a loss.",
+   "box": [
+    802,
+    1968,
+    204,
+    32
+   ]
+  },
+  {
+   "text": "(win) the lottery, yOU",
+   "box": [
+    1043,
+    1151,
+    228,
+    39
+   ]
+  },
+  {
+   "text": "VOCABULARY AND GRAMMAR",
+   "box": [
+    99,
+    159,
+    472,
+    42
+   ]
+  },
+  {
+   "text": "Michael asked me today. He",
+   "box": [
+    291,
+    308,
+    302,
+    36
+   ]
+  },
+  {
+   "text": "anyone down and",
+   "box": [
+    410,
+    735,
+    189,
+    31
+   ]
+  },
+  {
+   "text": "Jack",
+   "box": [
+    736,
+    1510,
+    56,
+    28
+   ]
+  },
+  {
+   "text": "her",
+   "box": [
+    536,
+    933,
+    48,
+    34
+   ]
+  },
+  {
+   "text": "to",
+   "box": [
+    768,
+    1184,
+    28,
+    26
+   ]
+  },
+  {
+   "text": "She",
+   "box": [
+    768,
+    1088,
+    48,
+    28
+   ]
+  },
+  {
+   "text": "Revision",
+   "box": [
+    173,
+    37,
+    200,
+    60
+   ]
+  },
+  {
+   "text": "Jack",
+   "box": [
+    736,
+    1722,
+    56,
+    28
+   ]
+  },
+  {
+   "text": "5",
+   "box": [
+    739,
+    1089,
+    18,
+    24
+   ]
+  },
+  {
+   "text": "2",
+   "box": [
+    741,
+    345,
+    18,
+    24
+   ]
+  },
+  {
+   "text": "se",
+   "box": [
+    128,
+    438,
+    28,
+    28
+   ]
+  },
+  {
+   "text": "wink",
+   "box": [
+    278,
+    2072,
+    58,
+    26
+   ]
+  },
+  {
+   "text": "Until",
+   "box": [
+    770,
+    822,
+    56,
+    28
+   ]
+  },
+  {
+   "text": "the verbs in brackets.",
+   "box": [
+    736,
+    1401,
+    244,
+    29
+   ]
+  },
+  {
+   "text": "How come he'syour friend then?",
+   "box": [
+    804,
+    1796,
+    364,
+    32
+   ]
+  },
+  {
+   "text": "(go) straight to your class",
+   "box": [
+    1189,
+    1583,
+    280,
+    38
+   ]
+  },
+  {
+   "text": "raise an",
+   "box": [
+    408,
+    1732,
+    86,
+    30
+   ]
+  },
+  {
+   "text": "Jack",
+   "box": [
+    736,
+    1586,
+    54,
+    26
+   ]
+  },
+  {
+   "text": "shrug shoulders",
+   "box": [
+    405,
+    1758,
+    178,
+    40
+   ]
+  },
+  {
+   "text": "(disagree) with someone:",
+   "box": [
+    848,
+    918,
+    284,
+    32
+   ]
+  },
+  {
+   "text": "the story.",
+   "box": [
+    126,
+    568,
+    102,
+    30
+   ]
+  },
+  {
+   "text": "(",
+   "box": [
+    1039,
+    1157,
+    12,
+    22
+   ]
+  },
+  {
+   "text": "(say) what they think if/ before they",
+   "box": [
+    981,
+    886,
+    397,
+    38
+   ]
+  },
+  {
+   "text": "Unless",
+   "box": [
+    768,
+    1152,
+    76,
+    32
+   ]
+  },
+  {
+   "text": "fall in",
+   "box": [
+    768,
+    438,
+    70,
+    30
+   ]
+  },
+  {
+   "text": "to",
+   "box": [
+    580,
+    940,
+    28,
+    24
+   ]
+  },
+  {
+   "text": "I glance",
+   "box": [
+    456,
+    1418,
+    90,
+    32
+   ]
+  },
+  {
+   "text": "disappoint them, but Georgie started to boss",
+   "box": [
+    127,
+    767,
+    471,
+    32
+   ]
+  },
+  {
+   "text": "(win) the race unless",
+   "box": [
+    894,
+    1088,
+    230,
+    30
+   ]
+  },
+  {
+   "text": "hard.",
+   "box": [
+    768,
+    1116,
+    60,
+    30
+   ]
+  },
+  {
+   "text": "(see)",
+   "box": [
+    1326,
+    1442,
+    66,
+    32
+   ]
+  },
+  {
+   "text": "1",
+   "box": [
+    743,
+    281,
+    16,
+    22
+   ]
+  },
+  {
+   "text": "with your best friend and fall out",
+   "box": [
+    1020,
+    542,
+    361,
+    32
+   ]
+  },
+  {
+   "text": "would_you do (do) ifyou ?",
+   "box": [
+    964,
+    1442,
+    290,
+    32
+   ]
+  },
+  {
+   "text": "him and, anyway, I knew",
+   "box": [
+    314,
+    536,
+    266,
+    30
+   ]
+  },
+  {
+   "text": "(train)",
+   "box": [
+    1368,
+    1088,
+    76,
+    32
+   ]
+  },
+  {
+   "text": "usually",
+   "box": [
+    1282,
+    1022,
+    84,
+    30
+   ]
+  },
+  {
+   "text": "with",
+   "box": [
+    1382,
+    226,
+    54,
+    28
+   ]
+  },
+  {
+   "text": "2",
+   "box": [
+    385,
+    1419,
+    18,
+    24
+   ]
+  },
+  {
+   "text": "love",
+   "box": [
+    1030,
+    226,
+    50,
+    26
+   ]
+  },
+  {
+   "text": "Complete sentences 1-4 with the zero conditional form of the",
+   "box": [
+    737,
+    693,
+    699,
+    32
+   ]
+  },
+  {
+   "text": "6",
+   "box": [
+    743,
+    613,
+    14,
+    22
+   ]
+  },
+  {
+   "text": "Alex",
+   "box": [
+    736,
+    1545,
+    57,
+    30
+   ]
+  },
+  {
+   "text": "(start) barking:",
+   "box": [
+    847,
+    981,
+    166,
+    36
+   ]
+  },
+  {
+   "text": "(speak) to him aboutitand 12",
+   "box": [
+    965,
+    2005,
+    326,
+    36
+   ]
+  },
+  {
+   "text": "try to lie to me either because I always saw",
+   "box": [
+    128,
+    502,
+    460,
+    33
+   ]
+  },
+  {
+   "text": "They always",
+   "box": [
+    764,
+    884,
+    143,
+    38
+   ]
+  },
+  {
+   "text": "buy :",
+   "box": [
+    791,
+    1180,
+    56,
+    38
+   ]
+  },
+  {
+   "text": "pictures:",
+   "box": [
+    142,
+    1108,
+    102,
+    32
+   ]
+  },
+  {
+   "text": "bullying a friend at school?",
+   "box": [
+    909,
+    1467,
+    304,
+    40
+   ]
+  },
+  {
+   "text": "that sort of behaviour:",
+   "box": [
+    804,
+    1826,
+    246,
+    30
+   ]
+  },
+  {
+   "text": "I will cover for you:",
+   "box": [
+    128,
+    1002,
+    206,
+    28
+   ]
+  },
+  {
+   "text": "But now that Michael was going to ask",
+   "box": [
+    126,
+    938,
+    414,
+    28
+   ]
+  },
+  {
+   "text": "Why? Has something happened?",
+   "box": [
+    805,
+    1508,
+    359,
+    37
+   ]
+  },
+  {
+   "text": "5 roll your eyes",
+   "box": [
+    94,
+    2072,
+    170,
+    30
+   ]
+  },
+  {
+   "text": "Although she had broken his Ih",
+   "box": [
+    128,
+    832,
+    344,
+    32
+   ]
+  },
+  {
+   "text": "Jack",
+   "box": [
+    736,
+    1798,
+    56,
+    28
+   ]
+  },
+  {
+   "text": "someone",
+   "box": [
+    804,
+    1474,
+    108,
+    26
+   ]
+  },
+  {
+   "text": "Jack",
+   "box": [
+    734,
+    2008,
+    56,
+    28
+   ]
+  },
+  {
+   "text": "After you",
+   "box": [
+    854,
+    1154,
+    102,
+    30
+   ]
+  },
+  {
+   "text": "(not",
+   "box": [
+    1414,
+    1902,
+    54,
+    30
+   ]
+  },
+  {
+   "text": "out with you_",
+   "box": [
+    994,
+    308,
+    142,
+    30
+   ]
+  },
+  {
+   "text": "was",
+   "box": [
+    129,
+    349,
+    44,
+    20
+   ]
+  },
+  {
+   "text": "Provided that",
+   "box": [
+    838,
+    1020,
+    148,
+    30
+   ]
+  },
+  {
+   "text": "6 stare",
+   "box": [
+    386,
+    2072,
+    80,
+    26
+   ]
+  },
+  {
+   "text": "Splitting_",
+   "box": [
+    767,
+    607,
+    102,
+    36
+   ]
+  },
+  {
+   "text": "Provided that",
+   "box": [
+    768,
+    1286,
+    148,
+    30
+   ]
+  },
+  {
+   "text": "forgive him, I changed my mind and said 'Yes_",
+   "box": [
+    126,
+    967,
+    484,
+    31
+   ]
+  },
+  {
+   "text": "best friend",
+   "box": [
+    806,
+    1684,
+    122,
+    30
+   ]
+  },
+  {
+   "text": "5",
+   "box": [
+    743,
+    547,
+    14,
+    22
+   ]
+  },
+  {
+   "text": "problem was he",
+   "box": [
+    125,
+    669,
+    173,
+    33
+   ]
+  },
+  {
+   "text": "spoke to other",
+   "box": [
+    126,
+    704,
+    158,
+    30
+   ]
+  },
+  {
+   "text": "boys:",
+   "box": [
+    281,
+    701,
+    65,
+    36
+   ]
+  },
+  {
+   "text": "a car;",
+   "box": [
+    842,
+    1186,
+    60,
+    24
+   ]
+  },
+  {
+   "text": "6",
+   "box": [
+    741,
+    1157,
+    16,
+    22
+   ]
+  },
+  {
+   "text": "90",
+   "box": [
+    40,
+    2134,
+    36,
+    32
+   ]
+  },
+  {
+   "text": "(be able)",
+   "box": [
+    1349,
+    1151,
+    110,
+    36
+   ]
+  },
+  {
+   "text": "2",
+   "box": [
+    98,
+    1072,
+    24,
+    32
+   ]
+  },
+  {
+   "text": "there. He had told her the \"t",
+   "box": [
+    128,
+    472,
+    298,
+    28
+   ]
+  },
+  {
+   "text": "10",
+   "box": [
+    1315,
+    1903,
+    24,
+    18
+   ]
+  },
+  {
+   "text": "go) round bullying people.",
+   "box": [
+    803,
+    1927,
+    296,
+    40
+   ]
+  },
+  {
+   "text": "up with a friend talking behind your",
+   "box": [
+    1041,
+    475,
+    396,
+    36
+   ]
+  },
+  {
+   "text": "Alex",
+   "box": [
+    738,
+    1654,
+    54,
+    28
+   ]
+  },
+  {
+   "text": "ifthey won't",
+   "box": [
+    770,
+    306,
+    144,
+    32
+   ]
+  }
+ ]
+}

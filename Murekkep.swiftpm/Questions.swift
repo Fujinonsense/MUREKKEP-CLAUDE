@@ -256,12 +256,6 @@ enum QuestionSolving {
         return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"
     }
 
-    /// For models that answer a whole textbook exercise at once (the local server).
-    static func exerciseInstructions(language: AnswerLanguage) -> String {
-        "Sen dikkatli bir öğretmensin. Alıştırmanın yönergesini ve varsa notlarını oku, maddeleri sırayla çöz. Boşluklu her maddeyi numarasıyla, boşlukları doldurulmuş tam cümle olarak yaz ve doldurduğun kelimeleri kalın yaz (örneğin **the**). Kullanılacak kelimeler verilmişse yalnızca onları kullan; ø boşluğun boş kalacağı anlamına gelir. Diğer maddelerde kısa cevabı kalın yaz ve bir cümleyle gerekçesini ekle. Şık harfi yalnızca maddenin şıkları varsa yaz. "
-            + language.directive
-    }
-
     /// "**3)** **C** — the option's text" and the reasoning under it.
     static func line(_ q: PageQuestion, answer: String, reasoning: String) -> String {
         let a = answer.trimmingCharacters(in: .whitespacesAndNewlines)

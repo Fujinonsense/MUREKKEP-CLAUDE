@@ -707,7 +707,7 @@ final class AssistantModel: ObservableObject {
     /// A textbook page: the model answers a whole exercise at once (it has room for it), thinking first.
     @MainActor
     private func solveExercisesWithBrain(_ exercises: [PageExercise], language: AnswerLanguage) async throws {
-        let system = QuestionSolving.exerciseInstructions(language: language)
+        let system = ExerciseSplitter.instructions(language: language)
         let skipped = Self.skippedNote(language)
         for (index, e) in exercises.enumerated() {
             try Task.checkCancellation()
@@ -885,7 +885,7 @@ final class AssistantModel: ObservableObject {
         guard !model.isEmpty else {
             throw LocalAIError(Loc.t("Sunucuda yüklü model bulunamadı. Bilgisayarda örneğin \"ollama pull llama3.2\" çalıştır, sonra Ayarlar'dan modeli seç."))
         }
-        let system = QuestionSolving.exerciseInstructions(language: language)
+        let system = ExerciseSplitter.instructions(language: language)
         let skipped = Self.skippedNote(language)
         for (index, e) in exercises.enumerated() {
             try Task.checkCancellation()

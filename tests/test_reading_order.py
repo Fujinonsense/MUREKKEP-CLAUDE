@@ -88,3 +88,17 @@ def test_printed_blanks_become_one_marker():
     assert normalize_blanks("Name .......... Date ……") == "Name ___ Date ___"
     assert normalize_blanks("fashion... ...is that") == "fashion... ...is that"
     assert normalize_blanks("____ ____ ok") == "___ ok"
+
+
+def test_a_revision_page_is_read_column_by_column():
+    """Lone item numbers, superscript gap numbers and speaker names are tiny boxes of their own: a
+    column is told by its wide boxes, so the story on the left is not interleaved with the exercises
+    on the right."""
+    d = json.loads((Path(__file__).parent / "fixtures" / "ocr_highnote3_p91.json").read_text(encoding="utf-8"))
+    out = lines([Piece(l["text"], tuple(l["box"])) for l in d["lines"]])
+    order = ["1 Complete the story with one word in each gap", "'Will you \"cover", "I will cover for you",
+             "2 Choose the correct words to describe the", "3 Complete the sentences with the words from the box",
+             "Complete sentences 1-4 with the zero conditional", "5 Complete the conversation", "Alex Thanks!"]
+    at = [where(out, s) for s in order]
+    assert at == sorted(at)
+    assert not any("cover" in t and "ask back crazy" in t for t in out)

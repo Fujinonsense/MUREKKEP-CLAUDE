@@ -24,7 +24,7 @@ enum ReadingOrder {
     private static let sideShare: CGFloat = 0.2
     /// At most this share of the boxes cross a column gap.
     private static let crossShare: CGFloat = 0.2
-    /// A column's typical box is at least this many line heights wide.
+    /// A column's wide boxes (its upper quartile) are at least this many line heights wide.
     private static let columnWidth: CGFloat = 4
     /// Boxes of one row overlap vertically by half the smaller height.
     private static let rowOverlap: CGFloat = 0.5
@@ -54,6 +54,13 @@ enum ReadingOrder {
         guard !v.isEmpty else { return 0 }
         let m = v.count / 2
         return v.count % 2 == 1 ? v[m] : (v[m - 1] + v[m]) / 2
+    }
+
+    /// The value a quarter of the way down from the top: a column's line boxes, not the lone item
+    /// numbers, speaker names and answer letters printed beside them.
+    private static func upperQuartile(_ values: [CGFloat]) -> CGFloat {
+        let v = values.sorted()
+        return v[min(v.count - 1, Int(0.75 * Double(v.count)))]
     }
 
     private static func crosses(_ p: Piece, _ g: (CGFloat, CGFloat)) -> Bool {
@@ -101,7 +108,7 @@ enum ReadingOrder {
         let mid = (g.0 + g.1) / 2
         let rest = pieces.filter { !crosses($0, g) }
         for side in [rest.filter { $0.box.midX < mid }, rest.filter { $0.box.midX >= mid }] {
-            if side.isEmpty || median(side.map(\.box.width)) < columnWidth * h { return nil }
+            if side.isEmpty || upperQuartile(side.map(\.box.width)) < columnWidth * h { return nil }
         }
         return g
     }

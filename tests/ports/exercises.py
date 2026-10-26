@@ -4,16 +4,30 @@ small model answers one item at a time with the exercise's instruction in front 
 An exercise starts on a line "N <instruction>" whose N follows the previous exercise's number (the
 first may be any number) and whose text is an instruction: a sentence that starts with an instruction
 verb ("Complete", "In pairs, match"), a Turkish instruction verb anywhere ("tamamlayınız"), or a
-section label ("SPEAKING"). The instruction runs on to the end of its sentence (at most four lines);
-then come items "N text" numbered from 1 (or 0 for the example), or a running text whose gaps are
-numbered inside it. A short heading ("Articles", "WATCH OUT!") ends the items; what follows is the
-exercise's context (a grammar box). Text before the first exercise is the page's passage.
+section label ("SPEAKING"). Scans lose or misread the printed exercise numbers, so a line that can only
+be an instruction also starts an exercise without a number (a track number "2.30 Listen …", a label
+with a verb, a writing verb first, or another verb with a strong cue such as "the Grammar box") or
+with a number that does not follow (at most three past the last one); it is numbered after the one
+before it. The instruction runs on to the end of its sentence (at most four lines); then come items
+"N text" numbered from 1 (or 0 for the example; one lost number is skipped, and a first item that lost
+its number is the unnumbered lines before item 2), or, when the instruction says to complete or fill,
+a running text whose gaps are numbered inside it. A short heading ("Articles", "WATCH OUT!") ends the
+items; what follows is the exercise's context (a grammar box) — unless the next item follows within
+three lines, when the heading was a key word printed between the items ("FOCUSED"). Examples before the
+items and a grammar box after them are the context, never items.
 
 Gaps are printed blanks ("___", see reading_order.normalize_blanks). In a running text a gap's number
 may be glued to the word before it ("is3"), stand alone ("2 ___"), be misread ("1o" for 10) or have
 lost its blank ("wearing5 old"); gaps are counted in order, so a lost number costs nothing. The
 words that may fill a gap come from the instruction ("with ø (no article), a/an or the", "rules a-g")
-or from a box of words. Exercises with no writing to do (speaking, discussion) are skipped."""
+or from a box of words. Exercises with no writing to do (speaking, discussion) are skipped.
+
+The page's text before the first exercise is its passage. An exercise gets the passage only when its
+instruction points at it ("Read the text", "from the article", "according to the text") and the passage
+is a real text (120 letters); when the text is printed after the exercise instead, the exercise's
+context is the passage. A grammar or vocabulary exercise that points at the text ("find more examples
+of the rules in the text") gets it labelled as reference only, so the model answers the items and not
+the text."""
 import re
 from dataclasses import dataclass, field
 
@@ -21,40 +35,67 @@ from ports.questions import _options
 from ports.reading_order import normalize_blanks
 
 HEADER = re.compile(r"^\s*(\d{1,2})[.)]?\s+(\S.*)$")
-TRACK = re.compile(r"^[A-Z]?\d{1,2}\.\d{1,2}\s+")
+TRACK = re.compile(r"^(?:\S{1,3}\)\s*)?[A-Z]?\d{1,3}\.\d{1,2}\s+")
 LABEL = re.compile(r"^(?:[A-ZÇĞİÖŞÜ]{4,}\s+)+(?=\S)")
 LEAD = re.compile(r"^(?:(?:in pairs|in groups|then|now|first|finally|individually)\s*,?\s*)+", re.IGNORECASE)
 WRITE_VERBS = {"complete", "fill", "choose", "circle", "underline", "match", "rewrite", "write", "put", "correct",
                "order", "tick", "find", "answer", "translate", "decide", "label", "add", "replace", "change",
                "join", "combine", "cross", "number", "sort", "make", "use", "mark", "identify", "unscramble",
-               "rearrange", "transform", "select", "give"}
+               "rearrange", "transform", "select", "give", "report"}
 OTHER_VERBS = {"read", "listen", "discuss", "study", "look", "work", "talk", "ask", "say", "check", "think",
                "imagine", "compare", "describe", "practise", "practice", "repeat", "watch", "note", "guess",
-               "tell", "share", "play", "act", "prepare", "take", "plan", "present", "review"}
+               "tell", "share", "play", "act", "prepare", "take", "plan", "present", "review", "follow"}
+# An instruction with one of these verbs and one of these nouns ("Complete the text with …") has a
+# running text under it, with the gaps numbered inside it.
+GAP_VERBS = {"complete", "fill", "put", "use", "write", "add", "insert"}
+RUNNING_CUE = re.compile(r"\b(?:texts?|stor(?:y|ies)|dialogues?|conversations?|emails?|letters?|articles?|gaps|"
+                         r"extracts?|paragraphs?|notes|news items?|metni|metin|boşluk|diyalog|paragraf)\b", re.IGNORECASE)
 TURKISH_VERB = re.compile(
     r"(?<![\wçğıöşü])(?:tamamla|doldur|eşleştir|işaretle|cevapla|yanıtla|düzelt|sırala|çevir|belirle|birleştir)"
     r"(?:y?[ıiuü]n(?:[ıiuü]z)?)?(?![\wçğıöşü])"
     r"|(?<![\wçğıöşü])(?:yaz|seç|bul|çiz)[ıiuü]n(?:[ıiuü]z)?(?![\wçğıöşü])", re.IGNORECASE)
+TURKISH_GAP = re.compile(r"(?<![\wçğıöşü])(?:tamamla|doldur|yaz)", re.IGNORECASE)
 TURKISH_SKIP = re.compile(r"(?<![\wçğıöşü])(?:tartış|konuş|dinle)", re.IGNORECASE)
-STRONG = re.compile(r"\b(?:the|these) (?:gaps|sentences|text|questions|words|blanks|dialogue|table|box|email|"
-                    r"paragraph|conversation)\b", re.IGNORECASE)
-PASSAGE_CUE = re.compile(r"\b(?:text|passage|letter|email|story|article on|metin|metne|parça)", re.IGNORECASE)
+STRONG = re.compile(r"\b(?:the|these|each) (?:gaps?|sentences?|texts?|questions?|words?|blanks?|dialogues?|tables?|box|boxes|"
+                    r"emails?|paragraphs?|conversations?|stor(?:y|ies)|articles?|quotes?|examples?|verbs?|photos?|pictures?|"
+                    r"notes|tasks?|instructions?|correct|odd|first|second|underlined|highlighted|missing)\b"
+                    r"|\b(?:grammar|fact|writing|vocabulary) box\b|\bin (?:brackets|bold|pairs|groups)\b|\bexercise \d",
+                    re.IGNORECASE)
+GRAMMAR_BOX = re.compile(r"\bwe (?:use|form|can use|sometimes use|often use|don't use|do not use)\b|\bgrammar reference\b|"
+                         r"\bwatch out\b", re.IGNORECASE)
+FOOTER = re.compile(r"^(?:use of english|grammar reference)\b.*\bpage \d", re.IGNORECASE)
+PASSAGE_CUE = re.compile(r"\b(?:the|this) (?:text|passage|letter|email|story|article|blog|review|extract|report|interview|"
+                         r"poster|leaflet|advert(?:isement)?|news item|fact box)s?\b"
+                         r"|\baccording to\b|\btrue or false\b|\bnot given\b|\b(?:metin|metne|metni|parça)", re.IGNORECASE)
+REFERENCE_CUE = re.compile(r"\b(?:grammar|rules?|examples?|underlined|highlighted|in bold|form of|tenses?|structures?|"
+                           r"verbs?|nouns?|adjectives?|phrases?|words? (?:and phrases )?(?:from|in) the|"
+                           r"find (?:the |more )?(?:words|phrases|expressions|examples))\b", re.IGNORECASE)
 NO_ARTICLE = re.compile(r"(?:^|(?<=\s))[-–o0Øø]\s*\((?:no article|ø|o|0)\)", re.IGNORECASE)
 ARTICLE_O = re.compile(r"\bno article \([o0Ø]\)", re.IGNORECASE)
 LETTER_RANGE = re.compile(r"(?:with|to|rules?|options?|endings?|letters?|from)\s+([a-h])\s*[-–]\s*([a-h])\b")
 LIST_TAIL = re.compile(r"\b(?:with|using)\s+(.+?)(?:[.:;!?](?:\s|$)|$)", re.IGNORECASE)
 GLUED = re.compile(r"(.*?[^\d\s])(\d{1,2})")
+BOX_CUE = re.compile(r"\b(?:box|below|list|kutu)", re.IGNORECASE)
 SUPERSCRIPT_MISREAD = "éèêº°¹²³⁴⁵⁶⁷⁸⁹⁰"
 GIVEN_O = {"o", "0", "-", "–"}
 MAX_INSTRUCTION_LINES = 4
 MAX_LOST_GAPS = 3
+MAX_LOST_ITEMS = 1      # item numbers the scan may have lost between two items
+MAX_JUMP = 3            # a misread exercise number is at most this far past the previous one
+FOLD_LINES = 3          # a heading at most this many lines before the next item is a key word
 CONTEXT_CHARS = 1500
-PASSAGE_CHARS = 1500
+PASSAGE_CHARS = 3000
+UNIT_PASSAGE_CHARS = 1500
+PASSAGE_MIN_LETTERS = 120
 
 AN_WORDS = ("hour", "honest", "honour", "honor", "heir")
 A_PREFIXES = ("unic", "unif", "unio", "uniq", "unit", "univ", "use", "usu", "usa", "uti", "ure", "eu", "one", "ewe",
               "ufo", "uk")
 AN_LETTERS = set("AEFHILMNORSX")
+
+REFERENCE_LABEL = ("Text (reference only: it just shows the words and structures; answer only the numbered items "
+                   "of the exercise)")
+TEXT_RULE = "Answer only this exercise's items as the instruction says; do not write anything else about the text."
 
 
 @dataclass
@@ -100,6 +141,10 @@ def _words(s):
     return re.findall(r"[A-Za-z']+", s.lower())
 
 
+def _letters(s):
+    return sum(c.isalpha() for c in s)
+
+
 def _sentences(s):
     return [t for t in re.split(r"(?<=[.!?])\s+", s.strip()) if t]
 
@@ -112,7 +157,7 @@ def _clean_header(rest):
 
 
 def _is_instruction(rest):
-    if LABEL.match(rest) or TURKISH_VERB.search(rest):
+    if _very_strong(rest) or TURKISH_VERB.search(rest):
         return True
     for sentence in _sentences(_clean_header(TRACK.sub("", rest))):
         words = _words(LEAD.sub("", sentence))
@@ -121,9 +166,36 @@ def _is_instruction(rest):
     return False
 
 
+def _lead_verb(s):
+    """The instruction verb the first sentence of s starts with (after "In pairs," and the like), or None."""
+    sentences = _sentences(s)
+    words = _words(LEAD.sub("", sentences[0])) if sentences else []
+    return words[0] if words and words[0] in WRITE_VERBS | OTHER_VERBS else None
+
+
+def _very_strong(rest):
+    """A track number or a section label: the mark of an exercise even when its verb is on the next line."""
+    rest = re.sub(r"^___\s+", "", rest)
+    return bool(TRACK.match(rest) or LABEL.match(TRACK.sub("", rest)))
+
+
 def _strong(rest):
+    rest = re.sub(r"^___\s+", "", rest)
     return bool(TRACK.match(rest) or LABEL.match(TRACK.sub("", rest)) or STRONG.search(rest)
                 or TURKISH_VERB.search(rest))
+
+
+def _unnumbered_start(line):
+    """A line without a number that can only be an exercise's instruction."""
+    if FOOTER.match(line):
+        return False
+    head = re.sub(r"^___\s+", "", line)
+    if TRACK.match(head):
+        return True
+    verb = _lead_verb(_clean_header(line))
+    if verb is None:
+        return False
+    return bool(LABEL.match(head)) or verb in WRITE_VERBS or bool(STRONG.search(line))
 
 
 def _ends_sentence(s):
@@ -137,16 +209,27 @@ def _heading(line):
     return len(s.split()) <= 4
 
 
-def _box_words(line):
+def _box_words(line, boxed=False):
+    """The words of a box line: parts set off by separators or wide spaces, or, when the instruction
+    names a box, plain lowercase words."""
     parts = [p.strip() for p in re.split(r"\s*[/•|,]\s*|\s{2,}", line.strip()) if p.strip()]
     if 3 <= len(parts) <= 15 and all(len(p.split()) <= 2 and not p[0].isdigit() for p in parts):
         return parts
+    toks = [t for t in line.split() if t != "___"]
+    if boxed and 3 <= len(toks) <= 15 and all(re.fullmatch(r"[a-zçğıöşü'/-]+", t) for t in toks):
+        return toks
     return None
 
 
 def _no_article(s):
     s = NO_ARTICLE.sub("ø (no article)", s)
     return ARTICLE_O.sub("no article (ø)", s)
+
+
+def _running_text(instruction):
+    """The exercise is a text to complete, not sentences: its body is one item with numbered gaps."""
+    gaps = bool(set(_words(instruction)) & GAP_VERBS) or bool(TURKISH_GAP.search(instruction))
+    return gaps and bool(RUNNING_CUE.search(instruction))
 
 
 def choices(instruction):
@@ -259,32 +342,70 @@ def _item_gaps(text, options):
     return " ".join(out), gaps
 
 
+def _draft(number, rest):
+    cur = {"number": number, "instruction": [_clean_header(rest)], "mode": "instruction",
+           "items": [], "body": [], "preface": [], "box": None, "context": [], "fold": 0}
+    if _ends_sentence(cur["instruction"][0]):
+        cur["mode"] = "body"
+    return cur
+
+
+def _item_number_fits(cur, n, rest):
+    """n continues the items: the next number (one may be lost), or 0/1 to start them, or 2/3 when the
+    first item lost its number and stands unnumbered in the body (not in a running text, whose gap
+    numbers start lines too: "2 ___ boys")."""
+    if cur["items"]:
+        want = cur["items"][-1][0] + 1
+        return want <= n <= want + MAX_LOST_ITEMS
+    if n in (0, 1):
+        return True
+    return n in (2, 3) and bool(cur["body"]) and not rest.startswith("___") \
+        and not _running_text(" ".join(cur["instruction"]))
+
+
+def _can_fold(cur):
+    return cur["mode"] == "context" and 0 < cur["fold"] <= FOLD_LINES
+
+
 def split(text):
     lines = [normalize_blanks(l) for l in text.splitlines()]
     lines = [l for l in lines if l]
     pre, found = [], []
     cur = None
+    prev = ""
     for line in lines:
+        # An instruction without its number follows a finished line, never a line cut mid-sentence.
+        after_sentence = _ends_sentence(prev) or prev.endswith("___")
+        prev = line
         m = HEADER.match(line)
         if m:
             n, rest = int(m.group(1)), m.group(2)
-            expected = cur["number"] + 1 if cur else None
-            if (expected is None or n == expected) and _is_instruction(rest):
-                next_item = cur["items"][-1][0] + 1 if cur and cur["items"] else 1
-                in_items = cur is not None and cur["mode"] == "body" and cur["items"] and n == next_item
-                if not in_items or _strong(rest):
-                    cur = {"number": n, "raw": rest, "instruction": [_clean_header(rest)], "mode": "instruction",
-                           "items": [], "body": [], "preface": [], "box": None, "context": []}
-                    if _ends_sentence(cur["instruction"][0]):
-                        cur["mode"] = "body"
+            if _is_instruction(rest):
+                expected = cur["number"] + 1 if cur else None
+                # The next item's number too: only a strong instruction starts an exercise then.
+                ambiguous = cur is not None and _item_number_fits(cur, n, rest) and (cur["mode"] == "body" or _can_fold(cur))
+                strong = _strong(rest)
+                if expected is None or n == expected:
+                    if not ambiguous or strong:
+                        cur = _draft(n, rest)
+                        found.append(cur)
+                        continue
+                elif (_very_strong(rest) or (strong and not ambiguous)) and n <= cur["number"] + MAX_JUMP:
+                    # The scan misread the number: the exercise follows the one before it.
+                    cur = _draft(n if n > cur["number"] else cur["number"] + 1, rest)
                     found.append(cur)
                     continue
+        elif cur is not None and cur["mode"] != "instruction" and (cur["items"] or cur["body"] or cur["context"]) \
+                and after_sentence and _unnumbered_start(line):
+            # The scan lost the number: the exercise follows the one before it.
+            cur = _draft(cur["number"] + 1, line)
+            found.append(cur)
+            continue
         if cur is None:
             pre.append(line)
             continue
         if cur["mode"] == "instruction":
-            item = HEADER.match(line)
-            if item and int(item.group(1)) in (0, 1):
+            if m and int(m.group(1)) in (0, 1):
                 cur["mode"] = "body"
             elif len(cur["instruction"]) < MAX_INSTRUCTION_LINES and not _ends_sentence(" ".join(cur["instruction"])):
                 cur["instruction"].append(line)
@@ -293,29 +414,42 @@ def split(text):
                 continue
             else:
                 cur["mode"] = "body"
+        if m and _item_number_fits(cur, int(m.group(1)), m.group(2)) and (cur["mode"] == "body" or _can_fold(cur)):
+            n = int(m.group(1))
+            if cur["mode"] == "context":
+                # The heading was a key word between the items: it belongs to the item before.
+                folded = cur["context"][-cur["fold"]:]
+                del cur["context"][-cur["fold"]:]
+                if cur["items"]:
+                    cur["items"][-1][1].extend(folded)
+                else:
+                    cur["body"].extend(folded)
+                cur["mode"], cur["fold"] = "body", 0
+            if not cur["items"] and cur["body"]:
+                if n >= 2:
+                    cur["items"].append((1, cur["body"]))
+                else:
+                    cur["preface"] = cur["body"]
+                cur["body"] = []
+            cur["items"].append((n, [m.group(2)]))
+            continue
         if cur["mode"] == "body":
             if _heading(line):
-                cur["mode"] = "context"
+                cur["mode"], cur["fold"] = "context", 1
                 cur["context"].append(line)
                 continue
-            item = HEADER.match(line)
-            if item:
-                n = int(item.group(1))
-                want = (cur["items"][-1][0] + 1) if cur["items"] else None
-                if (want is None and n in (0, 1)) or n == want:
-                    if not cur["items"] and cur["body"]:
-                        cur["preface"], cur["body"] = cur["body"], []
-                    cur["items"].append((n, [item.group(2)]))
+            if not cur["items"] and not cur["body"] and cur["box"] is None:
+                box = _box_words(line, BOX_CUE.search(" ".join(cur["instruction"])) is not None)
+                if box:
+                    cur["box"] = box
                     continue
-            if not cur["items"] and not cur["body"] and cur["box"] is None and _box_words(line):
-                cur["box"] = _box_words(line)
-                continue
             if cur["items"]:
                 cur["items"][-1][1].append(line)
             else:
                 cur["body"].append(line)
             continue
         cur["context"].append(line)
+        cur["fold"] += 1
     passage = " ".join(pre).strip() or None
     return [_finish(c, passage) for c in found]
 
@@ -323,7 +457,7 @@ def split(text):
 def _finish(c, passage):
     instruction = _no_article(" ".join(c["instruction"]).strip())
     options = choices(instruction)
-    if not options and c["box"] and re.search(r"\b(?:box|below|list|kutu)", instruction, re.IGNORECASE):
+    if not options and c["box"] and BOX_CUE.search(instruction):
         options = c["box"]
     items, running = [], False
     if c["items"]:
@@ -335,7 +469,7 @@ def _finish(c, passage):
                 continue
             text, gaps = _item_gaps(raw, options)
             items.append(Item(n, text, gaps))
-    elif c["body"]:
+    elif c["body"] and _running_text(instruction):
         text, gaps = _number_gaps(_no_article(" ".join(c["body"])), options)
         if gaps:
             items, running = [Item(0, text, gaps)], True
@@ -351,9 +485,18 @@ def _finish(c, passage):
         kind = "skip"
     else:
         kind = "short"
-    context = _no_article(" ".join(c["preface"] + c["context"]).strip())
-    return Exercise(c["number"], instruction, kind, options, items, running, context,
-                    passage if PASSAGE_CUE.search(instruction) else None)
+    # Examples before the items and a grammar box after them; an unnumbered body that is no running
+    # text (a grammar box, a word list) is context too.
+    before = c["preface"] + ([] if running else c["body"])
+    context = _no_article(" ".join(before + c["context"]).strip())
+    text = None
+    if PASSAGE_CUE.search(instruction):
+        if passage and _letters(passage) >= PASSAGE_MIN_LETTERS:
+            text = passage
+        elif _letters(context) >= PASSAGE_MIN_LETTERS and not GRAMMAR_BOX.search(context):
+            # The text is printed after the exercise (a grammar box is not it).
+            text, context = context, ""
+    return Exercise(c["number"], instruction, kind, options, items, running, context, text)
 
 
 def units(e):
@@ -435,6 +578,15 @@ def _numbered(item_text):
     return re.sub(r"(?<!\S)(___|ø)(?!\S)", lambda m: f"({next(k)}) {m.group(1)}", item_text)
 
 
+def is_reference(e):
+    """The passage only shows the words or structures of a grammar or vocabulary exercise."""
+    return bool(REFERENCE_CUE.search(e.instruction))
+
+
+def _text_line(e, limit):
+    return (REFERENCE_LABEL if is_reference(e) else "Text") + ": " + e.passage[:limit]
+
+
 def unit_prompt(e, u, before):
     """What a small model reads for one unit: the instruction, what it needs to know, the unit."""
     lines = [f"Exercise: {e.instruction}"]
@@ -442,9 +594,10 @@ def unit_prompt(e, u, before):
         lines.append("Notes: " + e.context[:CONTEXT_CHARS])
     if not u.gaps:
         if e.passage:
-            lines.append("Text: " + e.passage[:PASSAGE_CHARS])
+            lines.append(_text_line(e, UNIT_PASSAGE_CHARS))
         lines.append(f"Item {u.number}: {u.text}")
-        lines.append("Answer with exactly one of: " + ", ".join(e.choices) + "." if e.choices else "Answer briefly.")
+        lines.append("Answer with exactly one of: " + ", ".join(e.choices) + "." if e.choices
+                     else f"Answer item {u.number} only, briefly.")
         return "\n".join(lines)
     if before:
         lines.append("Previous sentence: " + before)
@@ -460,14 +613,15 @@ def unit_prompt(e, u, before):
 
 
 def exercise_prompt(e):
-    """The whole exercise for a model strong enough to answer it at once."""
+    """The whole exercise for a model strong enough to answer it at once. Notes are cut short unless they
+    are all the exercise has; a text comes labelled, and a rule under the items keeps the answer to them."""
     lines = [f"Exercise {e.number}: {e.instruction}"]
     if e.choices:
         lines.append("Words to use: " + ", ".join(e.choices) + (" (ø means the gap stays empty)" if "ø" in e.choices else ""))
     if e.context:
-        lines.append("Notes: " + e.context[:CONTEXT_CHARS])
+        lines.append("Notes: " + e.context[:CONTEXT_CHARS if e.items else PASSAGE_CHARS])
     if e.passage:
-        lines.append("Text: " + e.passage[:PASSAGE_CHARS])
+        lines.append(_text_line(e, PASSAGE_CHARS))
     if e.running:
         lines.append(e.items[0].text)
     for item in e.items if not e.running else []:
@@ -476,7 +630,37 @@ def exercise_prompt(e):
         for o in item.options:
             line += f"\n{o.letter}) {o.text}"
         lines.append(line)
+    if e.passage:
+        lines.append(TEXT_RULE)
     return "\n".join(lines)
+
+
+def instructions(directive=""):
+    """For models that answer a whole exercise at once (the downloaded model, the local server): only this
+    exercise's items, the instruction's own task, the text as reference. `directive` names the answer's
+    language."""
+    return ("Sen dikkatli bir öğretmensin. Ders kitabından tek bir alıştırma çözüyorsun: yalnızca bu alıştırmanın "
+            "yönergesini uygula ve yalnızca numaralı maddelerini cevapla; başka soru uydurma. Yönergenin görevine bağlı "
+            "kal: seç (choose), tamamla (complete), yeniden yaz (rewrite), eşleştir (match), hataları düzelt (correct) "
+            "neyse onu yap ve alıştırmanın dil bilgisi konusundan çıkma. \"Text\" ile verilen metin yalnızca kaynaktır: "
+            "madde metinle ilgili bir soruysa cevabı metinden bul, dil bilgisi ya da kelime alıştırmasında metin yalnızca "
+            "kelime ve yapıları gösterir; metni özetleme, metin hakkında kendi sorularını yazıp cevaplama. "
+            "Boşluklu her maddeyi numarasıyla, boşlukları doldurulmuş tam cümle olarak yaz ve doldurduğun kelimeleri "
+            "kalın yaz (örneğin **the**). Kullanılacak kelimeler verilmişse yalnızca onları kullan; ø boşluğun boş "
+            "kalacağı anlamına gelir. Diğer maddelerde kısa cevabı kalın yaz ve bir cümleyle gerekçesini ekle. Şık harfi "
+            "yalnızca maddenin şıkları varsa yaz. " + directive)
+
+
+def unit_instructions(gaps, directive=""):
+    """For the on-device model, which answers one unit: the gaps of a sentence, or a short answer."""
+    if gaps:
+        return ("You solve one item of a textbook exercise. Read the instruction and the sentence, decide what belongs "
+                "in each numbered gap, then fill every gap in order. Use only the allowed words when they are given. "
+                "A text, when given, is reference only: it shows the words and structures; never answer about the "
+                "text. Never answer with an option letter.")
+    return ("Sen dikkatli bir öğretmensin. Alıştırmanın yönergesini ve varsa notları oku, yalnızca verilen maddeyi çöz. "
+            "\"Text\" ile verilen metin yalnızca kaynaktır; onu özetleme, onun hakkında soru uydurma. Şık harfi yalnızca "
+            "izin verilen cevaplar harfse yaz. " + directive)
 
 
 def render(e, fills, notes=None):

@@ -14,7 +14,7 @@ GAP = 1.2            # pieces or words farther apart than this many line heights
 GUTTER_MIN = 0.6     # a column gap is at least this many line heights wide
 SIDE_SHARE = 0.2     # each side of a column gap holds at least this share of the boxes
 CROSS_SHARE = 0.2    # at most this share of the boxes cross a column gap
-COLUMN_WIDTH = 4     # a column's typical box is at least this many line heights wide
+COLUMN_WIDTH = 4     # a column's wide boxes (its upper quartile) are at least this many line heights wide
 ROW_OVERLAP = 0.5    # boxes of one row overlap vertically by half the smaller height
 MAX_DEPTH = 2        # up to four columns
 
@@ -56,6 +56,13 @@ def normalize_blanks(s):
     s = re.sub(r"\.{5,}|…{2,}", " ___ ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return re.sub(r"___(?: ___)+", "___", s)
+
+
+def _upper_quartile(values):
+    """The value a quarter of the way down from the top: a column's line boxes, not the lone item
+    numbers, speaker names and answer letters printed beside them."""
+    v = sorted(values)
+    return v[min(len(v) - 1, int(0.75 * len(v)))]
 
 
 def _gutter(pieces, h):
@@ -100,7 +107,7 @@ def _gutter(pieces, h):
     mid = (a + b) / 2
     sides = ([p for p in pieces if not _crosses(p, (a, b)) and p.cx < mid],
              [p for p in pieces if not _crosses(p, (a, b)) and p.cx >= mid])
-    if any(not side or median(p.box[2] for p in side) < COLUMN_WIDTH * h for side in sides):
+    if any(not side or _upper_quartile([p.box[2] for p in side]) < COLUMN_WIDTH * h for side in sides):
         return None
     return a, b
 
