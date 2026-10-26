@@ -56,7 +56,7 @@ struct BladeGPU {
     float  depth;          // 0 front .. 1 back inside the stroke
     float4 color;
     uint   stroke;
-    uint   kind;           // 0 blade, 1 flower stem
+    uint   kind;           // 0 blade, 1 flower stem, 2 glass stem, 3 glass leaf (the flowering water)
     float  stiffness;
     float  pad;
 };
@@ -971,7 +971,15 @@ vertex BladeOut blade_vertex(uint vid [[vertex_id]],
     float tl = length(tangent);
     float2 dir = tl > 1e-5 ? tangent / tl : float2(0.0, -1.0);
     float2 nrm = float2(-dir.y, dir.x);
-    float w = b.kind == 1u ? b.width * (1.0 - 0.45 * s) : b.width * powr(max(1.0 - s, 1e-4), 0.85);
+    float w;
+    if (b.kind == 3u) {
+        // A leaf: pointed at both ends, widest a little past the middle.
+        w = b.width * powr(max(sin(3.14159265 * powr(max(s, 1e-4), 1.15)), 1e-4), 0.8);
+    } else if (b.kind >= 1u) {
+        w = b.width * (1.0 - 0.45 * s);
+    } else {
+        w = b.width * powr(max(1.0 - s, 1e-4), 0.85);
+    }
     w *= 0.35 + 0.65 * g;
     float hw = 0.5 * w;
     float ext = hw + fu.pixelSize;
@@ -995,6 +1003,42 @@ vertex BladeOut blade_vertex(uint vid [[vertex_id]],
     return o;
 }
 
+// The flowering water's stems (kind 2) and leaves (kind 3): translucent turquoise glass, denser and
+// deeper at the edges, with a soft streak and a sharp glint where the rounded surface faces the light.
+static DecorOut glassBlade(BladeOut in, float u, float a)
+{
+    float uu = u * u;
+    float3 N = normalize(float3(in.n2 * (u * 0.92), sqrt(max(1.0 - uu * 0.85, 0.05))));
+    float ndl = saturate(dot(N, kLight));
+    float3 base = in.color;
+    float3 deep = base * float3(0.55, 0.78, 0.92);
+    float3 col;
+    float alpha;
+    if (in.kind > 2.5) {
+        // A leaf: a light midrib, the tip a touch bluer.
+        float midrib = exp(-abs(u) * 7.0) * 0.16;
+        col = mix(base, mix(base, float3(0.55, 0.72, 1.0), 0.35), smoothstep(0.4, 1.0, in.t));
+        col = mix(col, deep, uu * 0.6);
+        col += float3(midrib);
+        alpha = 0.52 + 0.30 * uu;
+    } else {
+        // A stem: a glass rod, lighter toward the flower.
+        col = mix(deep, base, 0.2 + 0.8 * smoothstep(0.0, 0.7, in.t));
+        col = mix(col, deep * 0.9, uu * uu * 0.7);
+        alpha = 0.66 + 0.30 * uu;
+    }
+    col *= 0.82 + 0.26 * ndl;
+    float nh = saturate(dot(N, kHalf));
+    float streak = powr(nh, 18.0);
+    float glint = powr(nh, 90.0);
+    col = saturate(col + float3(0.92, 0.98, 1.0) * (streak * 0.35 + glint * 0.55));
+    a *= saturate(alpha + glint * 0.3);
+    DecorOut o;
+    o.color = float4(col * a, a);
+    o.depth = in.depth;
+    return o;
+}
+
 fragment DecorOut blade_fragment(BladeOut in [[stage_in]])
 {
     float cov = saturate((1.0 - abs(in.u)) * in.halfPx + 0.5);
@@ -1003,6 +1047,9 @@ fragment DecorOut blade_fragment(BladeOut in [[stage_in]])
         discard_fragment();
     }
     float u = clamp(in.u, -1.0, 1.0);
+    if (in.kind > 1.5) {
+        return glassBlade(in, u, a);
+    }
     float3 base = in.color;
     float3 col;
     if (in.kind > 0.5) {
@@ -1041,6 +1088,7 @@ struct FlowerOut {
     float3 petal  [[flat]];
     float3 core   [[flat]];
     float  depth  [[flat]];
+    float  seed   [[flat]];   // 0..1, fixed per flower (the glass flowers vary their tilt and stamens by it)
 };
 
 vertex FlowerOut flower_vertex(uint vid [[vertex_id]],
@@ -1074,6 +1122,7 @@ vertex FlowerOut flower_vertex(uint vid [[vertex_id]],
     o.petal = f.petal.rgb;
     o.core = f.core.rgb;
     o.depth = zBase + su.depthStep * (0.44 * b.depth - 0.002);
+    o.seed = fract(f.spin * 0.15915494 + f.radius * 0.731);
     if (o.grow <= 0.001) {
         o.position = float4(-2.0, -2.0, 0.5, 1.0);
     }
@@ -1084,6 +1133,143 @@ static float4 over(float4 src, float4 dst) {
     return src + dst * (1.0 - src.a);
 }
 
+// MARK: glass flowers (the flowering water, style 3)
+
+struct GlassPetal {
+    float  a;      // coverage of this petal, 0 outside it
+    float  t;      // 0 at the flower's centre .. 1 at the tip
+    float  u;      // -1 .. 1 across the petal
+    float2 dirA;   // along the petal, in page space
+};
+
+// One petal of a whorl of n (centre angle (i + offset) * sector in the spun frame): narrow at the
+// centre, widest a little past the middle, drawn to a slightly rounded point.
+static GlassPetal glassPetal(float rho, float th, float i, float offset, float sector,
+                             float L, float halfWidth, float px, float spin)
+{
+    float ang = (i + offset) * sector;
+    float dth = th - ang;
+    float along = rho * cos(dth);
+    float across = rho * sin(dth);
+    float t = saturate(along / L);
+    float shape = powr(max(sin(3.14159265 * powr(max(t, 1e-4), 1.15)), 0.0), 0.72);
+    float w = halfWidth * L * shape;
+    GlassPetal p;
+    p.a = saturate((w - abs(across)) / px + 0.5) * saturate((L - along) / px + 0.5) * saturate(along / px + 0.5);
+    p.t = t;
+    p.u = clamp(across / max(w, 1e-4), -1.0, 1.0);
+    p.dirA = float2(cos(ang - spin), sin(ang - spin));
+    return p;
+}
+
+// Colour (straight, not premultiplied) and alpha of a glass petal: pale at the centre shading to the
+// tip colour, deeper and denser at the edges where the glass is seen edge-on, faint veins, a soft
+// lit streak and a sharper glint on the cupped surface. Buds keep the water's pale blue.
+static float4 glassPetalColor(GlassPetal p, float3 tip, float3 pale, float budMix, float cupping, float alphaScale)
+{
+    float uu = p.u * p.u;
+    float2 dirC = float2(-p.dirA.y, p.dirA.x);
+    float3 N = normalize(float3(dirC * (p.u * cupping) + p.dirA * ((p.t - 0.5) * 0.9), 1.0));
+    float ndl = saturate(dot(N, kLight));
+    float nh = saturate(dot(N, kHalf));
+    float3 deep = tip * float3(0.80, 0.74, 1.0);
+    float3 col = mix(pale, tip, smoothstep(0.12, 0.92, p.t));
+    float edge = (uu * uu * 0.55 + smoothstep(0.80, 1.0, abs(p.u)) * 0.35) * smoothstep(0.08, 0.4, p.t);
+    col = mix(col, deep, edge);
+    float veins = powr(max(0.5 + 0.5 * cos(p.u * 9.42478), 0.0), 5.0) * 0.09 * smoothstep(0.05, 0.45, p.t) * (1.0 - 0.6 * p.t);
+    col += float3(veins);
+    col = mix(col, float3(0.66, 0.88, 0.98), budMix * 0.6);
+    col *= 0.84 + 0.24 * ndl;
+    float streak = powr(nh, 14.0);
+    float glint = powr(nh, 70.0);
+    float rimLit = powr(abs(p.u), 4.0) * powr(nh, 6.0) * 0.6;
+    col = saturate(col + float3(0.94, 0.97, 1.0) * (streak * 0.30 + glint * 0.55 + rimLit));
+    float alpha = mix(0.40, 0.80, smoothstep(0.05, 0.9, p.t)) + 0.16 * uu + budMix * 0.18;
+    alpha = min(saturate(alpha + glint * 0.25), 0.95) * alphaScale;
+    return float4(col, alpha);
+}
+
+// The two petals of a whorl nearest the fragment, the lower index on top (and petal n-1 over petal
+// 0), so where petals overlap there is one seam, as in a real flower.
+static float4 glassWhorl(float rho, float th, float n, float sector, float offset, float L, float halfWidth,
+                         float px, float spin, float3 tip, float3 pale, float budMix, float cupping, float alphaScale)
+{
+    float i0 = round(th / sector - offset);
+    float dth = th - (i0 + offset) * sector;
+    float i1 = i0 + (dth >= 0.0 ? 1.0 : -1.0);
+    GlassPetal pA = glassPetal(rho, th, i0, offset, sector, L, halfWidth, px, spin);
+    GlassPetal pB = glassPetal(rho, th, i1, offset, sector, L, halfWidth, px, spin);
+    float4 cA = glassPetalColor(pA, tip, pale, budMix, cupping, alphaScale);
+    float4 cB = glassPetalColor(pB, tip, pale, budMix, cupping, alphaScale);
+    float aA = cA.a * pA.a;
+    float aB = cB.a * pB.a;
+    float4 layerA = float4(cA.rgb * aA, aA);
+    float4 layerB = float4(cB.rgb * aB, aB);
+    float i0w = i0 - n * floor(i0 / n);
+    float i1w = i1 - n * floor(i1 / n);
+    bool aOnTop = (i1w == i0w + 1.0) || (i0w == n - 1.0 && i1w == 0.0);
+    return aOnTop ? over(layerA, layerB) : over(layerB, layerA);
+}
+
+// A glass flower (premultiplied): an outer whorl of long petals, a shorter inner whorl turned half
+// a petal, a pale glowing heart with fine glassy stamens instead of pollen, and a faint blue shadow.
+static float4 glassFlower(FlowerOut in, float S, float px, float e)
+{
+    float v1 = fract(in.seed * 7.13 + 0.37);
+    float v2 = fract(in.seed * 3.71 + 0.61);
+    // Each flower faces the viewer a little differently: a touch wider than tall.
+    float aspect = 0.78 + 0.17 * v1;
+    float2 q = float2(in.q.x, in.q.y / aspect);
+    float cs = cos(in.spin);
+    float sn = sin(in.spin);
+    float2 r = float2(cs * q.x - sn * q.y, sn * q.x + cs * q.y);
+    float rho = length(r);
+    float th = atan2(r.y, r.x);
+    float n = in.petals;
+    float sector = 6.2831853 / n;
+    float budMix = 1.0 - smoothstep(0.05, 0.55, e);
+    float3 tip = in.petal;
+    float3 pale = mix(in.core, float3(1.0), 0.25);
+    float3 paleInner = mix(pale, tip, 0.18);
+
+    float halfWidth = 0.38 - 0.03 * (n - 5.0);
+    float4 outer = glassWhorl(rho, th, n, sector, 0.0, S, halfWidth, px, in.spin, tip, pale, budMix, 0.55, 1.0);
+    float4 inner = glassWhorl(rho, th, n, sector, 0.5, S * 0.58, 0.40, px, in.spin, mix(tip, pale, 0.25), paleInner,
+                              budMix, 0.75, 0.75);
+
+    float opened = smoothstep(0.10, 0.60, e);
+    float rr = rho / max(S, 1e-4);
+    float glowA = (1.0 - smoothstep(0.04, 0.40, rr)) * 0.62 * opened;
+    float3 glowC = mix(in.core, float3(1.0), 0.5);
+
+    float stamens = 10.0;
+    float sec2 = 6.2831853 / stamens;
+    float k = round(th / sec2 - v2);
+    float dk = th - (k + v2) * sec2;
+    float along = rho * cos(dk);
+    float across = rho * sin(dk);
+    float stLen = S * 0.30 * opened;
+    float stW = S * 0.022;
+    float aLine = saturate((stW - abs(across)) / px + 0.5) * saturate((stLen - along) / px + 0.5)
+                * saturate((along - S * 0.05) / px + 0.5);
+    float aDot = saturate((S * 0.045 - length(float2(along - stLen, across))) / px + 0.5);
+    float aSt = max(aLine, aDot) * 0.85 * opened;
+    float3 stC = mix(float3(0.98, 0.98, 1.0), tip, 0.22);
+    float aCore = saturate((S * 0.07 - rho) / px + 0.5) * 0.9 * opened;
+    float3 coreC = mix(in.core, float3(1.0), 0.6);
+
+    float2 sq = in.q - float2(0.10, 0.14) * S;
+    float shadowA = 0.14 * (1.0 - smoothstep(0.25 * S, 1.0 * S, length(sq))) * smoothstep(0.0, 0.3, e) * in.grow;
+
+    float4 acc = float4(float3(0.30, 0.36, 0.70) * shadowA, shadowA);
+    acc = over(outer, acc);
+    acc = over(inner, acc);
+    acc = over(float4(glowC * glowA, glowA), acc);
+    acc = over(float4(stC * aSt, aSt), acc);
+    acc = over(float4(coreC * aCore, aCore), acc);
+    return acc;
+}
+
 fragment DecorOut flower_fragment(FlowerOut in [[stage_in]])
 {
     float e = in.open;
@@ -1092,6 +1278,17 @@ fragment DecorOut flower_fragment(FlowerOut in [[stage_in]])
     float ob = 1.0 + (c1 + 1.0) * em * em * em + c1 * em * em;
     float S = mix(0.28, 1.0, ob) * in.grow;
     float px = in.pxR;
+
+    if (in.style > 2.5) {
+        float4 glass = glassFlower(in, S, px, e);
+        if (glass.a <= 0.003) {
+            discard_fragment();
+        }
+        DecorOut og;
+        og.color = glass;
+        og.depth = in.depth;
+        return og;
+    }
 
     float2 q = float2(in.q.x, in.q.y / 0.86);
     float cs = cos(in.spin);

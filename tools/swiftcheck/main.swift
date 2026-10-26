@@ -348,6 +348,20 @@ check(downstroke[20].r > crossbar[20].r * 1.2, "lettering: a downstroke is fulle
 check(lettered([SIMD2<Float>(0, 0), SIMD2<Float>(0, 0.5)]).allSatisfy { $0.r > 1.5 },
       "lettering: a dot stays round and bold")
 
+// MARK: Photos as PDF pages (PhotoPDF)
+
+// A page has the photo's own shape and A4's long side; photos are scaled down, never up.
+check(PhotoPDF.pageSize(for: CGSize(width: 3024, height: 4032)) == CGSize(width: 632, height: 842),
+      "photo pdf: a portrait phone photo gets a portrait page as tall as A4")
+check(PhotoPDF.pageSize(for: CGSize(width: 2732, height: 2048)) == CGSize(width: 842, height: 631),
+      "photo pdf: an iPad screenshot gets a landscape page as wide as A4")
+check(PhotoPDF.scaledPixels(for: CGSize(width: 4032, height: 3024)) == CGSize(width: 2400, height: 1800),
+      "photo pdf: a 12 MP photo is scaled down to 2400 px")
+check(PhotoPDF.scaledPixels(for: CGSize(width: 800, height: 600)) == CGSize(width: 800, height: 600),
+      "photo pdf: a small photo keeps its size")
+check(PhotoPDF.fileName("Ders: 3/4") == "Ders- 3-4" && PhotoPDF.fileName("  ") == "Photos",
+      "photo pdf: titles become safe file names")
+
 // MARK: Typing from a keyboard (KeyboardSpot)
 
 // Page lines 28 apart; the view shows y 0…600; the margin is at 60.
@@ -730,20 +744,46 @@ if case let .claim(_, holds, left, _, _)? = PageMath.question("3+3=33 doğru mu?
     check(false, "page math: the engine finds 3+3=33 wrong (left side 6)")
 }
 
-// The flowering water pen (as in the ad's hook): a glossy turquoise line that grows glassy blue and
-// violet flowers on thin stems once the pen lifts; no grass.
+// The flowering water pen (as in the ad's hook): a glossy turquoise line that grows glass flowers on
+// thin turquoise stems once the pen lifts; no grass. Some stems stand in pairs or threes, some carry
+// a small leaf or two, and the flowers come in several sizes.
 let waterLine = (0...40).map { InkPoint(x: Float($0) * 5, y: 300, r: 4, ink: 0) }
 let blooms = GrassGenerator.blooms(points: waterLine, width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
-check(blooms.flowers.count >= 8 && blooms.blades.allSatisfy(\.isStem) && blooms.blades.count == blooms.flowers.count,
-      "flowering water: flowers on stems along the line, no grass blades")
-check(blooms.flowers.allSatisfy { $0.petal.z >= $0.petal.x && $0.petal.z >= $0.petal.y },
-      "flowering water: the petals are blue and violet")
+let stems = blooms.blades.filter { $0.kind == .glassStem }
+let leaves = blooms.blades.filter { $0.kind == .glassLeaf }
+check(blooms.flowers.count >= 8 && stems.count == blooms.flowers.count && stems.allSatisfy(\.isStem)
+      && stems.count + leaves.count == blooms.blades.count,
+      "flowering water: a flower on every stem, leaves on some, no grass blades")
+check(blooms.flowers.allSatisfy { $0.style == GrassGenerator.glassStyle }
+      && GrassGenerator.field(points: waterLine, width: 8, color: InkColor(hex: 0x3BA55D), seed: 1.5).flowers.allSatisfy { $0.style < 2.5 },
+      "flowering water: glass flowers (style 3), which the grass pen never grows")
+check(blooms.flowers.allSatisfy { $0.petal.z >= $0.petal.x && $0.petal.z >= $0.petal.y && $0.core.min() > 0.85 },
+      "flowering water: the petals are blue and violet around a pale centre")
 check(blooms.flowers.allSatisfy { (0.5...1.6).contains($0.delay) }, "flowering water: the flowers open after the pen lifts")
-check(blooms.blades.allSatisfy { $0.height >= 8 } && blooms.blades.allSatisfy { abs($0.base.y - 300) <= 4 },
+check(stems.allSatisfy { $0.height >= 8 && abs($0.base.y - 300) <= 4 },
       "flowering water: the stems rise from the line itself")
+check(stems.allSatisfy { $0.color.y > $0.color.x + 0.3 && $0.color.z > $0.color.x + 0.3 },
+      "flowering water: the stems are turquoise-blue glass, not the ink darkened")
+check(!leaves.isEmpty && leaves.allSatisfy { leaf in
+    stems.contains { stem in
+        let t = (stem.base.y - leaf.base.y) / stem.height
+        return (0.2...0.55).contains(t) && abs(stem.base.x + stem.lean * t * t - leaf.base.x) < 0.01
+            && leaf.height < stem.height * 0.5 && abs(leaf.lean) >= leaf.height
+    }
+}, "flowering water: small leaves sit low on their stems and bend away from them")
+let stemHeights = stems.map(\.height)
+let flowerRadii = blooms.flowers.map(\.radius)
+check((stemHeights.max() ?? 0) > (stemHeights.min() ?? 0) * 1.6 && (flowerRadii.max() ?? 0) > (flowerRadii.min() ?? 0) * 1.5,
+      "flowering water: stems of different heights carry flowers of different sizes")
+let stemX = stems.map(\.base.x).sorted()
+check(zip(stemX, stemX.dropFirst()).contains { $1 - $0 < 8 * 0.7 }, "flowering water: some stems stand in pairs or threes")
 let bloomsAgain = GrassGenerator.blooms(points: waterLine, width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
 check(bloomsAgain.flowers.map(\.radius) == blooms.flowers.map(\.radius) && bloomsAgain.blades.map(\.base) == blooms.blades.map(\.base),
       "flowering water: the same stroke always grows the same flowers")
+let longLine = (0...4000).map { InkPoint(x: Float($0) * 5, y: 300, r: 4, ink: 0) }
+let longBlooms = GrassGenerator.blooms(points: longLine, width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)
+check(longBlooms.flowers.count <= 420 && longBlooms.blades.count <= 420 * 3 && longBlooms.flowers.count > 300,
+      "flowering water: a very long line stays bounded")
 // The live stroke's flowers are made again every frame from the growing line: a stem must stay where
 // the pen passed, not slide along as the line gets longer.
 let halfway = GrassGenerator.blooms(points: Array(waterLine.prefix(24)), width: 8, color: InkColor(hex: 0x22B8CF), seed: 0.37)

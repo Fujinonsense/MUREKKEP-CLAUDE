@@ -1,5 +1,14 @@
 import Foundation
 
+/// What a blade is drawn as (the shader's `BladeGPU.kind`): the grass pen's blades and stems are
+/// opaque plants; the flowering water's stems and leaves are translucent glass.
+enum BladeKind: UInt32 {
+    case blade = 0
+    case stem = 1
+    case glassStem = 2
+    case glassLeaf = 3
+}
+
 /// One blade of grass (or a flower stem), in page-local points. Blades grow up the page.
 struct GrassBlade {
     var base: SIMD2<Float>
@@ -10,9 +19,12 @@ struct GrassBlade {
     var phase: Float
     var stiffness: Float
     var color: SIMD3<Float>
-    var isStem: Bool
+    var kind: BladeKind
     /// 0...1 position along the stroke, used to sprout blades in drawing order.
     var arc: Float
+
+    /// A flower sits at the tip of a stem.
+    var isStem: Bool { kind == .stem || kind == .glassStem }
 }
 
 struct GrassFlower {
@@ -20,7 +32,8 @@ struct GrassFlower {
     var stem: Int
     var radius: Float
     var petals: Float
-    /// 0 daisy (many thin petals), 1 round petals, 2 poppy (wide, cupped).
+    /// 0 daisy (many thin petals), 1 round petals, 2 poppy (wide, cupped), 3 glass (the flowering
+    /// water: long translucent petals, pale centre, no pollen).
     var style: Float
     var spin: Float
     var petal: SIMD3<Float>
@@ -65,12 +78,17 @@ enum GrassGenerator {
         FlowerKind(petal: SIMD3(0.86, 0.22, 0.62), core: SIMD3(1.00, 0.90, 0.50), style: 0, petals: 10...12, scale: 1.0),
     ]
 
-    /// The flowering water pen's glassy flowers: blue and violet petals around a pale, icy centre.
+    /// The flower style the shader draws as glass; only the flowering water uses it.
+    static let glassStyle: Float = 3
+
+    /// The flowering water pen's glass flowers (as in the ad): five or six long petals shading from a
+    /// pale centre (`core`) to periwinkle blue or violet tips (`petal`), in several sizes.
     private static let crystals: [FlowerKind] = [
-        FlowerKind(petal: SIMD3(0.56, 0.66, 1.00), core: SIMD3(0.92, 0.96, 1.00), style: 1, petals: 5...5, scale: 1.0),
-        FlowerKind(petal: SIMD3(0.70, 0.62, 1.00), core: SIMD3(0.95, 0.93, 1.00), style: 1, petals: 5...6, scale: 0.9),
-        FlowerKind(petal: SIMD3(0.45, 0.72, 0.98), core: SIMD3(0.88, 0.97, 1.00), style: 1, petals: 5...5, scale: 1.1),
-        FlowerKind(petal: SIMD3(0.62, 0.55, 0.96), core: SIMD3(0.98, 0.95, 1.00), style: 0, petals: 8...10, scale: 0.85),
+        FlowerKind(petal: SIMD3(0.46, 0.56, 0.99), core: SIMD3(0.90, 0.95, 1.00), style: glassStyle, petals: 5...6, scale: 1.0),
+        FlowerKind(petal: SIMD3(0.60, 0.50, 0.97), core: SIMD3(0.94, 0.92, 1.00), style: glassStyle, petals: 5...6, scale: 0.9),
+        FlowerKind(petal: SIMD3(0.40, 0.66, 0.99), core: SIMD3(0.88, 0.96, 1.00), style: glassStyle, petals: 5...5, scale: 1.12),
+        FlowerKind(petal: SIMD3(0.56, 0.58, 1.00), core: SIMD3(0.95, 0.94, 1.00), style: glassStyle, petals: 6...6, scale: 0.82),
+        FlowerKind(petal: SIMD3(0.68, 0.52, 0.98), core: SIMD3(0.96, 0.92, 1.00), style: glassStyle, petals: 5...5, scale: 1.0),
     ]
 
     @inline(__always)
@@ -155,7 +173,7 @@ enum GrassGenerator {
                                          phase: rand(key, 8, salt) * 6.283,
                                          stiffness: rand(key, 10, salt),
                                          color: c,
-                                         isStem: false,
+                                         kind: .blade,
                                          arc: total > 0 ? s / total : 0))
             }
         }
@@ -182,7 +200,7 @@ enum GrassGenerator {
                                          phase: rand(key, 15, salt) * 6.283,
                                          stiffness: rand(key, 16, salt),
                                          color: baseColor * 0.62,
-                                         isStem: true,
+                                         kind: .stem,
                                          arc: total > 0 ? s / total : 0))
                 let kind = kinds[min(kinds.count - 1, Int(rand(key, 17, salt) * Float(kinds.count)))]
                 let petalCount = min(kind.petals.upperBound,
@@ -235,43 +253,82 @@ enum GrassGenerator {
             return (a.position + d * t, a.r + (b.r - a.r) * t, dl > 1e-5 ? d / dl : SIMD2<Float>(1, 0))
         }
 
-        // A flower every two to three line widths, at fixed distances along the line so a stem stays
-        // where the pen passed while the line grows; the stems in the ink's own colour, darker.
-        let gap = max(width * 2.4, 12)
-        let count = max(1, min(300, Int(total / gap)))
-        let stemColor = SIMD3<Float>(color.r, color.g, color.b) * 0.72
+        // Slots at fixed distances along the line, so a stem stays where the pen passed while the line
+        // grows (a slot the pen has not reached yet is skipped, never pulled back to the end). Most
+        // slots hold one stem, some a pair or three from nearby points; a dot gets one cluster.
+        let gap = max(width * 2.8, 12)
+        let isDot = total < width * 0.5
+        let slots = isDot ? 1 : min(220, Int(total / gap) + 1)
+        // Glass stems and leaves: the ink's turquoise, lighter and bluer; the shader lights them.
+        let ink = SIMD3<Float>(color.r, color.g, color.b)
+        let stemColor = ink + (SIMD3<Float>(0.36, 0.82, 0.93) - ink) * 0.55
+        let leafColor = ink + (SIMD3<Float>(0.42, 0.86, 0.90) - ink) * 0.5
         var blades: [GrassBlade] = []
         var flowers: [GrassFlower] = []
-        for m in 0..<count {
-            let key = 70_000 + m
-            let s = min(total, (Float(m) + 0.2 + 0.6 * rand(key, 1, salt)) * gap)
-            let (p, r, tangent) = sample(s)
-            let normal = SIMD2<Float>(-tangent.y, tangent.x)
-            var base = p + normal * ((rand(key, 2, salt) - 0.5) * r * 0.6)
-            if n == 1 {
-                base.x += (rand(key, 3, salt) - 0.5) * width * 0.6
+        for m in 0..<slots {
+            let slotKey = 70_000 + m * 8
+            let s = isDot ? total * 0.5 : (Float(m) + 0.15 + 0.7 * rand(slotKey, 1, salt)) * gap
+            if s > total { continue }
+            let group = rand(slotKey, 2, salt)
+            let members = group < 0.12 ? 3 : (group < 0.45 ? 2 : 1)
+            for j in 0..<members where flowers.count < 420 {
+                let key = slotKey + 1 + j
+                var sj = s
+                if j > 0 && !isDot {
+                    sj += (rand(key, 1, salt) - 0.5) * width * 1.3
+                    if sj < 0 || sj > total { continue }
+                }
+                let (p, r, tangent) = sample(sj)
+                let normal = SIMD2<Float>(-tangent.y, tangent.x)
+                var base = p + normal * ((rand(key, 2, salt) - 0.5) * r * 0.6)
+                if isDot {
+                    base.x += (rand(key, 3, salt) - 0.5) * width * (j == 0 ? 0.3 : 1.2)
+                }
+                // Most stems short, a few tall; the tall ones carry the big flowers.
+                let tall = rand(key, 4, salt)
+                let stemHeight = width * (1.0 + 1.9 * tall * tall)
+                blades.append(GrassBlade(base: base,
+                                         height: stemHeight,
+                                         width: max(0.45, width * 0.055),
+                                         lean: (rand(key, 5, salt) - 0.5) * stemHeight * 0.5,
+                                         phase: rand(key, 6, salt) * 6.283,
+                                         stiffness: rand(key, 7, salt),
+                                         color: stemColor,
+                                         kind: .glassStem,
+                                         arc: total > 0 ? sj / total : 0))
+                let stem = blades[blades.count - 1]
+                let kind = crystals[min(crystals.count - 1, Int(rand(key, 8, salt) * Float(crystals.count)))]
+                let petalCount = min(kind.petals.upperBound,
+                                     kind.petals.lowerBound + Int(rand(key, 9, salt) * Float(kind.petals.count)))
+                let size = 0.4 * tall + 0.6 * rand(key, 10, salt)
+                flowers.append(GrassFlower(stem: blades.count - 1,
+                                           radius: max(1.6, width * (0.40 + 0.55 * size)) * kind.scale,
+                                           petals: Float(petalCount),
+                                           style: kind.style,
+                                           spin: rand(key, 11, salt) * 6.283,
+                                           petal: kind.petal,
+                                           core: kind.core,
+                                           delay: 0.6 + 0.9 * rand(key, 12, salt)))
+                // One or two small leaves low on half the stems, bending away from the stem; a leaf
+                // sprouts a moment after its stem.
+                let leafRoll = rand(key, 13, salt)
+                let leaves = leafRoll < 0.12 ? 2 : (leafRoll < 0.50 ? 1 : 0)
+                let firstSide: Float = rand(key, 14, salt) < 0.5 ? -1 : 1
+                for l in 0..<leaves {
+                    let ch = UInt32(20 + l * 4)
+                    let at = 0.22 + 0.30 * rand(key, ch, salt)
+                    let leafHeight = stemHeight * (0.20 + 0.16 * rand(key, ch + 1, salt))
+                    blades.append(GrassBlade(base: point(on: stem, at: at),
+                                             height: leafHeight,
+                                             width: max(0.8, width * (0.26 + 0.14 * rand(key, ch + 2, salt))),
+                                             lean: (l == 0 ? firstSide : -firstSide) * leafHeight * (1.0 + 0.5 * rand(key, ch + 3, salt)),
+                                             phase: stem.phase,
+                                             stiffness: stem.stiffness,
+                                             color: leafColor,
+                                             kind: .glassLeaf,
+                                             arc: min(1, stem.arc + 0.02)))
+                }
             }
-            let stemHeight = width * (1.3 + 0.9 * rand(key, 4, salt))
-            blades.append(GrassBlade(base: base,
-                                     height: stemHeight,
-                                     width: max(0.45, width * 0.06),
-                                     lean: (rand(key, 5, salt) - 0.5) * stemHeight * 0.4,
-                                     phase: rand(key, 6, salt) * 6.283,
-                                     stiffness: rand(key, 7, salt),
-                                     color: stemColor,
-                                     isStem: true,
-                                     arc: total > 0 ? s / total : 0))
-            let kind = crystals[min(crystals.count - 1, Int(rand(key, 8, salt) * Float(crystals.count)))]
-            let petalCount = min(kind.petals.upperBound,
-                                 kind.petals.lowerBound + Int(rand(key, 9, salt) * Float(kind.petals.count)))
-            flowers.append(GrassFlower(stem: blades.count - 1,
-                                       radius: max(1.6, width * (0.5 + 0.25 * rand(key, 10, salt))) * kind.scale,
-                                       petals: Float(petalCount),
-                                       style: kind.style,
-                                       spin: rand(key, 11, salt) * 6.283,
-                                       petal: kind.petal,
-                                       core: kind.core,
-                                       delay: 0.6 + 0.9 * rand(key, 12, salt)))
         }
         return backToFront(blades, flowers)
     }

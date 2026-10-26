@@ -297,22 +297,47 @@ enum FlatInk {
             let mid = GrassGenerator.point(on: b, at: 0.5)
             let half = CGFloat(b.width * 0.5)
             let path = CGMutablePath()
-            path.move(to: CGPoint(x: CGFloat(b.base.x) - half, y: CGFloat(b.base.y)))
-            path.addQuadCurve(to: CGPoint(x: CGFloat(tip.x), y: CGFloat(tip.y)),
-                              control: CGPoint(x: CGFloat(mid.x) - half * 0.6, y: CGFloat(mid.y)))
-            path.addQuadCurve(to: CGPoint(x: CGFloat(b.base.x) + half, y: CGFloat(b.base.y)),
-                              control: CGPoint(x: CGFloat(mid.x) + half * 0.6, y: CGFloat(mid.y)))
+            if b.kind == .glassLeaf {
+                // A leaf: pointed at both ends, bulging either side of its midline.
+                let d = tip - b.base
+                let dl = max(vlength(d), 1e-4)
+                let n = SIMD2<Float>(-d.y, d.x) / dl * b.width
+                path.move(to: CGPoint(x: CGFloat(b.base.x), y: CGFloat(b.base.y)))
+                path.addQuadCurve(to: CGPoint(x: CGFloat(tip.x), y: CGFloat(tip.y)),
+                                  control: CGPoint(x: CGFloat(mid.x - n.x), y: CGFloat(mid.y - n.y)))
+                path.addQuadCurve(to: CGPoint(x: CGFloat(b.base.x), y: CGFloat(b.base.y)),
+                                  control: CGPoint(x: CGFloat(mid.x + n.x), y: CGFloat(mid.y + n.y)))
+            } else {
+                path.move(to: CGPoint(x: CGFloat(b.base.x) - half, y: CGFloat(b.base.y)))
+                path.addQuadCurve(to: CGPoint(x: CGFloat(tip.x), y: CGFloat(tip.y)),
+                                  control: CGPoint(x: CGFloat(mid.x) - half * 0.6, y: CGFloat(mid.y)))
+                path.addQuadCurve(to: CGPoint(x: CGFloat(b.base.x) + half, y: CGFloat(b.base.y)),
+                                  control: CGPoint(x: CGFloat(mid.x) + half * 0.6, y: CGFloat(mid.y)))
+            }
             path.closeSubpath()
-            let shade: Float = b.isStem ? 0.9 : 1.0
+            let shade: Float = b.kind == .stem ? 0.9 : 1.0
+            // Glass stems and leaves are see-through, with a lighter edge.
+            let glassAlpha: Float = b.kind == .glassStem ? 0.74 : (b.kind == .glassLeaf ? 0.6 : 1)
             ctx.setFillColor(CGColor(red: CGFloat(min(1, b.color.x * shade)), green: CGFloat(min(1, b.color.y * shade)),
-                                     blue: CGFloat(min(1, b.color.z * shade)), alpha: CGFloat(alpha)))
+                                     blue: CGFloat(min(1, b.color.z * shade)), alpha: CGFloat(alpha * glassAlpha)))
             ctx.addPath(path)
             ctx.fillPath()
+            if b.kind == .glassStem || b.kind == .glassLeaf {
+                ctx.setStrokeColor(CGColor(red: CGFloat(min(1, b.color.x * 0.7)), green: CGFloat(min(1, b.color.y * 0.9)),
+                                           blue: 1, alpha: CGFloat(alpha * 0.35)))
+                ctx.setLineWidth(max(0.25, CGFloat(b.width) * 0.12))
+                ctx.addPath(path)
+                ctx.strokePath()
+            }
         }
         for f in field.flowers where field.blades.indices.contains(f.stem) {
             let center = GrassGenerator.point(on: field.blades[f.stem], at: 1)
             let c = CGPoint(x: CGFloat(center.x), y: CGFloat(center.y))
             let r = CGFloat(f.radius)
+            if f.style > 2.5 {
+                drawGlassFlower(f, at: c, radius: r, alpha: CGFloat(alpha), in: ctx)
+                continue
+            }
             let count = max(4, Int(f.petals))
             ctx.setFillColor(CGColor(red: CGFloat(f.petal.x), green: CGFloat(f.petal.y), blue: CGFloat(f.petal.z), alpha: 1))
             let petalLength = r * 0.62
@@ -330,6 +355,80 @@ enum FlatInk {
             ctx.fillEllipse(in: CGRect(x: c.x - coreR, y: c.y - coreR, width: coreR * 2, height: coreR * 2))
         }
         ctx.restoreGState()
+    }
+
+    /// The flowering water's glass flower, as the shader draws it: an outer whorl of long translucent
+    /// petals (pale centre, blue or violet tips), a shorter inner whorl turned half a petal, a pale
+    /// glowing heart and fine pale stamens; a touch wider than tall.
+    private static func drawGlassFlower(_ f: GrassFlower, at c: CGPoint, radius r: CGFloat, alpha: CGFloat, in ctx: CGContext) {
+        let count = max(5, Int(f.petals))
+        let seed = (f.spin * 0.15915494 + f.radius * 0.731).truncatingRemainder(dividingBy: 1)
+        let aspect = CGFloat(0.78 + 0.17 * (seed * 7.13 + 0.37).truncatingRemainder(dividingBy: 1))
+        let tip = (CGFloat(f.petal.x), CGFloat(f.petal.y), CGFloat(f.petal.z))
+        let pale = (CGFloat(f.core.x) + (1 - CGFloat(f.core.x)) * 0.25, CGFloat(f.core.y) + (1 - CGFloat(f.core.y)) * 0.25,
+                    CGFloat(f.core.z) + (1 - CGFloat(f.core.z)) * 0.25)
+        let deep = (tip.0 * 0.8, tip.1 * 0.74, tip.2)
+
+        func petalPath(length L: CGFloat, halfWidth: CGFloat, from t0: CGFloat) -> CGPath {
+            // A leaf shape from t0 (0 = centre) to the tip; the cubic bows out to about the half-width.
+            let hw = halfWidth * L
+            let x0 = L * t0
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: x0, y: 0))
+            path.addCurve(to: CGPoint(x: L, y: 0), control1: CGPoint(x: x0 + (L - x0) * 0.3, y: hw * 1.4),
+                          control2: CGPoint(x: x0 + (L - x0) * 0.8, y: hw * 0.9))
+            path.addCurve(to: CGPoint(x: x0, y: 0), control1: CGPoint(x: x0 + (L - x0) * 0.8, y: -hw * 0.9),
+                          control2: CGPoint(x: x0 + (L - x0) * 0.3, y: -hw * 1.4))
+            path.closeSubpath()
+            return path
+        }
+
+        func whorl(length L: CGFloat, halfWidth: CGFloat, offset: CGFloat, paleAlpha: CGFloat, tipAlpha: CGFloat) {
+            let outline = petalPath(length: L, halfWidth: halfWidth, from: 0)
+            let tipPart = petalPath(length: L, halfWidth: halfWidth * 0.92, from: 0.42)
+            for i in 0..<count {
+                let a = CGFloat(f.spin) + (CGFloat(i) + offset) * 2 * .pi / CGFloat(count)
+                ctx.saveGState()
+                ctx.translateBy(x: c.x, y: c.y)
+                ctx.scaleBy(x: 1, y: aspect)
+                ctx.rotate(by: a)
+                ctx.setFillColor(CGColor(red: pale.0, green: pale.1, blue: pale.2, alpha: alpha * paleAlpha))
+                ctx.addPath(outline)
+                ctx.fillPath()
+                ctx.setFillColor(CGColor(red: tip.0, green: tip.1, blue: tip.2, alpha: alpha * tipAlpha))
+                ctx.addPath(tipPart)
+                ctx.fillPath()
+                ctx.setStrokeColor(CGColor(red: deep.0, green: deep.1, blue: deep.2, alpha: alpha * 0.4))
+                ctx.setLineWidth(max(0.25, r * 0.035))
+                ctx.addPath(outline)
+                ctx.strokePath()
+                ctx.restoreGState()
+            }
+        }
+
+        // A faint blue shadow, the whorls, then the heart.
+        ctx.setFillColor(CGColor(red: 0.30, green: 0.36, blue: 0.70, alpha: alpha * 0.08))
+        ctx.fillEllipse(in: CGRect(x: c.x + r * 0.1 - r * 0.9, y: c.y + r * 0.14 - r * 0.9 * aspect, width: r * 1.8, height: r * 1.8 * aspect))
+        whorl(length: r, halfWidth: 0.38 - 0.03 * CGFloat(count - 5), offset: 0, paleAlpha: 0.42, tipAlpha: 0.55)
+        whorl(length: r * 0.58, halfWidth: 0.40, offset: 0.5, paleAlpha: 0.32, tipAlpha: 0.36)
+        ctx.setFillColor(CGColor(red: pale.0, green: pale.1, blue: pale.2, alpha: alpha * 0.55))
+        ctx.fillEllipse(in: CGRect(x: c.x - r * 0.36, y: c.y - r * 0.36 * aspect, width: r * 0.72, height: r * 0.72 * aspect))
+        let stamen = (0.98 + (tip.0 - 0.98) * 0.22, 0.98 + (tip.1 - 0.98) * 0.22, 1 + (tip.2 - 1) * 0.22)
+        ctx.setStrokeColor(CGColor(red: stamen.0, green: stamen.1, blue: stamen.2, alpha: alpha * 0.85))
+        ctx.setFillColor(CGColor(red: stamen.0, green: stamen.1, blue: stamen.2, alpha: alpha * 0.85))
+        ctx.setLineWidth(max(0.2, r * 0.045))
+        ctx.setLineCap(.round)
+        for k in 0..<10 {
+            let a = (CGFloat(k) + CGFloat(seed)) * 2 * .pi / 10
+            let dir = CGPoint(x: cos(a), y: sin(a) * aspect)
+            ctx.move(to: CGPoint(x: c.x + dir.x * r * 0.05, y: c.y + dir.y * r * 0.05))
+            ctx.addLine(to: CGPoint(x: c.x + dir.x * r * 0.30, y: c.y + dir.y * r * 0.30))
+            ctx.strokePath()
+            let d = r * 0.045
+            ctx.fillEllipse(in: CGRect(x: c.x + dir.x * r * 0.30 - d, y: c.y + dir.y * r * 0.30 - d, width: d * 2, height: d * 2))
+        }
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: alpha * 0.9))
+        ctx.fillEllipse(in: CGRect(x: c.x - r * 0.07, y: c.y - r * 0.07, width: r * 0.14, height: r * 0.14))
     }
 }
 

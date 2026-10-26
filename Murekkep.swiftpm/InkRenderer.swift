@@ -821,7 +821,7 @@ final class InkRenderer {
                                    depth: 1 - (Float(k) + 1) / (n + 1),
                                    color: SIMD4<Float>(b.color.x, b.color.y, b.color.z, color.a),
                                    stroke: stroke,
-                                   kind: b.isStem ? 1 : 0,
+                                   kind: b.kind.rawValue,
                                    stiffness: b.stiffness))
         }
         for f in field.flowers {
