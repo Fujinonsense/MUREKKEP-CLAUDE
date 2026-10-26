@@ -370,6 +370,18 @@ check(MathText.rebuiltFractions("Calculate the sums:\n3 + 4\n5 × 6\n(2) Next qu
       "a list of sums is not a fraction")
 check(MathText.rebuiltFractions("Complete the text with the words in the box.\n1\n2\npeople were waiting outside") == "Complete the text with the words in the box.\n1\n2\npeople were waiting outside",
       "a textbook's gap numbers on their own lines are not a fraction")
+// What build 208 met on the iPad (PDFKit's text): a fraction laid flat with its square gone, and a
+// form whose first blank did not survive.
+check(ExactMath.solve("(5) Solve the inequality 3x x + 2 ≥ 1 x − 1 . Express your answer in interval notation. Answer: [ , ) ∪ [ 2 , ) .") == nil
+      && ExactMath.solve("Solve the inequality 3x x2 + 2 ≥ 1 x − 1. Express your answer in interval notation.") == nil,
+      "a fraction laid flat is the model's, never a product",
+      got: ExactMath.solve("(5) Solve the inequality 3x x + 2 ≥ 1 x − 1 . Express your answer in interval notation. Answer: [ , ) ∪ [ 2 , ) .")?.answer ?? "nil")
+check(ExactMath.solve("2 x + 3 = 7")?.answer == "x = 2", "a spaced coefficient is still one",
+      got: ExactMath.solve("2 x + 3 = 7")?.answer ?? "nil")
+check(ExactMath.solve("(1) The inequality |x − 2| < 6 can be expressed in the form a < x < b where b = .")?.answer == "a = −4, b = 8"
+      && ExactMath.solve("The inequality −15 x 7 can be expressed in the form |x − a| b where b = .")?.answer == "a = −4, b = 11",
+      "every letter of the form is filled, even when one blank was lost",
+      got: ExactMath.solve("(1) The inequality |x − 2| < 6 can be expressed in the form a < x < b where b = .")?.answer ?? "nil")
 check(ExactMath.verify(question: "Solve the equation |4x + 23| = |4x - 9|. Answer: x = .", answer: "x = −1") != nil
       && ExactMath.verify(question: "Solve the equation x3 - x = 0. Answer: x = , x = , and x = .", answer: "x = 0, x = 1, x = −1") == .holds,
       "verify: the page's own answer blanks do not stop the check", got: "\(String(describing: ExactMath.verify(question: "Solve the equation |4x + 23| = |4x - 9|. Answer: x = .", answer: "x = −1")))")

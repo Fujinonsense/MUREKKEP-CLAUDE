@@ -766,6 +766,22 @@ enum ExactMath {
     static func withGaps(_ run: String) -> String? {
         let tokens = run.split(separator: " ").map(String.init)
         guard tokens.count >= 2 else { return nil }
+        let operand = operandEdges(tokens)
+        var out = tokens[0]
+        var gaps = 0
+        for k in 1..<tokens.count {
+            if operand[k - 1].ends && operand[k].starts {
+                gaps += 1
+                out += " \(gap) " + tokens[k]
+            } else {
+                out += " " + tokens[k]
+            }
+        }
+        return gaps >= 1 && gaps <= 2 ? out : nil
+    }
+
+    /// Whether each token can start or end an operand ("3x", "|x", "2|²", "(1"), bars paired.
+    private static func operandEdges(_ tokens: [String]) -> [(starts: Bool, ends: Bool)] {
         var bars = 0
         var operand: [(starts: Bool, ends: Bool)] = []
         for t in tokens {
@@ -778,17 +794,21 @@ enum ExactMath {
             operand.append((starts: first.isNumber || first.isLetter || first == "(" || opens || negative,
                             ends: last.isNumber || last.isLetter || last == ")" || "²³".contains(last) || closes))
         }
-        var out = tokens[0]
-        var gaps = 0
-        for k in 1..<tokens.count {
-            if operand[k - 1].ends && operand[k].starts {
-                gaps += 1
-                out += " \(gap) " + tokens[k]
-            } else {
-                out += " " + tokens[k]
-            }
+        return operand
+    }
+
+    /// A relation whose operands stand side by side across a space ("3x x + 2 ≥ 1 x − 1"): a
+    /// fraction or a power the page's text layer laid flat, not a product. Only a number before a
+    /// letter or a bracket ("2 x + 3 = 7", as a handwriting reader may space it) is a coefficient.
+    static func sideBySide(_ run: String) -> Bool {
+        let tokens = run.split(separator: " ").map(String.init)
+        guard tokens.count >= 2 else { return false }
+        let operand = operandEdges(tokens)
+        for k in 1..<tokens.count where operand[k - 1].ends && operand[k].starts {
+            let coefficient = tokens[k - 1].allSatisfy(\.isNumber) && (tokens[k].first!.isLetter || tokens[k].first == "(")
+            if !coefficient { return true }
         }
-        return gaps >= 1 && gaps <= 2 ? out : nil
+        return false
     }
 
     /// One interval of an answer line written to be filled: "( , ]", "[ , 0 )".
@@ -851,7 +871,7 @@ enum ExactMath {
         var runs: [String] = []
         for run in MathText.mathRuns(in: stem).map(normalizedRelations) where !isBlankRun(run) {
             if hasRelation(run) {
-                runs.append(run)
+                if !sideBySide(run) { runs.append(run) }
             } else if let gapped = withGaps(run) {
                 runs.append(gapped)
             }
@@ -877,11 +897,21 @@ enum ExactMath {
             // The textbook form named beside the chain ("|x − a| ≤ b") lost the same sign.
             form = f.replacingOccurrences(of: " \(gap) ", with: " ≤ ")
         }
+        // Every letter of the form but the unknown is to be filled ("a < x < b": a and b), so a blank
+        // the text layer mangled is still answered; in the form's order when one was missed.
+        var asked = formBlanks
+        if let f = form {
+            var named: [String] = []
+            for ch in f where ch.isLetter && String(ch) != variable && !named.contains(String(ch)) {
+                named.append(String(ch))
+            }
+            if named.count > formBlanks.count { asked = named }
+        }
         // "x = 5" alone is a statement, not an equation to solve.
         let coefficient = resolved.range(of: "[0-9][a-zA-Z]", options: .regularExpression) != nil
         let inequality = resolved.contains(where: { "<>≤≥".contains($0) })
         guard coefficient || inequality || resolved.contains(where: { operators.contains($0) }) else { return nil }
-        return Reading(given: resolved, variable: variable, form: form, blanks: formBlanks, intervals: intervals)
+        return Reading(given: resolved, variable: variable, form: form, blanks: asked, intervals: intervals)
     }
 
     /// The given with its lost sign put back where that is safe: a chain "−15 ⟂ x ⟂ 7" named as an
