@@ -1,15 +1,15 @@
 """Port of QuestionSplitter (Murekkep.swiftpm/Questions.swift): the questions of a page (text layer
 or OCR), each with its stem, its options and the passage it refers to.
 
-A question starts on a line "N." or "N)" whose N follows the previous question's number (the first
-one may be any number; OCR's "l." or "I." counts as 1 when a "2." follows). Numbered lines that break
-the count stay inside the question. A directive ("3. - 5. soruları …", "Questions 1-2 refer to …")
-starts a passage that belongs to the questions it names. Options are markers A) B) C) D) (E) in
+A question starts on a line "N.", "N)" or "(N)" whose N follows the previous question's number (the
+first one may be any number; OCR's "l." or "I." counts as 1 when a "2." follows). Numbered lines that
+break the count stay inside the question. A directive ("3. - 5. soruları …", "Questions 1-2 refer to
+…") starts a passage that belongs to the questions it names. Options are markers A) B) C) D) (E) in
 order, also several on one line, also "(A)" and "A."; fewer than two means an open question."""
 import re
 from dataclasses import dataclass, field
 
-QUESTION = re.compile(r"^\s*(\d{1,2}|[lI])\s*[.)]\s+(\S.*)$")
+QUESTION = re.compile(r"^\s*\(?(\d{1,2}|[lI])\s*[.)]\s+(\S.*)$")
 DIRECTIVES = [
     re.compile(r"^\s*(\d{1,2})\s*\.?\s*(?:-|–|ve|ile)\s*(\d{1,2})\s*\.?\s*sorular", re.IGNORECASE),
     re.compile(r"^\s*questions?\s+(\d{1,2})\s*(?:-|–|and|to)\s*(\d{1,2})", re.IGNORECASE),
@@ -45,7 +45,7 @@ def _number(token, expected, rest_lines):
         # OCR reads "1." as "l." or "I.": only the first question, and only when a "2." follows.
         if expected not in (None, 1):
             return None
-        return 1 if any(re.match(r"^\s*2\s*[.)]\s+\S", ln) for ln in rest_lines) else None
+        return 1 if any(re.match(r"^\s*\(?2\s*[.)]\s+\S", ln) for ln in rest_lines) else None
     n = int(token)
     return n if expected is None or n == expected else None
 

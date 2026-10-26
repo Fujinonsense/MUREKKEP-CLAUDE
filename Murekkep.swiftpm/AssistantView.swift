@@ -416,13 +416,13 @@ struct MessageBubble: View {
             }
             .contextMenu {
                 Button {
-                    UIPasteboard.general.string = message.text
+                    UIPasteboard.general.string = MathText.plain(message.text)
                 } label: {
                     Label(Loc.t("Kopyala"), systemImage: "doc.on.doc")
                 }
                 // A wrong or harmful AI answer can be sent to us (App Store guideline 1.2).
                 Link(destination: ProPlan.supportMail(subject: Loc.t("Yapay zekâ cevabını bildir"),
-                                                      body: Loc.t("Bu cevapta sorun var:") + "\n\n" + message.text)) {
+                                                      body: Loc.t("Bu cevapta sorun var:") + "\n\n" + MathText.plain(message.text))) {
                     Label(Loc.t("Bildir"), systemImage: "exclamationmark.bubble")
                 }
             }
@@ -431,10 +431,11 @@ struct MessageBubble: View {
 }
 
 /// Small Markdown renderer: headings, bullets and code blocks per line, inline styles via Foundation.
+/// Any LaTeX a model slipped in is shown as text (MathText), code blocks aside.
 enum MarkdownLite {
     static func render(_ text: String) -> AttributedString {
         var result = AttributedString()
-        let lines = text.components(separatedBy: "\n")
+        let lines = MathText.plain(text).components(separatedBy: "\n")
         var inCode = false
         for (index, raw) in lines.enumerated() {
             let trimmed = raw.trimmingCharacters(in: .whitespaces)

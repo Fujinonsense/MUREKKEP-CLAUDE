@@ -26,13 +26,13 @@ struct PageQuestion: Equatable {
 /// The questions of a page (text layer or OCR), so a small model can solve one at a time (twin of
 /// tests/ports/questions.py).
 ///
-/// A question starts on a line "N." or "N)" whose N follows the previous question's number (the first
-/// one may be any number; OCR's "l." or "I." counts as 1 when a "2." follows). Numbered lines that
-/// break the count stay inside the question. A directive ("3. - 5. soruları …", "Questions 1-2 refer
-/// to …") starts a passage that belongs to the questions it names. Options are markers A) B) C) D) (E)
-/// in order, also several on one line, also "(A)" and "A."; fewer than two means an open question.
+/// A question starts on a line "N.", "N)" or "(N)" whose N follows the previous question's number (the
+/// first one may be any number; OCR's "l." or "I." counts as 1 when a "2." follows). Numbered lines
+/// that break the count stay inside the question. A directive ("3. - 5. soruları …", "Questions 1-2
+/// refer to …") starts a passage that belongs to the questions it names. Options are markers A) B) C)
+/// D) (E) in order, also several on one line, also "(A)" and "A."; fewer than two means an open question.
 enum QuestionSplitter {
-    private static let question = try! NSRegularExpression(pattern: #"^\s*(\d{1,2}|[lI])\s*[.)]\s+(\S.*)$"#)
+    private static let question = try! NSRegularExpression(pattern: #"^\s*\(?(\d{1,2}|[lI])\s*[.)]\s+(\S.*)$"#)
     private static let directives = [
         try! NSRegularExpression(pattern: #"^\s*(\d{1,2})\s*\.?\s*(?:-|–|ve|ile)\s*(\d{1,2})\s*\.?\s*sorular"#,
                                  options: [.caseInsensitive]),
@@ -40,7 +40,7 @@ enum QuestionSplitter {
                                  options: [.caseInsensitive]),
     ]
     private static let option = try! NSRegularExpression(pattern: #"(?:(?<=\s)|^)[(]?([A-Ea-e])\s*[).\]]\s+"#)
-    private static let secondQuestion = try! NSRegularExpression(pattern: #"^\s*2\s*[.)]\s+\S"#)
+    private static let secondQuestion = try! NSRegularExpression(pattern: #"^\s*\(?2\s*[.)]\s+\S"#)
     /// Text before the first question counts as a shared passage only when it is this long.
     private static let passageMinLetters = 120
 
@@ -166,6 +166,48 @@ enum QuestionSolving {
     static func brainInstructions(language: AnswerLanguage) -> String {
         "Sen dikkatli bir sınav öğretmenisin. Soruyu ve varsa parçayı dikkatle oku. Düşünürken her şıkkı tek tek değerlendir; matematikte işlemleri adım adım yap ve bulduğun sonucu soruda yerine koyarak kontrol et. Parçada olmayan bilgiyi uydurma. Düşünmen bitince en fazla üç cümlelik kısa bir gerekçe yaz, son satıra da yalnızca \"Cevap: X\" yaz (X doğru şıkkın harfi). Şık yoksa son satıra \"Cevap:\" ve kısa sonucu yaz. "
             + language.directive
+    }
+
+    /// For the downloaded model on a worded math question with no options (an inequality, an equation,
+    /// blanks to fill): the working and every check happen while it thinks, and the answer is the
+    /// clean result a textbook prints — "Cevap:" first, a few steps, no LaTeX, no second thoughts.
+    static func mathInstructions(language: AnswerLanguage) -> String {
+        "Sen titiz bir matematik öğretmenisin. Soruyu dikkatle oku; metin bir sayfadan okundu, OCR hatası ya da kaybolmuş boşluk olabilir (\"a = ____ ve b = ____\" iki boşluk demektir, ikisini de doldur). Bütün hesabı ve kontrolü düşünürken yap: her adımı doğrula, bulduğun sonucu soruda yerine koy, kararsızlığı düşünürken bitir. Düşünmen bitince yalnızca son hâli yaz: ilk satıra \"Cevap: …\" ve kesin sonuç, altına en fazla üç kısa adım (madde madde). Yazdığın cevapta tereddüt, düzeltme, ikinci deneme ya da OCR yorumu olmasın (\"dur\", \"aslında\", \"düzeltme\", \"wait\", \"correction\" yazma). LaTeX kullanma ($, \\frac, \\le, \\sqrt yazma); matematiği düz metin ve Unicode ile yaz: ≤ ≥ ≠ × ÷ √ ² ³ π ∞, kesir (−15 + 7)/2, mutlak değer |x − 2|, aralık [2, ∞). "
+            + language.directive
+    }
+
+    /// Added to the assistant's instructions when it solves a whole page in one answer.
+    static let pageSolvingRules = "SAYFA ÇÖZÜMÜ: Her soru için ayrı bir blok yaz: numarası, ilk satırda kalın kesin sonuç, altında en fazla üç kısa adım. Bütün hesabı ve kontrolü düşünürken bitir; yazdığın cevapta tereddüt, düzeltme, ikinci deneme ya da OCR yorumu olmasın. Metindeki \"a = ____\" gibi boşluklar doldurulacak yerlerdir. LaTeX yazma; ≤ ≥ √ ² gibi Unicode kullan."
+
+    private static let finalLine = try! NSRegularExpression(
+        pattern: #"^[\s*_#>-]*(?:cevap|yan[ıi]t|answer|sonu[çc]|result)\s*[:：]\s*(.+?)\s*$"#, options: [.caseInsensitive])
+
+    /// What a "Cevap: …" / "Answer: …" line states, without its emphasis; nil for any other line.
+    static func finalAnswer(in line: String) -> String? {
+        let ns = line as NSString
+        guard let m = finalLine.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        let answer = ns.substring(with: m.range(at: 1)).replacingOccurrences(of: "**", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "*_ "))
+        return answer.isEmpty ? nil : answer
+    }
+
+    /// "**3)** **Cevap: −4 < x < 8**" and the steps under it: the last "Cevap:"/"Answer:" line of the
+    /// answer comes first, the other lines follow as the steps.
+    static func openLine(_ q: PageQuestion, answer: String, language: AnswerLanguage) -> String {
+        var final: String?
+        var steps: [String] = []
+        for line in answer.components(separatedBy: "\n") {
+            if let a = finalAnswer(in: line) {
+                final = a
+            } else {
+                steps.append(line)
+            }
+        }
+        let body = steps.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        var head = "**\(q.number))** "
+        guard let final else { return head + body + "\n\n" }
+        head += "**\(language == .english ? "Answer" : "Cevap"): \(final)**"
+        return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"
     }
 
     /// For models that answer a whole textbook exercise at once (the local server).

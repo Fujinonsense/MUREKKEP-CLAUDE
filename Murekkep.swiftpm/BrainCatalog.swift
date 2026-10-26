@@ -161,6 +161,12 @@ enum BrainBudget {
     /// Checking a solution, solving a page, or a free question with arithmetic.
     static let deep = 768
 
+    /// A worded math question solved on its own (an inequality, an equation, blanks to fill): one
+    /// line of working, not five options to try, so less than a test question's 1,024; at the iPad's
+    /// ~20 tokens a second about 40 seconds. With the page solved one question at a time, a budget
+    /// that runs out no longer spills half a page of reasoning into the answer.
+    static let mathQuestion = 768
+
     static func isMath(_ text: String) -> Bool {
         let digits = text.filter(\.isNumber).count
         let operators = text.filter { "+−×÷*/=^√<>≤≥∫∑π%²³".contains($0) }.count
