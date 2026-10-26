@@ -365,42 +365,22 @@ vertex RibbonOut ribbon_shadow_vertex(uint vid [[vertex_id]],
 
 // MARK: shading
 
-static float waveField(float2 P, float t, thread float2& grad) {
-    const float2 d0 = float2(0.97014, 0.24254);
-    const float2 d1 = float2(-0.33035, 0.94386);
-    const float2 d2 = float2(0.80000, -0.60000);
-    const float2 d3 = float2(-0.97619, -0.21693);
-    const float2 d4 = float2(0.44721, 0.89442);
-    const float k0 = 0.18;
-    const float k1 = 0.29;
-    const float k2 = 0.48;
-    const float k3 = 0.76;
-    const float k4 = 1.15;
-
-    float s0 = dot(P, d0) * k0 - 1.45 * t;
-    float s1 = dot(P, d1) * k1 - 2.05 * t + 1.7;
-    float s2 = dot(P, d2) * k2 - 2.85 * t + 4.1;
-    float s3 = dot(P, d3) * k3 - 3.70 * t + 2.3;
-    float s4 = dot(P, d4) * k4 - 4.60 * t + 5.0;
-
+// The ocean pen's swell seen from above: three trains of rounded crests crossing the page at fixed
+// angles, the wavelength following the line's width so thin and thick water read alike. Returns the
+// height (0 trough .. 1 crest) and its gradient in page space (height units per point).
+static float swellField(float2 P, float t, float L, float seed, thread float2& grad) {
+    const float2 d0 = float2(0.86, 0.51);
+    const float2 d1 = float2(-0.34, 0.94);
+    float k0 = 6.2831853 / L;
+    float k1 = 6.2831853 / (L * 0.55);
+    float s0 = dot(P, d0) * k0 - 1.15 * t + seed;
+    float s1 = dot(P, d1) * k1 - 1.75 * t + seed * 2.3 + 1.7;
     float u0 = max(0.5 + 0.5 * sin(s0), 1e-3);
     float u1 = max(0.5 + 0.5 * sin(s1), 1e-3);
-    float u2 = max(0.5 + 0.5 * sin(s2), 1e-3);
-    float u3 = max(0.5 + 0.5 * sin(s3), 1e-3);
-    float u4 = max(0.5 + 0.5 * sin(s4), 1e-3);
-
-    float W = 0.52 * powr(u0, 1.7)
-            + 0.36 * powr(u1, 1.7)
-            + 0.24 * powr(u2, 1.8)
-            + 0.15 * powr(u3, 1.9)
-            + 0.09 * powr(u4, 2.0);
-
-    grad = d0 * (0.52 * 0.85 * k0 * powr(u0, 0.7) * cos(s0))
-         + d1 * (0.36 * 0.85 * k1 * powr(u1, 0.7) * cos(s1))
-         + d2 * (0.24 * 0.90 * k2 * powr(u2, 0.8) * cos(s2))
-         + d3 * (0.15 * 0.95 * k3 * powr(u3, 0.9) * cos(s3))
-         + d4 * (0.09 * 1.00 * k4 * powr(u4, 1.0) * cos(s4));
-    return (W - 0.55) * 1.35;
+    float W = 0.68 * powr(u0, 1.8) + 0.32 * powr(u1, 2.0);
+    grad = d0 * (0.68 * 0.9 * k0 * powr(u0, 0.8) * cos(s0))
+         + d1 * (0.32 * 1.0 * k1 * u1 * cos(s1));
+    return W;
 }
 
 static float3 shadeWet(float3 base, float x, float2 n2, float sq, float ink, float w) {
@@ -442,41 +422,50 @@ static float3 shadeWet(float3 base, float x, float2 n2, float sq, float ink, flo
     return saturate(col + float3(spec + win * 0.85 * w + bounce));
 }
 
-static float3 shadeWave(float3 base, float x, float2 n2, float sq, float2 P, float t) {
+// The ocean pen: a pool of sea seen from above. Turquoise shallows at the shore deepening to the
+// ink's blue in the middle, a swell whose lit and shadowed faces roll across the line, caustic nets
+// drifting over the bed, lace on the breaking crests and a thin white edge where the water meets
+// the shore. Every pattern is sized from the line's width and blurred by the pixel size, so a thin
+// line is smooth glossy water with soft bands of light rather than speckle.
+static float3 shadeWave(float3 base, float x, float2 n2, float sq, float2 P, float t, float rN, float px, float seed) {
+    float L = max(rN * 3.0, 9.0);
     float2 g;
-    float Wn = waveField(P, t, g);
-    float slope = min(0.38 * x / max(sq, 0.12), 3.4);
-    float ws = 0.85 * sq;
-    float3 N = normalize(float3(n2 * slope - g * ws, 1.0));
+    float hN = swellField(P, t, L, seed, g);
+    float slope = min(0.30 * x / max(sq, 0.12), 2.5);
+    float amp = rN * 0.30 * (0.5 + 0.5 * sq);
+    float3 N = normalize(float3(n2 * slope - g * amp, 1.0));
+    float detail = smoothstep(2.0, 6.0, rN / px);
 
-    float3 deep = base * float3(0.18, 0.34, 0.62);
-    float3 midWater = mix(base, float3(0.06, 0.68, 0.78), 0.55);
-    float3 shallow = mix(base, float3(0.38, 0.95, 0.88), 0.78);
-    float depth = saturate(powr(max(sq, 1e-4), 0.75) * (0.82 + 0.18 * Wn));
-    float3 col = depth < 0.5 ? mix(shallow, midWater, depth * 2.0) : mix(midWater, deep, (depth - 0.5) * 2.0);
+    float depth = saturate(powr(max(sq, 1e-4), 0.8) * (0.9 - 0.25 * hN));
+    float3 deep = base * float3(0.20, 0.36, 0.64);
+    float3 mid = mix(base, float3(0.06, 0.62, 0.80), 0.52);
+    float3 shallow = mix(base, float3(0.40, 0.94, 0.88), 0.74);
+    float3 col = depth < 0.5 ? mix(shallow, mid, depth * 2.0) : mix(mid, deep, (depth - 0.5) * 2.0);
+    // The swell: light through the rising crests, the troughs deeper, lit and shadowed faces.
+    col = mix(col, mix(shallow, float3(0.55, 0.95, 0.92), 0.4), smoothstep(0.55, 1.0, hN) * 0.40 * (1.0 - 0.3 * depth));
+    col *= (0.82 + 0.18 * hN) * (0.92 + 0.45 * (dot(N, kLight) - kLight.z));
 
-    float sss = saturate(Wn * 0.8 + 0.2) * (1.0 - 0.5 * depth);
-    col += float3(0.08, 0.85, 0.78) * sss * 0.28;
+    float cs = max(rN * 0.9, 2.8);
+    float aa = px / cs;
+    float2 cq = P / cs + g * 0.5 + seed * 11.0;
+    float e1 = waterCells(cq, t * 1.1);
+    float e2 = waterCells(cq * 1.9 + float2(4.2, -3.1), -t * 1.5 + 1.5);
+    float caust = powr(saturate(1.0 - e1 / (0.24 + aa * 2.0)), 1.6) * 0.30
+                + powr(saturate(1.0 - e2 / (0.18 + aa * 2.4)), 1.6) * 0.16;
+    col += float3(0.60, 0.97, 1.0) * caust * detail * smoothstep(0.15, 0.6, depth) * 0.55;
 
-    float2 cUV = P * 0.16 + g * 0.8;
-    float e1 = waterCells(cUV, t * 1.4);
-    float e2 = waterCells(cUV * 1.65 + float2(4.2, -3.1), -t * 1.8 + 1.5);
-    float caust = powr(saturate(1.0 - e1 * 4.5), 2.2) * 0.75
-                + powr(saturate(1.0 - e2 * 5.0), 2.2) * 0.45;
-    col += float3(0.65, 0.98, 1.0) * caust * sq * (1.0 - 0.5 * depth) * 0.85;
+    float fresnel = powr(saturate(1.0 - N.z), 2.6);
+    col = mix(col, envColor(reflectView(N), float3(0.88, 0.96, 1.0)), fresnel * 0.35);
 
-    float fresnel = powr(saturate(1.0 - N.z), 2.8);
-    col = mix(col, envColor(reflectView(N), float3(0.88, 0.96, 1.0)), fresnel * 0.42);
-
-    float foamCell = waterCells(P * 0.38 - g * 1.2, t * 2.1);
-    float bubbleWeb = 1.0 - smoothstep(0.0, 0.14, foamCell);
-    float crestBreak = smoothstep(0.28, 0.68, Wn + 0.18 * valueNoise(P * 0.3 + t));
-    float shoreWave = smoothstep(0.66, 0.86, x + 0.08 * sin(P.x * 0.25 + P.y * 0.22 - t * 2.2) + 0.06 * Wn);
-    float foamMask = saturate(crestBreak * (0.45 + 0.55 * bubbleWeb) + shoreWave * (0.50 + 0.50 * bubbleWeb));
-    col = mix(col, float3(0.97, 0.995, 1.0), foamMask * 0.92);
+    float fn = valueNoise(P / max(rN * 0.9, 2.0) * 1.3 + t * 0.4 + seed * 5.0);
+    float web = 1.0 - smoothstep(0.0, 0.18 + aa * 1.5, waterCells(P / max(rN * 0.6, 2.5) + seed * 3.0, t * 1.9));
+    float crest = smoothstep(0.80, 0.97, hN + (fn - 0.5) * 0.20) * (0.35 + 0.65 * web) * detail;
+    float shore = smoothstep(0.84, 0.97, x + 0.04 * sin(P.x * 0.5 + P.y * 0.4 - t * 2.0) + 0.04 * hN) * (0.5 + 0.5 * web);
+    float foam = saturate(crest * 0.85 + shore * 0.65);
+    col = mix(col, float3(0.97, 0.995, 1.0), foam);
 
     float nh = saturate(dot(N, kHalf));
-    float spec = powr(nh, 180.0) * 1.55 * (1.0 - foamMask * 0.5) + powr(nh, 28.0) * 0.16;
+    float spec = powr(nh, 90.0) * 0.9 * (1.0 - foam * 0.6) + powr(nh, 400.0) * 1.2 + powr(nh, 20.0) * 0.12;
     return saturate(col + float3(spec));
 }
 
@@ -504,6 +493,14 @@ static float3 tubeLight(float3 col, float2 n2, float x, float sq, float gloss, f
     col *= 1.0 + 0.48 * (ndl - kLight.z);
     float spec = powr(saturate(dot(N, kHalf)), 48.0) * gloss;
     return saturate(col + float3(spec));
+}
+
+// The lava's temperature ramp, built from the ink's own hue: a dark, redder skin, the ink colour at
+// full glow, a paler yellower blaze, then white heat.
+static float3 lavaRamp(float3 skin, float3 glow, float3 blaze, float temp) {
+    float3 c = mix(skin, glow, smoothstep(0.0, 0.42, temp));
+    c = mix(c, blaze, smoothstep(0.50, 0.82, temp));
+    return mix(c, float3(1.0, 0.98, 0.92), smoothstep(0.86, 1.0, temp));
 }
 
 // MARK: segment fragment shaders
@@ -612,59 +609,75 @@ fragment InkOut ink_fragment(RibbonOut in [[stage_in]],
         float age = fu.time - (s.birth + max(arc, 0.0) / 380.0);
         float heat = 1.0 - smoothstep(0.0, max(fu.coolDuration, 0.5), age);
 
-        float edgeJag = (valueNoise(P * 0.85 + s.seed * 19.0) - 0.5) * r * 0.10 * (1.0 - 0.5 * heat);
+        float heat2 = heat * heat;
+        // Textures are scaled by the stroke's set width, not the pressure-varied radius, so they
+        // do not bunch up where the pen pressed lighter.
+        float rN = max(s.width * 0.5, 0.5);
+
+        // Molten lava spills a little past its line; the set crust keeps the shape. A warm glow
+        // lights the paper around it while it is hot, and faintly from the embers after.
+        float edgeJag = (valueNoise(float2(arc / rN * 0.9, sacross * 1.5) + s.seed * 19.0) - 0.5)
+                      * r * 0.09 * (0.6 + 0.4 * heat);
         float rLava = r + edgeJag;
         float body = clamp((rLava - d) / px + 0.5, 0.0, 1.0);
-        float glowA = (1.0 - body) * (0.35 + 0.65 * heat) * 0.16 * exp(-1.7 * max(d - rLava, 0.0) / max(r, 0.5));
+        float past = max(d - rLava, 0.0) / max(r, 0.5);
+        float glowA = (1.0 - body) * (0.06 + 0.55 * heat) * exp(-2.4 * past) * saturate(1.0 - past / 1.4);
         if (body <= 0.0 && glowA <= 0.002) {
             discard_fragment();
         }
+        float xL = clamp(d / max(rLava, 1e-4), 0.0, 1.0);
+        float sqL = sqrt(saturate(1.0 - xL * xL));
 
-        float flowShift = mix(s.birth * 0.45 + fu.coolDuration * 0.25, fu.waveTime * 0.55, heat * heat);
-        float2 flowUV = float2(arc / max(r, 0.5) * 0.60 - flowShift, sacross * 1.35) + s.seed * 13.0;
+        // The flow slides along the line while hot and freezes as it sets.
+        float flowShift = mix(s.birth * 0.45 + fu.coolDuration * 0.25, fu.waveTime * 0.5, heat2);
+        float2 fq = float2(arc / rN * 0.5 - flowShift, sacross * 1.1) + s.seed * 13.0;
+        float n1 = fbm(fq);
+        float rope = 0.5 + 0.5 * sin(fq.y * 5.5 + n1 * 6.0 + fq.x * 2.0);
 
-        float3 plate1 = voronoiDetail(flowUV * 1.45, 0.0);
-        float3 plate2 = voronoiDetail(P / max(r * 0.85, 1.5) + s.seed * 7.0, 0.0);
-        float n = fbm(flowUV * 1.2);
+        // Temperature: hottest down the middle, pulled into ropy streaks by the flow.
+        float temp = saturate(0.18 + 0.48 * sqL + (n1 - 0.5) * 0.8 + rope * 0.2 * sqL);
 
-        float coolingProgress = (1.0 - heat) * 1.15 + (x * 0.22) + (n - 0.5) * 0.35;
-        float crackWidth = mix(0.07, 0.26, heat);
-        float primaryCrack = 1.0 - smoothstep(0.015, crackWidth, plate1.x);
-        float microCrack   = (1.0 - smoothstep(0.01, crackWidth * 0.65, plate2.x)) * 0.65;
-        float crackMask    = saturate(primaryCrack + microCrack);
+        float3 hsvL = rgb2hsv(s.color.rgb);
+        float3 skin = hsv2rgb(float3(fract(hsvL.x - 0.035), min(hsvL.y * 1.15 + 0.1, 1.0), hsvL.z * 0.38));
+        float3 glow = hsv2rgb(float3(hsvL.x, hsvL.y, max(hsvL.z, 0.85)));
+        float3 blaze = hsv2rgb(float3(fract(hsvL.x + 0.055), hsvL.y * 0.55, 1.0));
+        float3 molten = lavaRamp(skin, glow, blaze, temp);
 
-        float crust = saturate(smoothstep(0.12, 0.72, coolingProgress) * (1.0 - crackMask * 0.92));
+        // A viscous, faintly glossy surface.
+        float2 bump = float2(valueNoise(fq * 2.3 + 5.0) - 0.5, valueNoise(fq * 2.3 + 9.0) - 0.5) * 0.5;
+        float3 Nm = normalize(float3(n2 * (xL / max(sqL, 0.2)) * 0.6 + bump * sqL, 1.0));
+        float nhM = saturate(dot(Nm, kHalf));
+        molten = molten * (0.9 + 0.2 * saturate(dot(Nm, kLight)))
+               + (powr(nhM, 22.0) * 0.18 + powr(nhM, 90.0) * 0.35) * float3(1.0, 0.98, 0.9) * (0.4 + 0.6 * heat);
 
-        float plateBevel = smoothstep(0.0, 0.18, plate1.x) * crust;
-        float2 rockBump = float2(valueNoise(P * 1.6) - 0.5, valueNoise(P * 1.6 + 7.3) - 0.5) * 1.1 * crust;
-        float3 N = normalize(float3(n2 * (x / max(sq, 0.15)) * (0.65 + 0.35 * plateBevel) + rockBump, 1.0));
-        float ndl = saturate(dot(N, kLight));
+        // The crust: basalt plates, sized from the line's width, with the cracks between them glowing.
+        float cell = max(rN * 0.95, 2.6);
+        float2 pq = float2(arc, sacross * r) / cell + s.seed * 7.0;
+        float3 plate = voronoiDetail(pq, 0.0);
+        float aa = px / cell;
+        float cw = mix(0.075, 0.16, heat) + aa * 0.5;
+        float crack = 1.0 - smoothstep(cw - aa, cw + aa, plate.x);
+        float crustProgress = (1.0 - heat) * 1.35 - 0.2 + (valueNoise(pq * 0.7 + 3.0) - 0.5) * 0.45 + xL * 0.18;
+        float crustRaw = smoothstep(0.0, 0.5, crustProgress);
+        float crust = crustRaw * (1.0 - crack);
 
-        float3 charcoalRock = float3(0.07, 0.065, 0.075) + plate1.z * float3(0.04, 0.03, 0.03);
-        float3 rock = charcoalRock * (0.45 + 0.85 * ndl)
-                    + powr(saturate(dot(N, kHalf)), 28.0) * 0.18 * crust;
+        float grain = valueNoise(P * 1.4 + s.seed) - 0.5;
+        float plateAO = smoothstep(0.0, 0.26, plate.x);
+        float3 rock = float3(0.115, 0.10, 0.10) + plate.z * float3(0.035, 0.025, 0.02) + grain * smoothstep(3.0, 7.0, rN / px) * 0.08;
+        float3 Nr = normalize(float3(n2 * (xL / max(sqL, 0.2)) * 0.75, 1.0));
+        rock *= (0.55 + 0.75 * saturate(dot(Nr, kLight))) * (0.55 + 0.45 * plateAO);
+        rock += powr(saturate(dot(Nr, kHalf)), 14.0) * 0.07;
 
-        float pulse = 0.62 + 0.38 * sin(fu.waveTime * 2.8 + plate1.z * 6.28 + n * 7.0);
-        float coreTemp = saturate(mix(crackMask * (0.72 + 0.28 * pulse) + sq * 0.18,
-                                      0.55 + 0.45 * n + 0.25 * sq,
-                                      heat));
-
-        float3 hotBase   = s.color.rgb;
-        float3 darkEmber = hotBase * float3(0.45, 0.08, 0.02);
-        float3 midMagma  = mix(hotBase, float3(1.0, 0.38, 0.02), 0.55);
-        float3 whiteHot  = float3(1.0, 0.96, 0.74);
-
-        float3 fireCol = darkEmber;
-        fireCol = mix(fireCol, midMagma, smoothstep(0.15, 0.60, coreTemp));
-        fireCol = mix(fireCol, whiteHot, smoothstep(0.62, 0.96, coreTemp));
-
-        float rimGlow = (1.0 - abs(crust - 0.5) * 2.0) * (0.5 + 0.5 * pulse);
-        float3 bodyCol = mix(fireCol, rock, crust);
-        bodyCol += midMagma * rimGlow * 0.45;
-        bodyCol += powr(saturate(dot(N, kHalf)), 45.0) * 0.25 * (1.0 - crust);
+        // Embers keep burning in the cracks after the rock has set.
+        float pulse = 0.5 + 0.5 * sin(fu.waveTime * 1.6 + plate.z * 6.28);
+        float3 ember = lavaRamp(skin, glow, blaze, mix(0.08 + 0.20 * pulse + 0.25 * plate.z, temp, heat));
+        float3 inside = mix(molten, ember, crustRaw);
+        float3 bodyCol = mix(inside, rock, crust);
+        float rim = crustRaw * (1.0 - crustRaw) * 4.0 * heat;
+        bodyCol = mix(bodyCol, glow, rim * 0.3);
 
         alpha = body + glowA;
-        col = saturate((bodyCol * body + midMagma * glowA) / max(alpha, 1e-4));
+        col = saturate((bodyCol * body + mix(glow, blaze, 0.35) * glowA) / max(alpha, 1e-4));
         alpha *= s.color.a;
     } else if (s.brush == BRUSH_JELLY) {
         float wob = sin(P.x * 0.25 + P.y * 0.18 + fu.waveTime * 3.2) * 0.5
@@ -780,7 +793,7 @@ fragment InkOut ink_fragment(RibbonOut in [[stage_in]],
             float w = wetness(fu, s.birth);
             col = shadeWet(s.color.rgb, x, n2, sq, ink, w);
         } else if (s.brush == BRUSH_WAVE) {
-            col = shadeWave(s.color.rgb, x, n2, sq, P, fu.waveTime);
+            col = shadeWave(s.color.rgb, x, n2, sq, P, fu.waveTime, max(s.width * 0.5, 0.5), px, s.seed);
         } else if (s.brush == BRUSH_RAINBOW) {
             float3 hsv = rgb2hsv(s.color.rgb);
             float hue = fract(hsv.x + arc / 220.0);
@@ -804,15 +817,21 @@ fragment InkOut ink_fragment(RibbonOut in [[stage_in]],
             col = s.color.rgb * (1.0 - pool) * (0.96 + 0.06 * valueNoise(P * 0.8));
             col = tubeLight(col, n2, x, sq, 0.18, 0.30);
         } else if (s.brush == BRUSH_GRASS) {
-            float3 tuft = voronoiDetail(P * 0.75 + s.seed * 5.0, 0.0);
-            float n = fbm(P * 0.55 + s.seed * 3.0);
+            // The turf the blades grow from: a mossy mound with a soft, ragged edge, shaded where it
+            // lies under the grass on its lower side. Its clumps are sized from the line's width.
+            float tuftScale = 1.0 / max(s.width * 0.4, 1.3);
+            float3 tuft = voronoiDetail(P * tuftScale + s.seed * 5.0, 0.0);
+            float n = fbm(P * tuftScale * 0.7 + s.seed * 3.0);
             float tuftDome = 1.0 - smoothstep(0.0, 0.65, tuft.y);
             float3 base = s.color.rgb;
-            float3 deepMoss = base * 0.36;
+            float3 deepMoss = base * 0.30;
             float3 freshTurf = mix(base * 0.88, float3(0.48, 0.82, 0.24), 0.28);
             col = mix(deepMoss, freshTurf, saturate(tuftDome * 0.7 + n * 0.4));
             col = tubeLight(col, n2, x, sq, 0.08, 0.45);
-            float edgeTuft = smoothstep(0.62, 0.98, x + (tuft.y - 0.4) * 0.22);
+            float under = smoothstep(0.1, 0.9, n2.y * x);
+            col = mix(col, float3(0.30, 0.21, 0.12) * (0.7 + 0.5 * n), under * 0.6);
+            col *= 1.0 - 0.3 * under;
+            float edgeTuft = smoothstep(0.62, 0.98, x + (tuft.y - 0.4) * 0.22 + (n - 0.5) * 0.1);
             cov *= 0.95 * (1.0 - edgeTuft);
         } else if (s.brush == BRUSH_FOUNTAIN) {
             col = shadeWet(s.color.rgb, x, n2, sq, ink, 0.78);
@@ -1055,13 +1074,20 @@ fragment DecorOut blade_fragment(BladeOut in [[stage_in]])
     if (in.kind > 0.5) {
         col = base * mix(0.55, 1.05, in.t);
     } else {
-        float3 darkRoot = base * 0.28;
-        float3 sunlitTip = mix(base * 1.25, float3(0.88, 0.96, 0.38), 0.32);
+        // A blade of grass: dark at the root, the ink's green up the blade, sunlit at the tip, with
+        // the light shining through the thin tip on the side that faces it and a darker rim so each
+        // blade stands out of the tuft.
+        float3 darkRoot = base * 0.26;
+        float3 sunlitTip = mix(base * 1.25, float3(0.90, 0.96, 0.40), 0.36);
         col = mix(darkRoot, base, smoothstep(0.0, 0.38, in.t));
         col = mix(col, sunlitTip, smoothstep(0.50, 1.0, in.t));
         float midrib = exp(-abs(u) * 8.0) * 0.12;
         float fibers = sin(u * 16.0) * 0.03;
         col += float3(midrib + fibers);
+        float facing = dot(in.n2 * (u < 0.0 ? -1.0 : 1.0), float2(-0.5865, -0.8100));
+        float through = smoothstep(0.55, 1.0, in.t) * (0.5 + 0.5 * facing) * 0.20;
+        col += float3(0.55, 0.62, 0.18) * through;
+        col *= 1.0 - 0.26 * smoothstep(0.55, 1.0, abs(u)) * (1.0 - 0.5 * smoothstep(0.7, 1.0, in.t));
     }
     float3 N = normalize(float3(in.n2 * (u * 0.90), sqrt(max(1.0 - u * u * 0.75, 0.05))));
     float ndl = saturate(dot(N, kLight));

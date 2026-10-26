@@ -757,6 +757,14 @@ check(blooms.flowers.count >= 8 && stems.count == blooms.flowers.count && stems.
 check(blooms.flowers.allSatisfy { $0.style == GrassGenerator.glassStyle }
       && GrassGenerator.field(points: waterLine, width: 8, color: InkColor(hex: 0x3BA55D), seed: 1.5).flowers.allSatisfy { $0.style < 2.5 },
       "flowering water: glass flowers (style 3), which the grass pen never grows")
+// The grass pen's turf is not one even fringe: a few blades stand taller and thinner (above the
+// tallest ordinary blade, 10 * 1.15 at full pressure), a few lean to blue-green.
+let turfLine = (0...40).map { InkPoint(x: Float($0) * 5, y: 300, r: 5, ink: 0) }
+let turf = GrassGenerator.field(points: turfLine, width: 10, color: InkColor(hex: 0x3F9B2F), seed: 0.37).blades.filter { !$0.isStem }
+let turfHeights = turf.map(\.height)
+check(turf.count > 50 && (turfHeights.max() ?? 0) > 1.6 * (turfHeights.min() ?? 1) && turf.contains { $0.height > 10 * 1.15 * 1.2 && $0.width < 0.9 }
+      && turf.contains { $0.color.z > $0.color.x } && turf.allSatisfy { $0.kind == .blade && $0.height <= 10 * 1.15 * 1.45 },
+      "grass: tall thin blades and blue-green tints among the turf, none taller than the bound")
 check(blooms.flowers.allSatisfy { $0.petal.z >= $0.petal.x && $0.petal.z >= $0.petal.y && $0.core.min() > 0.85 },
       "flowering water: the petals are blue and violet around a pale centre")
 check(blooms.flowers.allSatisfy { (0.5...1.6).contains($0.delay) }, "flowering water: the flowers open after the pen lifts")

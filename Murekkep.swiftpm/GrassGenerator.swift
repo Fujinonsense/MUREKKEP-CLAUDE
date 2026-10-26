@@ -160,12 +160,16 @@ enum GrassGenerator {
                 if isTuft {
                     base += tangent * ((rand(key, 9, salt) - 0.5) * 2 * baseR)
                 }
-                // Short blades keep the letter shapes readable even in small handwriting.
-                let height = width * (0.55 + 0.6 * rand(key, 3, salt)) * pressure
-                let bladeWidth = max(0.5, width * 0.11) * (0.7 + 0.6 * rand(key, 4, salt))
+                // Short blades keep the letter shapes readable even in small handwriting; a few stand
+                // taller and thinner, and a few lean to blue-green, so the turf is not one even fringe.
+                let tall: Float = rand(key, 24, salt) < 0.14 ? 1.45 : 1
+                let height = width * (0.55 + 0.6 * rand(key, 3, salt)) * pressure * tall
+                let bladeWidth = max(0.5, width * 0.11) * (0.7 + 0.6 * rand(key, 4, salt)) / (tall > 1 ? 1.3 : 1)
                 let tint = rand(key, 6, salt)
+                let cool = rand(key, 23, salt)
                 var c = baseColor * (0.78 + 0.42 * rand(key, 7, salt))
                 c += (yellow - c) * (tint * tint * 0.35)
+                c += (SIMD3<Float>(0.18, 0.52, 0.44) - c) * (cool * cool * 0.30)
                 blades.append(GrassBlade(base: base,
                                          height: height,
                                          width: bladeWidth,
