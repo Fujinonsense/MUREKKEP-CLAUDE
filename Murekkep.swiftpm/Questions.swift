@@ -176,6 +176,38 @@ enum QuestionSolving {
             + language.directive
     }
 
+    /// For the downloaded model when the math engine has already fixed the result exactly: the model
+    /// writes only the short steps that lead to it, never an answer line of its own.
+    static func stepsInstructions(language: AnswerLanguage) -> String {
+        "Sen titiz bir matematik öğretmenisin. Sorunun kesin sonucu hesap motorundan geldi ve soruyla birlikte verildi; sonuç doğrudur, onu değiştirme, yeniden hesaplama, sorgulama. Yalnızca bu sonuca götüren en fazla üç kısa adımı madde madde yaz (1. 2. 3.); verilmişse YOL satırındaki durumları kullan. Giriş cümlesi, başlık, \"Cevap:\" satırı, tereddüt ya da OCR yorumu yazma; ilk satır doğrudan 1. adım olsun. LaTeX kullanma ($, \\frac, \\le, \\sqrt yazma); ≤ ≥ ≠ × ÷ √ ² ³ π ∞ gibi Unicode kullan, kesirleri −7/4 gibi yaz. "
+            + language.directive
+    }
+
+    /// The question with the engine's result and working under it, for `stepsInstructions`.
+    static func stepsPrompt(_ q: PageQuestion, answer: String, working: [String], language: AnswerLanguage) -> String {
+        var s = q.promptText + "\n\n" + (language == .english ? "EXACT RESULT (from the math engine): " : "KESİN SONUÇ (hesap motorundan): ") + answer
+        if !working.isEmpty {
+            s += "\n" + (language == .english ? "WORKING: " : "YOL: ") + working.joined(separator: "; ")
+        }
+        return s
+    }
+
+    /// Put under the question when the model's first answer failed the engine's check, so the second
+    /// try starts from what substitution showed.
+    static func retryNote(reason: String, hint: String?, language: AnswerLanguage) -> String {
+        var s = language == .english
+            ? "YOUR FIRST ANSWER WAS WRONG: " + reason + "."
+            : "İLK CEVABIN YANLIŞTI: " + reason + "."
+        if let hint {
+            s += language == .english
+                ? " By substitution the math engine finds that \(hint) satisfies the equation; solve again towards that and check every case."
+                : " Hesap motoru yerine koyarak \(hint) değerinin denklemi sağladığını buldu; çözümü buna göre yeniden yap ve her durumu kontrol et."
+        } else {
+            s += language == .english ? " Solve again and check every case by substitution." : " Yeniden çöz ve her durumu yerine koyarak kontrol et."
+        }
+        return s
+    }
+
     /// Added to the assistant's instructions when it solves a whole page in one answer.
     static let pageSolvingRules = "SAYFA ÇÖZÜMÜ: Her soru için ayrı bir blok yaz: numarası, ilk satırda kalın kesin sonuç, altında en fazla üç kısa adım. Bütün hesabı ve kontrolü düşünürken bitir; yazdığın cevapta tereddüt, düzeltme, ikinci deneme ya da OCR yorumu olmasın. Metindeki \"a = ____\" gibi boşluklar doldurulacak yerlerdir. LaTeX yazma; ≤ ≥ √ ² gibi Unicode kullan."
 
@@ -191,9 +223,15 @@ enum QuestionSolving {
         return answer.isEmpty ? nil : answer
     }
 
+    /// The last "Cevap:"/"Answer:" line of a whole answer; nil when it has none.
+    static func finalAnswer(of answer: String) -> String? {
+        answer.components(separatedBy: "\n").compactMap(finalAnswer(in:)).last
+    }
+
     /// "**3)** **Cevap: −4 < x < 8**" and the steps under it: the last "Cevap:"/"Answer:" line of the
-    /// answer comes first, the other lines follow as the steps.
-    static func openLine(_ q: PageQuestion, answer: String, language: AnswerLanguage) -> String {
+    /// answer comes first, the other lines follow as the steps. A `note` (the engine's check failing)
+    /// is shown after the answer, so a number the engine could not confirm is never stated as fact.
+    static func openLine(_ q: PageQuestion, answer: String, language: AnswerLanguage, note: String? = nil) -> String {
         var final: String?
         var steps: [String] = []
         for line in answer.components(separatedBy: "\n") {
@@ -207,6 +245,16 @@ enum QuestionSolving {
         var head = "**\(q.number))** "
         guard let final else { return head + body + "\n\n" }
         head += "**\(language == .english ? "Answer" : "Cevap"): \(final)**"
+        if let note { head += " ⚠️ " + note }
+        return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"
+    }
+
+    /// "**3)** **Cevap: x = −7/4**" from the math engine, with the model's steps under it; any answer
+    /// line the model wrote of its own is dropped, the engine's is the one shown.
+    static func engineLine(_ q: PageQuestion, answer: String, steps: String, language: AnswerLanguage) -> String {
+        let body = steps.components(separatedBy: "\n").filter { finalAnswer(in: $0) == nil }
+            .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let head = "**\(q.number))** **\(language == .english ? "Answer" : "Cevap"): \(answer)**"
         return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"
     }
 

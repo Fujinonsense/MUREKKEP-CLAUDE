@@ -51,14 +51,41 @@ def test_a_page_of_worded_math_questions_is_solved_one_at_a_time():
     assert "solveWithBrain(questions, language: language, math: mathPage)" in model
     assert "let worded = q.options.count < 2 && (math || BrainBudget.isMath(q.promptText))" in model
     assert "thinking: worded ? BrainBudget.mathQuestion : BrainBudget.thinking(for: q.promptText)" in model
-    assert "QuestionSolving.openLine(q, answer: MathText.tidy(answer), language: language)" in model
+    assert "QuestionSolving.openLine(q, answer: MathText.withoutFiller(MathText.tidy(answer), question: q.stem)," in model
     assert "static let mathQuestion = 768" in src("BrainCatalog.swift")
+
+
+def test_the_math_engine_answers_what_it_can_solve_exactly_and_checks_the_rest():
+    """ExactMath.swift (Foundation only, checked by tools/mathcheck) solves a page's equations and
+    inequalities exactly; the flow shows its result as the answer line with the model's steps under
+    it, and checks the model's own result by substitution where the engine could not solve."""
+    exact = src("ExactMath.swift")
+    assert exact.startswith("import Foundation") and "import UIKit" not in exact and "import SwiftUI" not in exact
+    for fn in ("static func solve(_ stem: String) -> Answer?", "static func verify(question: String, answer: String) -> Verdict?"):
+        assert fn in exact
+    model = src("AssistantModel.swift")
+    assert "let exact = worded ? AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) : nil" in model
+    assert "thinking: BrainBudget.mathSteps" in model
+    assert "QuestionSolving.engineLine(q, answer: exact.answer, steps: steps, language: language)" in model
+    assert "ExactMath.verify(question: q.stem, answer: final)" in model
+    assert "QuestionSolving.retryNote(reason: reason, hint: hint, language: language)" in model
+    assert "language: language, note: note))" in model
+    # Apple's model, the fallback, shows the engine's result too; the facts block carries it as well.
+    assert "QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working.joined(separator: \"\\n\"), language: language)" in model
+    assert "} else if let exact = ExactMath.solve(line) {" in src("OfflineBrain.swift")
+    assert "static let mathSteps = 256" in src("BrainCatalog.swift")
+    questions = src("Questions.swift")
+    for fn in ("static func stepsInstructions(language: AnswerLanguage)", "static func engineLine(", "static func retryNote("):
+        assert fn in questions
+    steps = questions.split("static func stepsInstructions")[1].split("static func stepsPrompt")[0]
+    for phrase in ("onu değiştirme", "en fazla üç kısa adım", '\\"Cevap:\\" satırı', "LaTeX kullanma"):
+        assert phrase in steps, phrase
 
 
 def test_the_whole_page_answer_gets_the_rules_and_is_tidied():
     model = src("AssistantModel.swift")
     assert 'if action == .solve { system += "\\n" + QuestionSolving.pageSolvingRules }' in model
-    assert "action == .solve ? MathText.tidy(answer) : answer" in model
+    assert "action == .solve ? MathText.withoutFiller(MathText.tidy(answer), question: pageText) : answer" in model
 
 
 def test_lost_blanks_reach_the_model():

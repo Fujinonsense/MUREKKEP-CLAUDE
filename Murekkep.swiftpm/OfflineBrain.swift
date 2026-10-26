@@ -47,10 +47,19 @@ enum OfflineBrain {
             .filter { !$0.isEmpty }
     }
 
-    /// Exact results for every math line of the page, for the language models to rely on.
+    /// Exact results for every math line of the page, for the language models to rely on: the
+    /// calculations and equations the engine reads, and the worded questions it solves exactly
+    /// ("Solve |4x + 23| = |4x − 9|" → x = −7/4).
     static func mathFacts(_ pages: [PageText], current: Int) -> String {
         let lines = mathLines(pages, current: current)
-        var facts = lines.compactMap { MathEngine.analyze($0).map { "- " + MathFormat.describe($0) } }
+        var facts: [String] = []
+        for line in lines {
+            if let finding = MathEngine.analyze(line) {
+                facts.append("- " + MathFormat.describe(finding))
+            } else if let exact = ExactMath.solve(line) {
+                facts.append("- `\(exact.given)` → **\(exact.answer)**")
+            }
+        }
         if let system = MathEngine.solveSystem(lines) {
             facts.append("- " + describe(system))
         }

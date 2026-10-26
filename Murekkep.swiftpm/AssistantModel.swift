@@ -642,7 +642,11 @@ final class AssistantModel: ObservableObject {
     /// A page of questions, one at a time: the model thinks (longer for arithmetic), then writes a
     /// short reason and "Cevap: X", and the choice is shown with its option. A worded math question
     /// without options (`math` says the page is one, or the question's own signs do) goes to the math
-    /// teacher: the result comes first, a few steps under it, its second thoughts dropped.
+    /// teacher: the result comes first, a few steps under it, its second thoughts and filler dropped.
+    /// When the math engine solves the question exactly (an equation, an inequality, blanks to fill),
+    /// its result is the answer line and the model only lays out the steps towards it; when it
+    /// cannot, the model's result is checked by substitution, tried once more with what the engine
+    /// found if it fails, and a result the engine still cannot confirm is said so, never shown as fact.
     @MainActor
     private func solveWithBrain(_ questions: [PageQuestion], language: AnswerLanguage, math: Bool) async throws {
         let exam = QuestionSolving.brainInstructions(language: language)
@@ -651,13 +655,43 @@ final class AssistantModel: ObservableObject {
             try Task.checkCancellation()
             let label = brainTitle + " · " + Loc.t("Soru {0}/{1}", "\(i + 1)", "\(questions.count)")
             let worded = q.options.count < 2 && (math || BrainBudget.isMath(q.promptText))
-            let request = BrainRuntime.Request(system: worded ? teacher : exam, prompt: q.promptText,
+            let exact = worded ? AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) : nil
+            let request: BrainRuntime.Request
+            if let exact {
+                request = BrainRuntime.Request(system: QuestionSolving.stepsInstructions(language: language),
+                                               prompt: QuestionSolving.stepsPrompt(q, answer: exact.answer, working: exact.working, language: language),
+                                               thinking: BrainBudget.mathSteps, maxAnswerTokens: 240, temperature: 0.5)
+            } else {
+                request = BrainRuntime.Request(system: worded ? teacher : exam, prompt: q.promptText,
                                                thinking: worded ? BrainBudget.mathQuestion : BrainBudget.thinking(for: q.promptText),
                                                maxAnswerTokens: 400, temperature: 0.6)
+            }
             do {
-                let answer = try await runBrain(request, label: label)
-                if worded {
-                    appendToAnswer(QuestionSolving.openLine(q, answer: MathText.tidy(answer), language: language))
+                var answer = try await runBrain(request, label: label)
+                if let exact {
+                    let steps = MathText.withoutFiller(MathText.tidy(answer), question: q.stem)
+                    appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: steps, language: language))
+                } else if worded {
+                    var note: String?
+                    if let final = QuestionSolving.finalAnswer(of: answer),
+                       case let .fails(reason, hint)? = AnswerLanguage.$bound.withValue(language, operation: { ExactMath.verify(question: q.stem, answer: final) }) {
+                        let retry = BrainRuntime.Request(system: teacher,
+                                                         prompt: q.promptText + "\n\n" + QuestionSolving.retryNote(reason: reason, hint: hint, language: language),
+                                                         thinking: BrainBudget.mathQuestion, maxAnswerTokens: 400, temperature: 0.6)
+                        answer = try await runBrain(retry, label: label)
+                        let second = QuestionSolving.finalAnswer(of: answer)
+                        let verdict = AnswerLanguage.$bound.withValue(language, operation: { second.flatMap { ExactMath.verify(question: q.stem, answer: $0) } })
+                        switch verdict {
+                        case .holds?:
+                            note = nil
+                        case let .fails(again, _)?:
+                            note = again
+                        case nil:
+                            note = AnswerLanguage.$bound.withValue(language, operation: { L("hesap motoru doğrulayamadı", "the math engine could not confirm it") })
+                        }
+                    }
+                    appendToAnswer(QuestionSolving.openLine(q, answer: MathText.withoutFiller(MathText.tidy(answer), question: q.stem),
+                                                            language: language, note: note))
                 } else if let letter = ThinkingText.choice(in: answer, letters: q.options.map(\.letter)) {
                     appendToAnswer(QuestionSolving.line(q, answer: String(letter), reasoning: ThinkingText.explanation(answer)))
                 } else {
@@ -668,7 +702,12 @@ final class AssistantModel: ObservableObject {
             } catch {
                 // The first question failing means the model could not start: the caller falls back.
                 if i == 0 { throw error }
-                appendToAnswer("**\(q.number))** ⚠️ " + error.localizedDescription + "\n\n")
+                if let exact {
+                    // The model could not write the steps; the engine's result stands, with its own working.
+                    appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working.joined(separator: "\n"), language: language))
+                } else {
+                    appendToAnswer("**\(q.number))** ⚠️ " + error.localizedDescription + "\n\n")
+                }
             }
         }
         status = nil
@@ -721,7 +760,8 @@ final class AssistantModel: ObservableObject {
         let answer = try await runBrain(request, label: brainTitle) { [weak self] text in
             self?.setAnswer(before + text, isError: false)
         }
-        setAnswer(before + (action == .solve ? MathText.tidy(answer) : answer), isError: false)
+        let pageText = pages.map(\.text).joined(separator: "\n")
+        setAnswer(before + (action == .solve ? MathText.withoutFiller(MathText.tidy(answer), question: pageText) : answer), isError: false)
         status = nil
         setSources(web)
     }
@@ -738,6 +778,11 @@ final class AssistantModel: ObservableObject {
     private func solveOnDevice(_ questions: [PageQuestion], language: AnswerLanguage) async throws {
         for (i, q) in questions.enumerated() {
             try Task.checkCancellation()
+            // A worded math question the engine solves exactly needs no model: its working is the steps.
+            if q.options.count < 2, let exact = AnswerLanguage.$bound.withValue(language, operation: { ExactMath.solve(q.stem) }) {
+                appendToAnswer(QuestionSolving.engineLine(q, answer: exact.answer, steps: exact.working.joined(separator: "\n"), language: language))
+                continue
+            }
             status = Loc.t("Soru {0}/{1} çözülüyor…", "\(i + 1)", "\(questions.count)")
             do {
                 let solved = try await OnDeviceAI.solve(q, language: language)

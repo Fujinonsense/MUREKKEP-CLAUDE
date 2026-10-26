@@ -293,6 +293,8 @@ enum MathParser {
     private struct Parser {
         let tokens: [Token]
         var pos = 0
+        /// Inside "|…|" a bar closes it; outside, a bar after an operand opens one (3|x−2|).
+        var absDepth = 0
 
         var atEnd: Bool { pos >= tokens.count }
 
@@ -317,8 +319,8 @@ enum MathParser {
                     pos += 1
                     guard let rhs = unary() else { return nil }
                     value = t == .op("*") ? .multiply(value, rhs) : .divide(value, rhs)
-                } else if startsOperand(t) {
-                    // Implicit multiplication: 2x, 3(4+1), (a+b)(a-b), 2π, 4√2
+                } else if startsOperand(t) || (t == .op("|") && absDepth == 0) {
+                    // Implicit multiplication: 2x, 3(4+1), (a+b)(a-b), 2π, 4√2, 3|x−2|
                     guard let rhs = power() else { return nil }
                     value = .multiply(value, rhs)
                 } else {
@@ -399,7 +401,10 @@ enum MathParser {
                 return functionArgument().map { MathExpr.call("sqrt", $0) }
             case .op("|"):
                 pos += 1
-                guard let v = expression(), peek() == .op("|") else { return nil }
+                absDepth += 1
+                let v = expression()
+                absDepth -= 1
+                guard let v, peek() == .op("|") else { return nil }
                 pos += 1
                 return .call("abs", v)
             default:

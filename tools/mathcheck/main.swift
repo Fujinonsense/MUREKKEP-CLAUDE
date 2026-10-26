@@ -1,0 +1,224 @@
+import Foundation
+
+// The math engine on a page of textbook exercises (CALCULUS p.14, "1.2 Exercises", as the page's
+// text layer gives them to the assistant), run with the Windows Swift toolchain
+// (tools/mathcheck/run.ps1). Prints every failure and a final count.
+
+var failures = 0
+var total = 0
+
+func check(_ ok: Bool, _ name: String, got: String = "") {
+    total += 1
+    if !ok {
+        failures += 1
+        print("FAIL \(name)" + (got.isEmpty ? "" : " — got: \(got.debugDescription)"))
+    }
+}
+
+/// The engine's answer line to a question's stem, or "-" when it leaves it to the model.
+func exact(_ stem: String) -> String {
+    ExactMath.solve(stem)?.answer ?? "-"
+}
+
+func expect(_ stem: String, _ answer: String, _ name: String) {
+    let got = exact(stem)
+    check(got == answer, name, got: got)
+}
+
+AnswerLanguage.bound = .english
+
+// MARK: The parser reads absolute values in products and powers
+
+check(MathParser.parse("3|x-2|") != nil && MathParser.parse("|x-2|^2+3|x-2|-4") != nil, "parser: a bar after an operand opens one")
+check(MathParser.parse("|x|+|x-1|") != nil && MathParser.parse("|2x+1|") != nil && MathParser.parse("|x") == nil, "parser: bars pair up")
+check(MathParser.parse("2|-3|")?.evaluate([:]) == 6, "parser: 2|−3| = 6")
+if case let .solved(_, _, roots, _, _)? = MathEngine.analyze("|4x+23|=|4x-9|") {
+    check(roots == [-1.75], "math engine: the numeric root of |4x+23| = |4x−9|", got: "\(roots)")
+} else {
+    check(false, "math engine: the numeric root of |4x+23| = |4x−9|")
+}
+
+// MARK: The page's exercises, exactly
+
+expect("The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____.", "a = −4, b = 8", "ex 1: |x − 2| < 6 as a < x < b")
+expect("The inequality −15 ≤ x ≤ 7 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.", "a = −4, b = 11", "ex 2: −15 ≤ x ≤ 7 as |x − a| ≤ b")
+expect("Solve the equation |4x + 23| = |4x − 9|.", "x = −7/4", "ex 3: |4x + 23| = |4x − 9|")
+expect("Solve the equation |x² + 2| = |x² − 11|.", "x = ±3√2/2", "ex 4: |x² + 2| = |x² − 11|")
+expect("Solve the equation |2x − 5| = 7.", "x = −1 or x = 6", "ex 5: |2x − 5| = 7")
+expect("Solve the equation |x − 2|² + 3|x − 2| − 4 = 0.", "x = 1 or x = 3", "ex 6: a quadratic in |x − 2|")
+expect("The inequality −4 ≤ x ≤ 10 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.", "a = 3, b = 7", "ex 7: −4 ≤ x ≤ 10 as |x − a| ≤ b")
+expect("Solve the equation |x + 1| = 3x − 5.", "x = 3", "ex 8: |x + 1| = 3x − 5 keeps only the root with 3x − 5 ≥ 0")
+expect("Solve the inequality |x + 4| < 7.", "−11 < x < 3", "ex 9: |x + 4| < 7")
+expect("Solve the inequality |3x + 7| < 5.", "−4 < x < −2/3", "ex 10: |3x + 7| < 5")
+expect("Solve the equation |x² − 9| = |x² − 5|.", "x = ±√7", "ex 11: |x² − 9| = |x² − 5|")
+expect("Solve the inequality |(2x² − 3)/14| ≤ 1/2.", "−√5 ≤ x ≤ √5", "ex 12: |(2x² − 3)/14| ≤ 1/2")
+expect("Solve the inequality |x − 3| ≥ 6.", "(−∞, −3] ∪ [9, ∞)", "ex 13: |x − 3| ≥ 6")
+expect("Solve the inequality |2x + 1| > 3.", "(−∞, −2) ∪ (1, ∞)", "ex 14: |2x + 1| > 3")
+expect("Solve the inequality |x² − 4| ≤ 5.", "−3 ≤ x ≤ 3", "ex 15: |x² − 4| ≤ 5")
+expect("Solve the inequality |5 − 2x| ≤ 1.", "2 ≤ x ≤ 3", "ex 16: |5 − 2x| ≤ 1")
+expect("Solve the equation x² − 2x − 4 = 0.", "x = 1 − √5 or x = 1 + √5", "ex 17: a quadratic with surd roots")
+
+// MARK: More shapes
+
+expect("Solve 2x + 3 = 7.", "x = 2", "linear equation")
+expect("Solve x² − 5x + 6 = 0.", "x = 2 or x = 3", "quadratic with rational roots")
+expect("Solve the equation x² + 1 = 0.", "no solution", "no real root")
+expect("Solve the inequality x² − 4x + 4 ≤ 0.", "x = 2", "a double root as an inequality")
+expect("Solve the inequality x² + 1 < 0.", "no solution (∅)", "an inequality with no solution")
+expect("Solve the inequality x² ≥ 0.", "all real numbers (ℝ)", "an inequality that always holds")
+expect("Solve the inequality −3 < 2x + 1 ≤ 5.", "−2 < x ≤ 2", "a chain")
+expect("Solve the inequality 2x − 1 > 3.", "x > 2", "a half line")
+expect("Solve the equation |x − 1| = −2.", "no solution", "|x − 1| = −2 has no solution")
+expect("Solve the equation |x| = x.", "x ≥ 0", "|x| = x holds for x ≥ 0")
+expect("Solve the inequality (x + 1)/(x − 3) ≥ 0.", "(−∞, −1] ∪ (3, ∞)", "rational inequality, the pole stays out")
+expect("Solve the inequality 1/(x − 2) < 3.", "(−∞, 2) ∪ (7/3, ∞)", "rational inequality with a constant")
+expect("Solve the equation (x² − 1)/(x − 1) = 2.", "no solution", "a rational equation whose only root is a pole")
+expect("Solve |x − 1| ≤ 2x.", "x ≥ 1/3", "|A| ≤ B with x on the right")
+expect("Solve |x − 1| > 2x.", "x < 1/3", "|A| > B with x on the right")
+expect("Solve the inequality |x − 2| ≤ 0.", "x = 2", "|x − 2| ≤ 0 is one point")
+expect("Solve |x + 1|² = 4.", "x = −3 or x = 1", "a square of an absolute value")
+expect("Solve the equation 3|x + 1| = 6.", "x = −3 or x = 1", "a coefficient before the bars")
+expect("Solve the inequality |x| ≥ |x − 2|.", "x ≥ 1", "|A| ≥ |B| with linear insides")
+expect("Solve the equation 2x = 7.", "x = 7/2", "a fraction, never 3.5")
+expect("Solve 0,5x = 2.", "x = 4", "a decimal comma in the coefficient")
+expect("Solve x <= 3.", "x ≤ 3", "ASCII <=")
+
+// Turkish wording, Turkish answers.
+AnswerLanguage.bound = .turkish
+expect("|x − 2| < 6 eşitsizliğini çözünüz.", "−4 < x < 8", "tr: an inequality")
+expect("|2x + 1| = 5 denkleminin çözüm kümesini bulunuz.", "x = −3 veya x = 2", "tr: an equation with two roots")
+expect("x² + 1 = 0 denklemini çözünüz.", "çözüm yok", "tr: no solution")
+expect("−15 ≤ x ≤ 7 eşitsizliğini |x − a| ≤ b biçiminde yazınız: a = ____, b = ____.", "a = −4, b = 11", "tr: the blanks")
+expect("|x − 2| < 6 eşitsizliğini sağlayan x değerlerini bulunuz.", "−4 < x < 8", "tr: \"sağlayan\" still solves")
+AnswerLanguage.bound = .english
+
+// MARK: Questions the engine leaves to the model
+
+for stem in ["Show that x = 2 satisfies x² − 4 = 0.", "Find a and b if 2a + b = 5 and a − b = 1.", "If f(x) = 3x + 2, find f(4).",
+             "Ali'nin 3 elması var, 2 tane daha alırsa kaç elması olur?", "x = 5 is a solution of which equation?",
+             "Explain why |x| ≥ 0 for every x.", "Solve the equation x³ − x = 0.", "Solve sin x = 0.5.", "Evaluate 3 + 4 × 2.",
+             "Solve |x| + |x − 1| = 3.", "Solve x|x| = 4.", "Solve the equation x² = y."] {
+    check(exact(stem) == "-", "the model's: \"\(stem)\"", got: exact(stem))
+}
+
+// MARK: The working the engine states for the model's steps
+
+let ex3 = ExactMath.solve("Solve the equation |4x + 23| = |4x − 9|.")
+check(ex3?.working == ["4x + 23 = 4x − 9 → no solution", "4x + 23 = −(4x − 9) → x = −7/4"], "working: the two cases of |A| = |B|", got: "\(ex3?.working ?? [])")
+let ex2 = ExactMath.solve("The inequality −15 ≤ x ≤ 7 can be expressed in the form |x − a| ≤ b where a = ____ and b = ____.")
+check(ex2?.working == ["a = (−15 + 7)/2 = −4", "b = (7 − (−15))/2 = 11"], "working: midpoint and half-width", got: "\(ex2?.working ?? [])")
+let ex9 = ExactMath.solve("Solve the inequality |x + 4| < 7.")
+check(ex9?.working == ["−7 < x + 4 < 7"], "working: the bars removed", got: "\(ex9?.working ?? [])")
+check(ExactMath.solve("Solve the equation |2x − 5| = 7.")?.working == ["2x − 5 = 7 → x = 6", "2x − 5 = −7 → x = −1"], "working: |A| = c",
+      got: "\(ExactMath.solve("Solve the equation |2x − 5| = 7.")?.working ?? [])")
+check(ExactMath.solve("Solve the inequality |x − 3| ≥ 6.")?.working == ["x − 3 ≥ 6 or x − 3 ≤ −6"], "working: |A| ≥ c",
+      got: "\(ExactMath.solve("Solve the inequality |x − 3| ≥ 6.")?.working ?? [])")
+
+// MARK: Exact numbers
+
+check(ExactNumber.sqrt(Fraction(72))?.text == "6√2" && ExactNumber.sqrt(Fraction(9, 2))?.text == "3√2/2"
+      && ExactNumber.sqrt(Fraction(49))?.text == "7" && ExactNumber.sqrt(Fraction(-1)) == nil, "exact: square roots simplified")
+check(Fraction(0.3)?.text == "3/10" && Fraction(-1.75)?.text == "−7/4" && Fraction(Double.pi) == nil && Fraction(1.0 / 3) == nil
+      && Fraction(0.125)?.text == "1/8", "exact: decimals as fractions",
+      got: "\(Fraction(0.3)?.text ?? "nil") \(Fraction(-1.75)?.text ?? "nil") \(Fraction(Double.pi)?.text ?? "nil") \(Fraction(1.0 / 3)?.text ?? "nil")")
+check((Fraction(1, 3) + Fraction(1, 6)).text == "1/2" && (Fraction(2, 3) * Fraction(3, 4)).text == "1/2", "exact: fraction arithmetic")
+check(((ExactNumber(Fraction(1)) + ExactNumber.sqrt(Fraction(5))!)!).sign == 1
+      && ((ExactNumber(Fraction(-3)) + ExactNumber.sqrt(Fraction(5))!)!).sign == -1, "exact: the sign of a + b√n")
+
+// MARK: Checking the model's answer by substitution
+
+let q3 = "Solve the equation |4x + 23| = |4x − 9|."
+if case let .fails(reason, hint)? = ExactMath.verify(question: q3, answer: "x = 0.3") {
+    check(reason == "x = 0.3 does not satisfy the equation: left side 24.2, right side 7.8", "verify: the wrong 0.3 is caught", got: reason)
+    check(hint == "x = -7/4 (≈ -1.75)", "verify: the hint is what substitution finds", got: hint ?? "nil")
+} else {
+    check(false, "verify: the wrong 0.3 is caught")
+}
+check(ExactMath.verify(question: q3, answer: "x = −7/4") == .holds, "verify: −7/4 holds")
+check(ExactMath.verify(question: q3, answer: "**x = -1.75**.") == .holds, "verify: a decimal that holds, bold stripped")
+let q6 = "Solve the equation |x − 2|² + 3|x − 2| − 4 = 0."
+check(ExactMath.verify(question: q6, answer: "x = 1 or x = 3") == .holds && ExactMath.verify(question: q6, answer: "x = 3 veya x = 1") == .holds,
+      "verify: both roots listed")
+if case let .fails(reason, _)? = ExactMath.verify(question: q6, answer: "x = 3") {
+    check(reason.contains("x = 1") && reason.contains("missing"), "verify: a missing root is caught", got: reason)
+} else {
+    check(false, "verify: a missing root is caught")
+}
+check(ExactMath.verify(question: "Solve the equation x² + 1 = 0.", answer: "No solution.") == .holds, "verify: no solution, correctly")
+if case let .fails(reason, _)? = ExactMath.verify(question: "Solve the equation x² − 4 = 0.", answer: "no real solution") {
+    check(reason.contains("satisfies"), "verify: a wrong \"no solution\" is caught", got: reason)
+} else {
+    check(false, "verify: a wrong \"no solution\" is caught")
+}
+check(ExactMath.verify(question: "Solve the equation x² − 7 = 0.", answer: "x = ±√7") == .holds, "verify: ± and a root sign")
+check(ExactMath.verify(question: "Solve the inequality |x + 4| < 7.", answer: "−11 < x < 3") == nil, "verify: an inequality is not checked")
+check(ExactMath.verify(question: q3, answer: "The cases differ.") == nil, "verify: an answer without a value is not checked")
+check(ExactMath.verify(question: "Solve the equation x³ − x = 0.", answer: "x = −1, x = 0, x = 1") == .holds, "verify: a cubic the exact solver skips is still checked")
+check(ExactMath.claimed(in: "x ∈ {1, 3}", variable: "x") == [1, 3] && ExactMath.claimed(in: "x = 2 because 2·2 = 4", variable: "x") == [2],
+      "verify: sets and reasons are read")
+
+// MARK: Filler dropped from the shown steps
+
+let shown = """
+Here is the solution to the equation: To solve the equation |4x + 23| = |4x − 9|, we consider the definition of absolute value.
+Steps:
+1. Case 1: 4x + 23 = 4x − 9 gives 23 = −9, no solution.
+2. Case 2: 4x + 23 = −(4x − 9), so 8x = −14 and x = −7/4.
+Answer: x = −7/4
+"""
+let trimmed = MathText.withoutFiller(shown, question: q3)
+check(trimmed == """
+1. Case 1: 4x + 23 = 4x − 9 gives 23 = −9, no solution.
+2. Case 2: 4x + 23 = −(4x − 9), so 8x = −14 and x = −7/4.
+Answer: x = −7/4
+""", "filler: the opening and the heading go, the working stays", got: trimmed)
+check(MathText.withoutFiller("Çözüm:\nİşte çözüm. Mutlak değer tanımına göre iki durum vardır.\n- Önce 2x − 5 = 7 → x = 6.\n- Sonra 2x − 5 = −7 → x = −1.",
+                             question: "|2x − 5| = 7 denklemini çözünüz.")
+      == "- Önce 2x − 5 = 7 → x = 6.\n- Sonra 2x − 5 = −7 → x = −1.", "filler: Turkish openings",
+      got: MathText.withoutFiller("Çözüm:\nİşte çözüm. Mutlak değer tanımına göre iki durum vardır.\n- Önce 2x − 5 = 7 → x = 6.\n- Sonra 2x − 5 = −7 → x = −1.",
+                                  question: "|2x − 5| = 7 denklemini çözünüz."))
+check(MathText.withoutFiller("To solve, split into two cases: 4x+23 = 4x−9 or 4x+23 = −(4x−9).", question: q3)
+      == "To solve, split into two cases: 4x+23 = 4x−9 or 4x+23 = −(4x−9).", "filler: a real step that opens like filler stays")
+check(MathText.withoutFiller("1. Remove the bars: −6 < x − 2 < 6.\n2. Add 2: −4 < x < 8.", question: "Solve |x − 2| < 6.")
+      == "1. Remove the bars: −6 < x − 2 < 6.\n2. Add 2: −4 < x < 8.", "filler: numbered steps untouched")
+check(MathText.withoutFiller("Here is the solution: 8x = −14, so x = −7/4.\nCevap: çözüm yok", question: q3)
+      == "8x = −14, so x = −7/4.\nCevap: çözüm yok", "filler: after \"Here is …:\" the work stays; an answer line is kept whole",
+      got: MathText.withoutFiller("Here is the solution: 8x = −14, so x = −7/4.\nCevap: çözüm yok", question: q3))
+check(MathText.mathRuns(in: "The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____.")
+      == ["|x − 2| < 6", "a < x < b", "a = ____", "b = ____"], "math runs of a question", got: "\(MathText.mathRuns(in: "The inequality |x − 2| < 6 can be expressed in the form a < x < b where a = ____ and b = ____."))")
+
+// MARK: The answer line
+
+let q = PageQuestion(number: 3, stem: q3, options: [], passage: nil)
+check(QuestionSolving.engineLine(q, answer: "x = −7/4", steps: "1. 4x + 23 = −(4x − 9)\n2. 8x = −14\nAnswer: x = 0.3", language: .english)
+      == "**3)** **Answer: x = −7/4**\n1. 4x + 23 = −(4x − 9)\n2. 8x = −14\n\n", "engine line: the engine's answer, the model's own answer line dropped",
+      got: QuestionSolving.engineLine(q, answer: "x = −7/4", steps: "1. 4x + 23 = −(4x − 9)\n2. 8x = −14\nAnswer: x = 0.3", language: .english))
+check(QuestionSolving.engineLine(q, answer: "x = −7/4", steps: "", language: .turkish) == "**3)** **Cevap: x = −7/4**\n\n", "engine line: no steps")
+check(QuestionSolving.openLine(q, answer: "Answer: x = 0.3\n1. Guess.", language: .english, note: "x = 0.3 does not satisfy the equation")
+      == "**3)** **Answer: x = 0.3** ⚠️ x = 0.3 does not satisfy the equation\n1. Guess.\n\n", "open line: the failed check is said",
+      got: QuestionSolving.openLine(q, answer: "Answer: x = 0.3\n1. Guess.", language: .english, note: "x = 0.3 does not satisfy the equation"))
+check(QuestionSolving.finalAnswer(of: "Answer: x = 1\nsteps\nAnswer: x = 2") == "x = 2" && QuestionSolving.finalAnswer(of: "1. no answer") == nil,
+      "the last answer line of an answer")
+let prompt = QuestionSolving.stepsPrompt(q, answer: "x = −7/4", working: ["4x + 23 = 4x − 9 → no solution", "4x + 23 = −(4x − 9) → x = −7/4"], language: .english)
+check(prompt == "3. \(q3)\n\nEXACT RESULT (from the math engine): x = −7/4\nWORKING: 4x + 23 = 4x − 9 → no solution; 4x + 23 = −(4x − 9) → x = −7/4",
+      "steps prompt: the question, the result and the working", got: prompt)
+check(QuestionSolving.stepsInstructions(language: .english).contains("değiştirme") && QuestionSolving.stepsInstructions(language: .english).hasSuffix("RESPONSE LANGUAGE: English."),
+      "steps instructions")
+check(QuestionSolving.retryNote(reason: "x = 0.3 does not satisfy the equation", hint: "x = -7/4 (≈ -1.75)", language: .english)
+      == "YOUR FIRST ANSWER WAS WRONG: x = 0.3 does not satisfy the equation. By substitution the math engine finds that x = -7/4 (≈ -1.75) satisfies the equation; solve again towards that and check every case.",
+      "retry note", got: QuestionSolving.retryNote(reason: "x = 0.3 does not satisfy the equation", hint: "x = -7/4 (≈ -1.75)", language: .english))
+
+// MARK: The engine's earlier checks still hold (as tools/swiftcheck runs them)
+
+func solved(_ line: String) -> (String, [Double])? {
+    if case let .solved(text, _, roots, _, _)? = MathEngine.analyze(line) { return (text, roots) }
+    return nil
+}
+check(solved("2x+3=7 ise x kaçtır?").map { $0.0 == "2x+3=7" && $0.1 == [2] } == true, "math engine: the x after \"ise\"")
+check(solved("x²+3x=10 ise x kaçtır?")?.1 == [-5, 2], "math engine: a worded quadratic has both roots")
+check(MathEngine.analyze("2x+3=7 ise 4x kaçtır?") == nil && MathEngine.analyze("f(x)=3x+2 ise f(4) kaçtır?") == nil, "math engine: no fact for other askings")
+check(PageMath.engineSettles(["3+3=33"]) && !PageMath.engineSettles(["2x+3=7 ise x kaçtır?"]), "page math: what the engine settles alone")
+check(PageMath.question("3+3=33 doğru mu?") != nil && PageMath.question("türev nedir?") == nil, "page math: chat questions")
+
+print("mathcheck \(total - failures)/\(total) ok" + (failures == 0 ? "" : ", \(failures) failed"))
+exit(failures == 0 ? 0 : 1)

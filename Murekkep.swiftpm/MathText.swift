@@ -446,6 +446,123 @@ enum MathText {
         return out.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
+    // MARK: - Filler
+
+    /// Openings that never carry working: a sentence starting so goes whatever follows.
+    private static let heralds = ["here is", "here's", "here are", "işte", "aşağıda"]
+
+    /// Openings of a sentence that only announces the working ("To solve the equation …, we consider
+    /// the definition of absolute value."): it goes when it holds no number or sign of its own.
+    private static let preambles = [
+        "to solve", "in order to solve", "we consider", "we need", "we can", "we use", "we apply", "we start", "we begin",
+        "we have", "we know", "we want", "we must", "we will", "we'll", "we solve", "we find", "recall", "let's", "let us",
+        "first,", "first of all", "the solution", "the answer", "the equation", "the inequality", "solution", "steps",
+        "step 1", "çözüm", "adımlar", "çözmek için", "bunun için", "öncelikle", "ilk olarak", "önce ", "bu denklem",
+        "bu eşitsizlik", "bu soru", "soruyu", "denklemi", "eşitsizliği", "mutlak değer",
+    ]
+
+    /// A "Cevap:"/"Answer:" line is the answer, never filler.
+    private static let answerLabel = try! NSRegularExpression(
+        pattern: #"^[\s*_#>-]*(?:cevap|yan[ıi]t|answer|sonu[çc]|result)\s*[:：]"#, options: [.caseInsensitive])
+
+    /// Runs of math tokens in a sentence ("|x − 2| < 6", "a < x < b", "a = ____"): a token is math
+    /// when it is only digits, signs, bars, brackets, blanks and single Latin letters. A run ends at a
+    /// word or at a token's trailing comma or full stop.
+    static func mathRuns(in text: String) -> [String] {
+        let signs = "0123456789+-−–*/×÷^√|()[]{}.,=<>≤≥≠±∞²³¹⁰⁴⁵⁶⁷⁸⁹_½¼¾·"
+        func isMath(_ t: String) -> Bool {
+            guard !t.isEmpty else { return false }
+            var run = 0
+            for ch in t {
+                if ch.isLetter {
+                    run += 1
+                    guard run == 1, ch.isASCII else { return false }
+                } else if signs.contains(ch) {
+                    run = 0
+                } else {
+                    return false
+                }
+            }
+            return true
+        }
+        var runs: [String] = []
+        var current: [String] = []
+        func close() {
+            if !current.isEmpty { runs.append(current.joined(separator: " ")) }
+            current = []
+        }
+        for raw in text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }) {
+            var t = String(raw)
+            var ends = false
+            while let last = t.last, ".,;:?!".contains(last) {
+                t.removeLast()
+                ends = true
+            }
+            if isMath(t) {
+                current.append(t)
+                if ends { close() }
+            } else {
+                close()
+            }
+        }
+        close()
+        return runs
+    }
+
+    private static func squeezed(_ s: String) -> String {
+        String(s.filter { !$0.isWhitespace }).replacingOccurrences(of: "−", with: "-").replacingOccurrences(of: "–", with: "-")
+    }
+
+    /// The answer without the model's filler: "Here is the solution:", "Steps:", a sentence that only
+    /// restates the question's math and announces the work. A sentence with a number or a sign of its
+    /// own (one the question does not contain) is working, and stays whole; after "Here is …:" only
+    /// what follows the colon stays. A "Cevap:"/"Answer:" line is never touched.
+    static func withoutFiller(_ answer: String, question: String) -> String {
+        let known = mathRuns(in: question).map(squeezed).filter { $0.count >= 3 }
+        let tr = Locale(identifier: "tr_TR")
+        func opens(_ sentence: String, _ cues: [String]) -> Bool {
+            let body = String(sentence.drop { !$0.isLetter })
+            let lower = body.lowercased()
+            let lowerTR = body.lowercased(with: tr)
+            return cues.contains { lower.hasPrefix($0) || lowerTR.hasPrefix($0) }
+        }
+        func hasWork(_ sentence: String) -> Bool {
+            var rest = squeezed(sentence)
+            for k in known {
+                rest = rest.replacingOccurrences(of: k, with: "")
+            }
+            return rest.contains { $0.isNumber || "=<>≤≥".contains($0) }
+        }
+        /// What of a sentence is shown: nil for filler.
+        func kept(_ sentence: String) -> String? {
+            if let r = sentence.range(of: ": "), opens(String(sentence[..<r.lowerBound]), heralds) {
+                return kept(String(sentence[r.upperBound...]))
+            }
+            if opens(sentence, heralds) { return nil }
+            if hasWork(sentence) { return sentence }
+            return sentence.hasSuffix(":") || opens(sentence, preambles) ? nil : sentence
+        }
+        var lines: [String] = []
+        for line in answer.components(separatedBy: "\n") {
+            let ns = line as NSString
+            guard answerLabel.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) == nil else {
+                lines.append(line)
+                continue
+            }
+            let marker = listMarker.firstMatch(in: line, range: NSRange(location: 0, length: ns.length))
+                .map { ns.substring(with: $0.range) } ?? ""
+            let body = ns.substring(from: (marker as NSString).length)
+            guard !body.trimmingCharacters(in: .whitespaces).isEmpty else {
+                lines.append(line)
+                continue
+            }
+            let shown = sentences(body).compactMap(kept)
+            guard !shown.isEmpty else { continue }
+            lines.append(marker + shown.joined(separator: " "))
+        }
+        return lines.joined(separator: "\n")
+    }
+
     private static func isDoubt(_ sentence: String) -> Bool {
         if sentence.contains("OCR") { return true }
         let s = String(sentence.lowercased().drop { !$0.isLetter })
