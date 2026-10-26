@@ -9,6 +9,7 @@ struct AssistantPanel: View {
 
     @State private var keyInput = ""
     @FocusState private var inputFocused: Bool
+    @State private var askWebSearch = false
 
     init(assistant: AssistantModel, editor: EditorModel, onClose: @escaping () -> Void) {
         self.assistant = assistant
@@ -28,7 +29,22 @@ struct AssistantPanel: View {
             controls
         }
         .background(Color(uiColor: .systemBackground))
-        .onAppear { assistant.warmUp() }
+        .onAppear {
+            assistant.warmUp()
+            // The only question the assistant asks: whether its searches may go to the web.
+            if !settings.askedWebSearch && settings.engine != .claude { askWebSearch = true }
+        }
+        .alert(Loc.t("İnternette arama açılsın mı?"), isPresented: $askWebSearch) {
+            Button(Loc.t("Aç")) { answerWebSearch(true) }
+            Button(Loc.t("Kapalı kalsın"), role: .cancel) { answerWebSearch(false) }
+        } message: {
+            Text(Loc.t("Açıksa yalnızca aranan kelimeler Wikipedia ve DuckDuckGo'ya gider; notların gönderilmez."))
+        }
+    }
+
+    private func answerWebSearch(_ on: Bool) {
+        settings.webSearch = on
+        settings.askedWebSearch = true
     }
 
     // MARK: Header

@@ -49,6 +49,11 @@ final class AppSettings: ObservableObject {
     @Published var webSearch: Bool {
         didSet { UserDefaults.standard.set(webSearch, forKey: "webSearch") }
     }
+    /// Whether the user has answered "İnternette arama açılsın mı?", asked once when the assistant
+    /// first opens. Until then the App Store edition sends nothing to the web.
+    @Published var askedWebSearch: Bool {
+        didSet { UserDefaults.standard.set(askedWebSearch, forKey: "askedWebSearch") }
+    }
     @Published var serverURL: String {
         didSet { UserDefaults.standard.set(serverURL, forKey: "serverURL") }
     }
@@ -177,7 +182,8 @@ final class AppSettings: ObservableObject {
         let d = UserDefaults.standard
         d.register(defaults: [
             "engine": AIEngine.deviceBrain.rawValue,
-            "webSearch": true,
+            "webSearch": !ProPlan.sells,
+            "askedWebSearch": false,
             "serverURL": "",
             "serverModel": "",
             "serverSendsImages": false,
@@ -210,6 +216,7 @@ final class AppSettings: ObservableObject {
         language = AppLanguage.stored
         engine = AIEngine.migrated(AIEngine(rawValue: d.string(forKey: "engine") ?? ""))
         webSearch = d.bool(forKey: "webSearch")
+        askedWebSearch = d.bool(forKey: "askedWebSearch")
         serverURL = d.string(forKey: "serverURL") ?? ""
         serverModel = d.string(forKey: "serverModel") ?? ""
         serverSendsImages = d.bool(forKey: "serverSendsImages")
