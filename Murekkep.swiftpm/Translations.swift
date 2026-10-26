@@ -475,7 +475,6 @@ enum Translations {
         "Mürekkeple düzgün kalp": "A neat heart in ink",
         "Mürekkeple yazılır": "Written in ink",
         "Newton'un 2. yasası": "Newton's 2nd law",
-        "Neye ağırlık verilsin, kime göre anlatılsın, neyi atlasın; serbestçe yaz.": "What to emphasize, who it's for, what to skip; write freely.",
         "Noktalı": "Dotted",
         "Normal gerilme": "Normal stress",
         "Not": "Note",
@@ -486,7 +485,6 @@ enum Translations {
         "Notlar": "Notes",
         "Notlarda ve özetlerde ara": "Search notes and overviews",
         "Notlarım": "My notes",
-        "Odak (isteğe bağlı)": "Focus (optional)",
         "Ohm yasası": "Ohm's law",
         "Ok": "Arrow",
         "Okul · Bölüm": "School · Department",
@@ -898,7 +896,6 @@ enum Translations {
         "Üçgen": "Triangle",
         "çözüm yok (çelişki)": "no solution (contradiction)",
         "ör. 192.168.1.20:11434": "e.g. 192.168.1.20:11434",
-        "ör. sınavda çıkabilecek mekanizmalar, klinik önemi, 3. hafta konuları…": "e.g. mechanisms likely on the exam, clinical relevance, week 3 topics…",
         "İdeal gaz": "Ideal gas",
         "İfade okunamadı. Örnek: x^2 - 3x + 1": "Couldn't read the expression. Example: x^2 - 3x + 1",
         "İki parmakla dokununca geri al, üç parmakla yinele": "Two-finger tap to undo, three-finger tap to redo",
@@ -1286,5 +1283,14 @@ enum Translations {
         "{0}/yıl": "{0}/year",
         "İnternet bağlantını kontrol edip yeniden dene.": "Check your internet connection and try again.",
         "Şimdi değil": "Not now",
+        // Studio notes to the AI (2026-10-26)
+        "Yapay zekâya not (isteğe bağlı)": "Note to the AI (optional)",
+        "Nasıl anlatılsın, neye ağırlık verilsin, neyi atlasın; serbestçe yaz. Yapay zekâ buna göre hazırlar.": "How to explain it, what to stress, what to skip; write freely. The AI follows it.",
+        "Nasıl hazırlansın, neye ağırlık verilsin, neyi atlasın; serbestçe yaz. Yapay zekâ buna göre hazırlar.": "How to make it, what to stress, what to skip; write freely. The AI follows it.",
+        "ör. örnekleri günlük hayattan ver, formülleri adım adım çöz, sınavda çıkabilecek yerlere ağırlık ver…": "e.g. use everyday examples, solve formulas step by step, stress what may come up in the exam…",
+        "ör. yalnızca tanımlar ve formüller, arka yüz tek cümle, İngilizce terimleri de yaz…": "e.g. only definitions and formulas, one sentence on the back, add the English terms…",
+        "ör. zor, sınav tarzı sorular; işlem gerektirenler olsun, şıklar birbirine yakın olsun…": "e.g. hard, exam-style questions; include ones that need working out, with close choices…",
+        "ör. tarih sırasıyla dallansın, her dalda bir örnek olsun…": "e.g. branch in date order, with one example on each branch…",
+        "ör. sınava son gün tekrarı için kısa tut, formülleri ayrı topla…": "e.g. keep it short for a last-day review, gather the formulas separately…",
     ]
 }

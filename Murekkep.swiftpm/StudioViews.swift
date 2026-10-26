@@ -88,9 +88,9 @@ struct StudioCreateSheet: View {
                         if bookSource != nil {
                             chapterSection
                         }
+                        focusSection
                         formatSection
                         themeSection
-                        focusSection
                         voiceSection
                         engineSection
                     }
@@ -228,14 +228,16 @@ struct StudioCreateSheet: View {
         }
     }
 
+    /// The student's own words to the writer: how to tell it, what to stress, what to skip.
     private var focusSection: some View {
         Section {
-            TextField(Loc.t("ör. sınavda çıkabilecek mekanizmalar, klinik önemi, 3. hafta konuları…"), text: $options.focus, axis: .vertical)
-                .lineLimit(2...5)
+            TextField(Loc.t("ör. örnekleri günlük hayattan ver, formülleri adım adım çöz, sınavda çıkabilecek yerlere ağırlık ver…"),
+                      text: $options.focus, axis: .vertical)
+                .lineLimit(3...6)
         } header: {
-            Text(Loc.t("Odak (isteğe bağlı)"))
+            Label(Loc.t("Yapay zekâya not (isteğe bağlı)"), systemImage: "text.bubble")
         } footer: {
-            Text(Loc.t("Neye ağırlık verilsin, kime göre anlatılsın, neyi atlasın; serbestçe yaz."))
+            Text(Loc.t("Nasıl anlatılsın, neye ağırlık verilsin, neyi atlasın; serbestçe yaz. Yapay zekâ buna göre hazırlar."))
         }
     }
 

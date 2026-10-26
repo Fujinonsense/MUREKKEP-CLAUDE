@@ -9,6 +9,14 @@ struct StudyOptions {
     var english: Bool
     /// Cards or questions.
     var count: Int
+    /// The student's note to the writer ("only definitions", "hard, exam-style questions"…).
+    var note = ""
+
+    /// The note as a prompt line, or "" without one.
+    var noteLine: String {
+        let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? "" : "Öğrencinin notu (kaynaklara bağlı kalarak buna uy): \(n)"
+    }
 }
 
 /// Writes a study tool from the gathered sources with the chosen brain: the on-device model (part by
@@ -149,7 +157,8 @@ enum StudyWriter {
             shape = #"{"summary":["…"],"sections":[{"heading":"…","points":["…"]}],"terms":[{"term":"…","definition":"…"}],"questions":["…"]}"#
                 + " — 3 cümlelik özet, her bölüm için 3-5 madde, 8-14 terim, 5-8 düşündürücü soru."
         }
-        return "Aşağıdaki kaynaklardan bir çalışma aracı hazırla. Yalnızca kaynaklara dayan. Yanıtın yalnızca şu biçimde tek bir JSON olsun, başka hiçbir şey yazma:\n\(shape)\n\nKaynaklar:\n\(text)"
+        let note = options.noteLine.isEmpty ? "" : "\n\(options.noteLine)"
+        return "Aşağıdaki kaynaklardan bir çalışma aracı hazırla. Yalnızca kaynaklara dayan. Yanıtın yalnızca şu biçimde tek bir JSON olsun, başka hiçbir şey yazma:\n\(shape)\(note)\n\nKaynaklar:\n\(text)"
     }
 
     /// The JSON object in a reply (models sometimes wrap it in a sentence or a code fence).
@@ -203,6 +212,7 @@ enum StudyWriter {
                                  progress: @escaping Progress) async throws {
         let lang = language(options.english)
         let instructions = "Sen titiz bir öğretmensin. Yalnızca verilen metne dayan, uydurma. " + StudioWriter.scriptDirective(lang)
+            + (options.noteLine.isEmpty ? "" : " " + options.noteLine)
         set.engine = Loc.t("Cihazda · Apple Intelligence")
         let chunks = parts.prefix(10)
         // Cards and questions are spread over the parts.

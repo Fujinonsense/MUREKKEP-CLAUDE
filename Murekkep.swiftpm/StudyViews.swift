@@ -21,6 +21,16 @@ extension StudyKind {
 
     /// Cards and questions come in a number; maps and guides do not.
     var hasCount: Bool { self == .flashcards || self == .quiz }
+
+    /// What a note to the AI might say for this kind.
+    var noteExample: String {
+        switch self {
+        case .flashcards: return Loc.t("ör. yalnızca tanımlar ve formüller, arka yüz tek cümle, İngilizce terimleri de yaz…")
+        case .quiz: return Loc.t("ör. zor, sınav tarzı sorular; işlem gerektirenler olsun, şıklar birbirine yakın olsun…")
+        case .mindMap: return Loc.t("ör. tarih sırasıyla dallansın, her dalda bir örnek olsun…")
+        case .guide: return Loc.t("ör. sınava son gün tekrarı için kısa tut, formülleri ayrı topla…")
+        }
+    }
 }
 
 struct StudyRequest: Identifiable {
@@ -215,6 +225,7 @@ struct StudyCreateSheet: View {
     @State private var count = 20
     @State private var engine: StudioEngine
     @State private var showAllSources = false
+    @State private var note = ""
 
     init(request: StudyRequest, engine: StudioEngine) {
         self.request = request
@@ -314,6 +325,14 @@ struct StudyCreateSheet: View {
                     Text(Loc.t("Kaynaklar · {0} seçili", "\(selected.count)"))
                 }
                 Section {
+                    TextField(kind.noteExample, text: $note, axis: .vertical)
+                        .lineLimit(3...6)
+                } header: {
+                    Label(Loc.t("Yapay zekâya not (isteğe bağlı)"), systemImage: "text.bubble")
+                } footer: {
+                    Text(Loc.t("Nasıl hazırlansın, neye ağırlık verilsin, neyi atlasın; serbestçe yaz. Yapay zekâ buna göre hazırlar."))
+                }
+                Section {
                     Picker(Loc.t("Hazırlayan"), selection: $engine) {
                         ForEach(StudioEngine.visible(settings: settings)) { e in
                             Label(e.title, systemImage: e.symbol).tag(e)
@@ -373,7 +392,7 @@ struct StudyCreateSheet: View {
         let chosen = candidates.filter { selected.contains($0.id) }
         guard !chosen.isEmpty else { return }
         guard ProStore.shared.use(.studySet) else { return }
-        study.start(options: StudyOptions(kind: kind, english: english, count: count), sources: chosen,
+        study.start(options: StudyOptions(kind: kind, english: english, count: count, note: note), sources: chosen,
                     sectionID: request.sectionID, engine: engine, library: library, settings: settings)
         dismiss()
     }

@@ -410,9 +410,10 @@ enum StudioWriter {
     }
     #endif
 
+    /// The student's note to the writer, followed as long as it stays with the sources.
     private static func focusLine(_ options: OverviewOptions) -> String {
         let f = options.focus.trimmingCharacters(in: .whitespacesAndNewlines)
-        return f.isEmpty ? "" : "Odak: \(f)."
+        return f.isEmpty ? "" : "Öğrencinin notu (kaynaklara bağlı kalarak buna uy): \(f)."
     }
 
     /// Opening and closing of a podcast written piece by piece.
@@ -623,7 +624,7 @@ enum StudioPrompts {
         - Biçim: \(options.format.prompt(for: options.kind))
         - Süre: yaklaşık \(options.length.minutes) dakika; toplam seslendirme yaklaşık \(words) kelime.
         - Seviye: \(options.level.prompt)
-        - Odak: \(focus.isEmpty ? "kaynakların en önemli konuları" : focus)
+        - Öğrencinin notu: \(focus.isEmpty ? "yok; kaynakların en önemli konularına odaklan" : focus + " (kaynaklara bağlı kalarak buna uy)")
         - Dil: \(language.isEnglish ? "İngilizce (English)" : "Türkçe")
         - Kaynaklar: \(sources.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "; "))
 
