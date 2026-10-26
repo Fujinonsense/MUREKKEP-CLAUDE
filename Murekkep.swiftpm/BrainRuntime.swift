@@ -29,12 +29,14 @@ enum BrainRuntime {
 
     private static let gate = BrainGate()
 
-    /// Posted on the main thread when the model needs room to load: the page lets go of the PDF images
-    /// and caches it can draw again.
+    /// Posted on the main thread before the model loads: the page and the PDF caches let go of the
+    /// page images that are not on screen (they can draw them again), so the model and the pages
+    /// fit the iPad's memory side by side.
     static let needsMemory = Notification.Name("MurekkepBrainNeedsMemory")
 
     /// Called as the app goes to the background, where the GPU may not be used: the answer in
-    /// progress stops (this waits for it briefly) and an idle model leaves memory.
+    /// progress stops with `BrainInterrupted` (this waits for it briefly; Studio does the step
+    /// again on screen) and an idle model leaves memory.
     static func pauseForBackground() {
         gate.pause()
         Task { await BrainRuntime.unloadIfIdle() }
@@ -111,76 +113,38 @@ enum BrainRuntime {
     }
 }
 
-/// Keeps the GPU out of the background: an answer may not start while the app is away, and going
-/// away waits (briefly) for the running one to stop.
-final class BrainGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var paused = false
-    private var running = 0
-
-    var isPaused: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return paused
-    }
-
-    func enter() throws {
-        lock.lock()
-        defer { lock.unlock() }
-        if paused {
-            throw LocalAIError(Loc.t("Uygulama arka plandayken model çalışmaz. Tekrar sor."))
-        }
-        running += 1
-    }
-
-    func leave() {
-        lock.lock()
-        running -= 1
-        lock.unlock()
-    }
-
-    func pause() {
-        lock.lock()
-        paused = true
-        lock.unlock()
-        let deadline = Date().addingTimeInterval(0.8)
-        while Date() < deadline {
-            lock.lock()
-            let busy = running > 0
-            lock.unlock()
-            if !busy { return }
-            usleep(10_000)
-        }
-    }
-
-    func resume() {
-        lock.lock()
-        paused = false
-        lock.unlock()
-    }
-}
-
 #if canImport(MLX) && canImport(MLXLLM) && canImport(MLXLMCommon) && canImport(Tokenizers) && !MUREKKEP_PLAIN
 
-/// The model stays loaded between answers (loading takes seconds) and answers one at a time.
+/// The model stays loaded between answers (loading takes seconds) and answers one at a time. After
+/// `idleLimit` without a request it leaves memory: on an 8 GB iPad the 4B's working set (about
+/// 3.9 GB) leaves little room for the pages; the next request loads it again.
 private actor BrainHost {
     static let shared = BrainHost()
+
+    /// Seconds without a request after which the model is unloaded.
+    static let idleLimit: TimeInterval = 180
 
     private var container: ModelContainer?
     private var directory: URL?
     private var busy = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// When the last request (or warm-up) ended.
+    private var lastUse = Date()
+    private var idleCheck: Task<Void, Never>?
 
     func acquire() async {
         if busy {
             await withCheckedContinuation { waiting.append($0) }
         }
         busy = true
+        idleCheck?.cancel()
     }
 
     func release() {
+        lastUse = Date()
         if waiting.isEmpty {
             busy = false
+            scheduleIdleUnload()
         } else {
             waiting.removeFirst().resume()
         }
@@ -189,15 +153,32 @@ private actor BrainHost {
     func warm(_ directory: URL) async {
         guard !busy else { return }
         busy = true
+        idleCheck?.cancel()
         _ = try? await load(directory)
         release()
     }
 
     func unload(force: Bool) {
         guard force || !busy else { return }
+        idleCheck?.cancel()
         container = nil
         directory = nil
         Memory.clearCache()
+    }
+
+    /// Unloads the model when `idleLimit` has passed since the last request (not while one runs).
+    func unloadAfterIdle() {
+        guard !busy, Date().timeIntervalSince(lastUse) >= Self.idleLimit - 1 else { return }
+        unload(force: false)
+    }
+
+    private func scheduleIdleUnload() {
+        idleCheck?.cancel()
+        idleCheck = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: UInt64(BrainHost.idleLimit * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await BrainHost.shared.unloadAfterIdle()
+        }
     }
 
     private func load(_ directory: URL) async throws -> ModelContainer {
@@ -209,11 +190,12 @@ private actor BrainHost {
         let weights = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil))?
             .filter { $0.pathExtension == "safetensors" }
             .reduce(Int64(0)) { $0 + max(0, BrainFetcher.fileSize($1)) } ?? 0
-        // The weights stay as they are (4-bit); room is made around them instead.
+        // The weights stay as they are (4-bit); room is made around them instead: the page images
+        // that are not on screen go first, every time, so the pages do not crowd the model later.
         let need = BrainMemory.need(weights: weights)
+        await MainActor.run { NotificationCenter.default.post(name: BrainRuntime.needsMemory, object: nil) }
         var free = Int64(os_proc_available_memory())
         if free > 0, free < need {
-            await MainActor.run { NotificationCenter.default.post(name: BrainRuntime.needsMemory, object: nil) }
             try? await Task.sleep(nanoseconds: 200_000_000)
             free = Int64(os_proc_available_memory())
         }
@@ -261,7 +243,7 @@ private actor BrainHost {
             if gate.isPaused {
                 // Give the generation a moment to see the stream end before the app is suspended.
                 try? await Task.sleep(nanoseconds: 80_000_000)
-                throw LocalAIError(Loc.t("Uygulama arka plana geçtiği için yanıt durdu. Tekrar sor."))
+                throw BrainInterrupted(started: true)
             }
             try Task.checkCancellation()
             raw += chunk

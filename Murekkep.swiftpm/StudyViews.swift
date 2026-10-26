@@ -159,6 +159,11 @@ struct StudyJobRow: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 8)
+            if job.error != nil, let retry = job.retry {
+                Button(Loc.t("Tekrar dene"), action: retry)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
             Button {
                 study.dismiss(job)
             } label: {

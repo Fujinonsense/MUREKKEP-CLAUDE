@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import Metal
+import UIKit
 
 /// Page geometry helpers shared by the GPU rasterizer, thumbnails and PDF export.
 enum PDFGeometry {
@@ -116,10 +117,34 @@ final class PDFTextureCache {
     private var wanted: Set<Int> = []
     private var latestDetailGeneration = 0
 
+    private var observers: [NSObjectProtocol] = []
+
     init(device: MTLDevice, commandQueue: MTLCommandQueue, url: URL) {
         self.device = device
         self.commandQueue = commandQueue
         self.url = url
+        // Memory is short, or the downloaded model is about to load (up to six 4096² pages are half
+        // a gigabyte): the pages off screen go, in every cache; they are drawn again when scrolled to.
+        let center = NotificationCenter.default
+        for name in [UIApplication.didReceiveMemoryWarningNotification, BrainRuntime.needsMemory] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.purgeForMemory()
+            })
+        }
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    /// Keeps only the pages on screen and next to them (`setVisible`).
+    func purgeForMemory() {
+        lock.lock()
+        let keep = Array(wanted)
+        lock.unlock()
+        purge(keeping: keep)
     }
 
     func setVisible(_ pages: [Int]) {

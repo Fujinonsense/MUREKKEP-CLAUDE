@@ -1309,5 +1309,12 @@ enum Translations {
         "Bu not daha yeni bir Mürekkep sürümüyle kaydedilmiş; bu sürüm onu açamıyor. Yazılar dosyada duruyor; görmek için uygulamayı güncelle.": "This note was saved by a newer version of Mürekkep, which this version can't open. The ink is still in the file; update the app to see it.",
         "Not salt okunur: yeni yazılar kaydedilmez.": "Read-only note: new writing isn't saved.",
         "Fotoğraflar PDF'e dönüştürülüyor ({0}/{1})": "Converting photos to a PDF ({0}/{1})",
+        // The one internet question (1.1, 2026-10-26)
+        "İnternette arama açılsın mı?": "Turn on internet search?",
+        "Aç": "Turn On",
+        "Kapalı kalsın": "Keep It Off",
+        "Açıksa yalnızca aranan kelimeler Wikipedia ve DuckDuckGo'ya gider; notların gönderilmez.": "When it's on, only the words being searched go to Wikipedia and DuckDuckGo; your notes are never sent.",
+        // Studio interruptions (1.1, 2026-10-26)
+        "Uygulama arka plana geçince durdu; geri dönünce yeniden başlar.": "Stopped when the app went to the background; it starts again when you come back.",
     ]
 }

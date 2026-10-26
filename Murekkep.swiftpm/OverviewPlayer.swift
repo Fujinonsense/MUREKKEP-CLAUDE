@@ -889,7 +889,9 @@ enum OverviewQuestions {
     static func answer(_ question: String, overview: Overview, segment: Int, settings: AppSettings) async -> String {
         let prompt = StudioPrompts.question(question, overview: overview, position: segment)
         let directive = StudioWriter.directive(overview.language)
-        if let key = settings.apiKey, settings.engine == .claude || overview.engine.hasPrefix("Claude") || !OnDeviceAI.isAvailable {
+        let brainReady = DeviceBrain.shared.isReady
+        /// Claude's answer, or what went wrong; nil when it answered nothing.
+        func claude(_ key: String) async -> String? {
             let request = ClaudeRequest(model: settings.model.rawValue, effort: "low", maxTokens: 2000,
                                         system: ClaudeRequest.tutorSystemPrompt + "\n" + directive,
                                         context: .text(String(overview.scriptText.prefix(200_000)), title: overview.title),
@@ -897,10 +899,27 @@ enum OverviewQuestions {
                                         turns: [ClaudeTurn(role: .user, text: prompt, imageJPEG: nil)])
             do {
                 let text = try await ClaudeClient.collect(request, apiKey: key)
-                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return text }
+                return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
             } catch {
                 return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
+        }
+        // Claude when it was chosen or wrote the overview, or when the iPad has no model of its own.
+        if let key = settings.apiKey,
+           settings.engine == .claude || overview.engine.hasPrefix("Claude") || !(brainReady || OnDeviceAI.isAvailable),
+           let text = await claude(key) {
+            return text
+        }
+        // The downloaded model when it is on the iPad; otherwise, or when it fails, as before: Claude
+        // without Apple's model, Apple's model, the script itself.
+        if brainReady, let directory = DeviceBrain.shared.directory {
+            let request = BrainRuntime.Request(system: "Sen bir ders asistanısın. Kısa ve net cevap ver. " + directive,
+                                               prompt: prompt, thinking: nil, maxAnswerTokens: 400, temperature: 0.7)
+            if let raw = try? await BrainRuntime.complete(request, directory: directory) {
+                let text = ThinkingText.split(raw, thinking: false).answer
+                if !text.isEmpty { return text }
+            }
+            if let key = settings.apiKey, !OnDeviceAI.isAvailable, let text = await claude(key) { return text }
         }
         if OnDeviceAI.isAvailable {
             do {

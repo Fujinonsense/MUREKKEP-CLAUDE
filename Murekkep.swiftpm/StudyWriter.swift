@@ -42,6 +42,10 @@ enum StudyWriter {
                 try await brain(&set, options: options, material: material, progress: progress)
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let interrupted as BrainInterrupted {
+                // The app went to the background: the job does this step again on screen, with the
+                // same writer (BackgroundWork).
+                throw interrupted
             } catch {
                 // Not on the iPad yet, or it failed: Apple's model, then the keyless writer below.
                 set.engine = Loc.t("Çevrimdışı")

@@ -246,7 +246,9 @@ enum StudioWriter {
     }
 
     /// The same script Claude writes (StudioPrompts), by the model downloaded to the iPad; nil when it
-    /// is not there, fails, or answers in the other language.
+    /// is not there, fails, or answers mostly in the other language. Throws `BrainInterrupted` when the
+    /// app went to the background in the middle: the job does this step again on screen, it is not
+    /// handed to a lesser writer.
     @MainActor
     private static func brain(options: OverviewOptions, material: StudioMaterial, language: OverviewLanguage,
                               progress: @escaping WriteProgress) async throws -> Overview? {
@@ -272,14 +274,52 @@ enum StudioWriter {
             }
             var overview = try StudioScriptParser.overview(from: reply, options: options, language: language,
                                                            material: material, engine: Loc.t("Cihazda · {0}", title))
-            guard speaks(language, overview.segmentTexts.joined(separator: " ")) else { return nil }
+            guard try await keepsLanguage(&overview, language: language, directory: directory) else { return nil }
             if overview.title.isEmpty { overview.title = fallbackTitle(material) }
             return overview
         } catch is CancellationError {
             throw CancellationError()
+        } catch let interrupted as BrainInterrupted {
+            throw interrupted
         } catch {
             return nil
         }
+    }
+
+    /// Each scene or line is checked on its own, as Apple's are (onDevice): the ones in the other
+    /// language are asked for again in the overview's language, and any still wrong are left out, so
+    /// no voice reads a text that is not its own. False when more than half were wrong: the model did
+    /// not keep to the language, and the next writer takes over as before.
+    @MainActor
+    private static func keepsLanguage(_ overview: inout Overview, language: OverviewLanguage, directory: URL) async throws -> Bool {
+        let texts = overview.segmentTexts
+        let wrong = ScriptLanguage.wrong(texts) { speaks(language, $0) }
+        guard ScriptLanguage.keeps(total: texts.count, wrong: wrong.count) else { return false }
+        guard !wrong.isEmpty else { return true }
+        let request = BrainRuntime.Request(system: scriptDirective(language),
+                                           prompt: ScriptLanguage.rewritePrompt(wrong.map { texts[$0] }, english: language.isEnglish),
+                                           thinking: nil, maxAnswerTokens: min(3_000, wrong.count * 300 + 100), temperature: 0.3)
+        var again: [String]?
+        do {
+            let raw = try await BrainRuntime.complete(request, directory: directory)
+            again = ScriptLanguage.rewritten(ThinkingText.split(raw, thinking: false).answer, count: wrong.count)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let interrupted as BrainInterrupted {
+            throw interrupted
+        } catch {
+            again = nil
+        }
+        var dropped = Set<Int>()
+        for (k, i) in wrong.enumerated() {
+            if let text = again?[k], speaks(language, text) {
+                overview.setSegmentText(i, text)
+            } else {
+                dropped.insert(i)
+            }
+        }
+        overview.removeSegments(dropped)
+        return !overview.segmentTexts.isEmpty
     }
 
     // MARK: On the device

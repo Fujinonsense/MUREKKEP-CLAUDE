@@ -333,6 +333,38 @@ struct Overview: Codable, Hashable, Identifiable {
 
     var kind: OverviewKind { options.kind }
     var segmentTexts: [String] { kind == .video ? scenes.map(\.narration) : lines.map(\.text) }
+
+    /// Gives a segment (a scene's narration or a dialogue line) another spoken text.
+    mutating func setSegmentText(_ i: Int, _ text: String) {
+        if kind == .video {
+            if scenes.indices.contains(i) { scenes[i].narration = text }
+        } else if lines.indices.contains(i) {
+            lines[i].text = text
+        }
+    }
+
+    /// Leaves these segments out; a dropped line's chapter title moves to the next line kept.
+    mutating func removeSegments(_ indices: Set<Int>) {
+        guard !indices.isEmpty else { return }
+        if kind == .video {
+            scenes = scenes.enumerated().filter { !indices.contains($0.offset) }.map(\.element)
+            return
+        }
+        var kept: [DialogueLine] = []
+        var pending: String?
+        for (i, line) in lines.enumerated() {
+            if indices.contains(i) {
+                if pending == nil, let chapter = line.chapter, !chapter.isEmpty { pending = chapter }
+                continue
+            }
+            var next = line
+            if let chapter = pending, (next.chapter ?? "").isEmpty { next.chapter = chapter }
+            pending = nil
+            kept.append(next)
+        }
+        lines = kept
+    }
+
     var isVoiced: Bool { !durations.isEmpty && durations.count == segmentTexts.count && audioFiles.count == durations.count }
 
     var timeline: OverviewTimeline { OverviewTimeline(durations: durations, kind: kind) }
@@ -541,10 +573,17 @@ final class StudioStore: ObservableObject {
         job.task = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
+            // The free plan's use counts only for an overview that gets made: cancelled, stopped or
+            // failed, it is given back (a failed job offers a retry, which counts again).
+            var made = false
+            defer { if !made { ProStore.shared.refund(.overview) } }
             if Task.isCancelled {
                 self.jobs.removeAll { $0.id == job.id }
                 return
             }
+            // The app may leave the screen in the middle: iOS gives it a while to go on.
+            let background = BackgroundWork("studio")
+            defer { background.end() }
             do {
                 job.phase = Loc.t("Kaynaklar okunuyor…")
                 job.progress = 0.03
@@ -557,10 +596,14 @@ final class StudioStore: ObservableObject {
                 try Task.checkCancellation()
                 job.phase = Loc.t("Senaryo yazılıyor…")
                 job.progress = 0.08
-                var overview = try await StudioWriter.write(options: options, material: material, engine: engine,
-                                                            library: library, settings: settings) { fraction, phase in
-                    job.progress = 0.08 + 0.52 * fraction
-                    if let phase { job.phase = phase }
+                // Stopped by the background (the GPU may not be used there), the script is written
+                // again once the app is back on screen, by the same writer.
+                var overview = try await BackgroundWork.retrying(paused: { job.phase = $0 }) {
+                    try await StudioWriter.write(options: options, material: material, engine: engine,
+                                                 library: library, settings: settings) { fraction, phase in
+                        job.progress = 0.08 + 0.52 * fraction
+                        if let phase { job.phase = phase }
+                    }
                 }
                 overview.sectionID = sectionID
                 try Task.checkCancellation()
@@ -578,6 +621,7 @@ final class StudioStore: ObservableObject {
                     // A build without the embedded voices: the script is kept, silent.
                     await OverviewThumbnail.make(for: overview, folder: folder, library: library)
                     self.save(overview)
+                    made = true
                     job.phase = Loc.t("Sessiz kaydedildi")
                     job.error = SpeechError.unavailable.errorDescription
                     return
@@ -589,6 +633,7 @@ final class StudioStore: ObservableObject {
                 job.phase = Loc.t("Son dokunuşlar…")
                 await OverviewThumbnail.make(for: overview, folder: folder, library: library)
                 self.save(overview)
+                made = true
                 self.jobs.removeAll { $0.id == job.id }
                 self.justFinished = overview.id
             } catch is CancellationError {
@@ -598,6 +643,16 @@ final class StudioStore: ObservableObject {
             } catch {
                 job.phase = Loc.t("Olmadı")
                 job.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                // The same overview again, from the start; the use given back is counted again (with
+                // none left the Pro page opens instead).
+                job.retry = { [weak self] in
+                    Task { @MainActor in
+                        guard let self, ProStore.shared.use(.overview) else { return }
+                        self.jobs.removeAll { $0.id == job.id }
+                        self.start(options: options, sources: sources, sectionID: sectionID, engine: engine,
+                                   library: library, settings: settings, chapter: chapter)
+                    }
+                }
             }
         }
         queueTail = job.task
@@ -610,6 +665,8 @@ final class StudioStore: ObservableObject {
         jobs.insert(job, at: 0)
         job.task = Task { @MainActor [weak self] in
             guard let self else { return }
+            let background = BackgroundWork("studio-voice")
+            defer { background.end() }
             do {
                 job.phase = Loc.t("Yeniden seslendiriliyor…")
                 let folder = self.folder(for: overview.id)
@@ -645,6 +702,8 @@ final class StudioJob: ObservableObject, Identifiable {
     @Published var progress: Double = 0
     @Published var error: String?
     var task: Task<Void, Never>?
+    /// Starts the job again after it failed (set with `error`).
+    var retry: (() -> Void)?
 
     init(kind: OverviewKind, sectionID: UUID?, title: String) {
         self.kind = kind

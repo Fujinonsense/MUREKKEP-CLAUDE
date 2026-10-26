@@ -10,6 +10,8 @@ final class StudyJob: ObservableObject, Identifiable {
     @Published var progress: Double = 0
     @Published var error: String?
     var task: Task<Void, Never>?
+    /// Starts the job again after it failed (set with `error`).
+    var retry: (() -> Void)?
 
     init(kind: StudyKind, sectionID: UUID?, title: String) {
         self.kind = kind
@@ -130,10 +132,17 @@ final class StudyStore: ObservableObject {
         job.task = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
+            // The free plan's use counts only for a set that gets made: cancelled, stopped or failed,
+            // it is given back (a failed job offers a retry, which counts again).
+            var made = false
+            defer { if !made { ProStore.shared.refund(.studySet) } }
             if Task.isCancelled {
                 self.jobs.removeAll { $0.id == job.id }
                 return
             }
+            // The app may leave the screen in the middle: iOS gives it a while to go on.
+            let background = BackgroundWork("study")
+            defer { background.end() }
             do {
                 job.phase = Loc.t("Kaynaklar okunuyor…")
                 job.progress = 0.03
@@ -146,13 +155,18 @@ final class StudyStore: ObservableObject {
                 try Task.checkCancellation()
                 job.phase = Loc.t("Hazırlanıyor…")
                 job.progress = 0.25
-                var set = try await StudyWriter.write(options: options, material: material, engine: engine, settings: settings) { fraction, phase in
-                    job.progress = 0.25 + 0.73 * fraction
-                    if let phase { job.phase = phase }
+                // Stopped by the background (the GPU may not be used there), the set is written again
+                // once the app is back on screen, by the same writer.
+                var set = try await BackgroundWork.retrying(paused: { job.phase = $0 }) {
+                    try await StudyWriter.write(options: options, material: material, engine: engine, settings: settings) { fraction, phase in
+                        job.progress = 0.25 + 0.73 * fraction
+                        if let phase { job.phase = phase }
+                    }
                 }
                 set.sectionID = sectionID
                 if let chapter { set.title = chapter.title }
                 self.save(set)
+                made = true
                 self.jobs.removeAll { $0.id == job.id }
                 self.justFinished = set.id
             } catch is CancellationError {
@@ -160,6 +174,16 @@ final class StudyStore: ObservableObject {
             } catch {
                 job.phase = Loc.t("Olmadı")
                 job.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                // The same set again, from the start; the use given back is counted again (with none
+                // left the Pro page opens instead).
+                job.retry = { [weak self] in
+                    Task { @MainActor in
+                        guard let self, ProStore.shared.use(.studySet) else { return }
+                        self.jobs.removeAll { $0.id == job.id }
+                        self.start(options: options, sources: sources, sectionID: sectionID, engine: engine,
+                                   library: library, settings: settings, chapter: chapter)
+                    }
+                }
             }
         }
         queueTail = job.task

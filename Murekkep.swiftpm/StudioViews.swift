@@ -612,6 +612,11 @@ struct JobRow: View {
                     .font(.caption.weight(.bold).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+            if job.error != nil, let retry = job.retry {
+                Button(Loc.t("Tekrar dene"), action: retry)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
             Button {
                 studio.dismiss(job)
             } label: {

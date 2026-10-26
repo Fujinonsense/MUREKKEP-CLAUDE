@@ -218,6 +218,19 @@ final class ProStore: ObservableObject {
         return true
     }
 
+    /// Gives back `count` uses counted by `use` for work that was not delivered (an overview or a
+    /// study set that failed, stopped or was cancelled): this day's or week's count only, never
+    /// below zero.
+    func refund(_ feature: ProPlan.Feature, count: Int = 1) {
+        guard Self.sells, !isPro, count > 0 else { return }
+        let key = ProPlan.Usage.key(feature, on: Date(), calendar: calendar)
+        guard let used = usage.counts[key], used > 0 else { return }
+        usage.counts[key] = max(0, used - count)
+        if let data = try? JSONEncoder().encode(usage) {
+            UserDefaults.standard.set(data, forKey: Self.usageKey)
+        }
+    }
+
     /// How much of the nature pens' trial ink is left, 0...1 (1 with Pro or in the personal build).
     var trialInkLeft: Double {
         guard locks else { return 1 }

@@ -38,13 +38,16 @@ final class DeviceBrain: ObservableObject {
             }
         }
         let center = NotificationCenter.default
-        // The GPU may not be used in the background: an answer in progress stops before the app goes.
+        // The GPU may not be used in the background: an answer in progress stops before the app goes
+        // (BrainInterrupted; Studio does the step again on screen, BackgroundWork).
         center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
             BrainRuntime.pauseForBackground()
         }
         center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
             BrainRuntime.resume()
         }
+        // Memory is short: an idle model leaves (a running one cannot); the PDF page caches drop
+        // their off-screen pages on the same warning (PDFTextureCache).
         center.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { _ in
             Task { await BrainRuntime.unloadIfIdle() }
         }
