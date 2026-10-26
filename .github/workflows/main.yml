@@ -421,14 +421,14 @@ jobs:
               text = text.replace("TARGETED_DEVICE_FAMILY: \"1,2\"", "TARGETED_DEVICE_FAMILY: \"2\"")
               assert "TARGETED_DEVICE_FAMILY: \"2\"" in text, name
               # Its own bundle ID (App Store Connect: Murekkep, team DW66Y98N3Z), so it installs next to
-              # the personal build; version 1.0 on the store, and a new build number for every upload.
+              # the personal build; the store version (1.0 is live/in review, 1.1 next), and a new build number for every upload.
               text = text.replace("PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app",
                                   "PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.notebook")
-              text = text.replace("MARKETING_VERSION: \"3.0\"", "MARKETING_VERSION: \"1.0\"")
+              text = text.replace("MARKETING_VERSION: \"3.0\"", "MARKETING_VERSION: \"1.1\"")
               if os.environ.get("TESTFLIGHT") == "yes":
                   build = 100 + int(os.environ["GITHUB_RUN_NUMBER"])
                   text = text.replace("CURRENT_PROJECT_VERSION: \"29\"", f"CURRENT_PROJECT_VERSION: \"{build}\"")
-              assert "com.murekkep.notebook" in text and "MARKETING_VERSION: \"1.0\"" in text, name
+              assert "com.murekkep.notebook" in text and "MARKETING_VERSION: \"1.1\"" in text, name
               open(name, "w", encoding="utf-8").write(text)
           PYEOF
           fi

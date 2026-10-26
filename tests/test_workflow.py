@@ -182,11 +182,11 @@ def test_testflight_upload_is_opt_in():
 
 
 def test_app_store_edition_has_its_own_bundle_id_and_version(job):
-    # App Store Connect: Mürekkep, com.murekkep.notebook (team DW66Y98N3Z), version 1.0; the personal
+    # App Store Connect: Mürekkep, com.murekkep.notebook (team DW66Y98N3Z), version 1.1; the personal
     # build stays com.murekkep.app, so both can be installed on one iPad.
     script = step_with(job, 'if [ "$EDITION" = "appstore" ]')["run"]
     assert '"PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.notebook"' in script
-    assert 'MARKETING_VERSION: \\"1.0\\"' in script
+    assert 'MARKETING_VERSION: \\"1.1\\"' in script  # 1.0 went to App Review on 2026-10-26
     assert "GITHUB_RUN_NUMBER" in script  # every upload a new build number
 
 
