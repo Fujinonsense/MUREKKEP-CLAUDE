@@ -21,6 +21,15 @@ def test_codemagic_yaml_is_up_to_date_with_the_github_workflow():
     assert (ROOT / "codemagic.yaml").read_text(encoding="utf-8") == make_codemagic.render()
 
 
+def test_the_pdfkit_probe_is_short_and_needs_no_keys():
+    probe = yaml.safe_load((ROOT / "codemagic.yaml").read_text(encoding="utf-8"))["workflows"]["pdfkit-probe"]
+    assert probe["instance_type"] == "mac_mini_m2" and probe["max_build_duration"] <= 15
+    assert "groups" not in probe["environment"]
+    body = probe["scripts"][0]["script"]
+    assert "tools/pdfkit_probe/main.swift" in body and "tests/fixtures/calculus_p14.pdf" in body
+    assert (ROOT / "tests" / "fixtures" / "calculus_p14.pdf").exists()
+
+
 def test_runs_on_the_free_m2_mac_within_the_limit(flow):
     assert flow["instance_type"] == "mac_mini_m2"
     assert flow["max_build_duration"] <= 120

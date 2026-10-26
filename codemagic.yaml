@@ -584,3 +584,28 @@ workflows:
         echo "TestFlight'a yuklendi: App Store Connect > TestFlight'ta 15-30 dakikada 'Test Edilebilir' olur."
     artifacts:
     - '*.log'
+  pdfkit-probe:
+    name: Murekkep PDFKit Metni (deneme)
+    instance_type: mac_mini_m2
+    max_build_duration: 15
+    environment:
+      xcode: '26.5'
+    scripts:
+    - name: PDFKit ile Sayfa Metni
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        APP=Murekkep.swiftpm
+        xcrun swiftc -O tools/pdfkit_probe/main.swift tools/pdfkit_probe/Stubs.swift \
+          "$APP/MathEngine.swift" "$APP/ExactMath.swift" "$APP/PageMath.swift" "$APP/MathText.swift" "$APP/Questions.swift" \
+          -o "$RUNNER_TEMP/probe"
+        "$RUNNER_TEMP/probe" tests/fixtures/calculus_p14.pdf pdfkit_calculus_p14.txt
+    artifacts:
+    - pdfkit_*.txt

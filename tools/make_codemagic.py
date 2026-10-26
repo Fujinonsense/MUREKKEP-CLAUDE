@@ -80,9 +80,28 @@ def build():
                 "cache": {"cache_paths": ["$CM_BUILD_DIR/sherpa-out", "$CM_BUILD_DIR/spm"]},
                 "scripts": scripts,
                 "artifacts": ["*.log"],
-            }
+            },
+            # A page's text as PDFKit (the iPad's reader) gives it, and the math engine's answers on it:
+            # a minute on the Mac, no signing, started by hand when the iPad reads a page differently.
+            "pdfkit-probe": {
+                "name": "Murekkep PDFKit Metni (deneme)",
+                "instance_type": "mac_mini_m2",
+                "max_build_duration": 15,
+                "environment": {"xcode": XCODE},
+                "scripts": [script("PDFKit ile Sayfa Metni", PROBE)],
+                "artifacts": ["pdfkit_*.txt"],
+            },
         }
     }
+
+
+PROBE = """\
+APP=Murekkep.swiftpm
+xcrun swiftc -O tools/pdfkit_probe/main.swift tools/pdfkit_probe/Stubs.swift \\
+  "$APP/MathEngine.swift" "$APP/ExactMath.swift" "$APP/PageMath.swift" "$APP/MathText.swift" "$APP/Questions.swift" \\
+  -o "$RUNNER_TEMP/probe"
+"$RUNNER_TEMP/probe" tests/fixtures/calculus_p14.pdf pdfkit_calculus_p14.txt
+"""
 
 
 class Literal(yaml.SafeDumper):
