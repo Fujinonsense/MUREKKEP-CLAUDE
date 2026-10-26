@@ -9,6 +9,9 @@ struct PaywallView: View {
     @ObservedObject private var store = ProStore.shared
     @State private var plan: ProPlan.Product.Kind = .yearly
 
+    /// The plans in the order shown; the first one the App Store gave is chosen when the chosen one is missing.
+    private static let shown: [ProPlan.Product.Kind] = [.yearly, .monthly, .lifetime]
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -27,7 +30,10 @@ struct PaywallView: View {
                             .frame(maxWidth: .infinity, minHeight: 120)
                     } else {
                         plans
-                        purchase
+                        // Only a plan with its App Store price can be bought (the chosen one always has it).
+                        if let price = store.price(ProPlan.product(plan)) {
+                            purchase(price)
+                        }
                     }
                     footer
                 }
@@ -49,6 +55,14 @@ struct PaywallView: View {
             .accessibilityLabel(Loc.t("Kapat"))
         }
         .task { await store.refresh() }
+        .onChange(of: store.products, initial: true) { _, _ in keepPlanSellable() }
+    }
+
+    /// When the chosen plan is one the App Store did not give, the first one it did is chosen instead.
+    private func keepPlanSellable() {
+        guard store.price(ProPlan.product(plan)) == nil,
+              let first = Self.shown.first(where: { store.price(ProPlan.product($0)) != nil }) else { return }
+        plan = first
     }
 
     // MARK: Parts
@@ -141,14 +155,15 @@ struct PaywallView: View {
 
     private var plans: some View {
         VStack(spacing: 10) {
-            planRow(.yearly)
-            planRow(.monthly)
-            planRow(.lifetime)
+            ForEach(Self.shown, id: \.self) { kind in
+                planRow(kind)
+            }
         }
     }
 
     private func planRow(_ kind: ProPlan.Product.Kind) -> some View {
-        let chosen = plan == kind
+        let price = store.price(ProPlan.product(kind))
+        let chosen = plan == kind && price != nil
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         return Button {
             plan = kind
@@ -170,9 +185,17 @@ struct PaywallView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                // The amount that is billed, with its period, is the largest price on the page (3.1.2).
-                Text(billed(kind))
-                    .font(.headline.monospacedDigit())
+                if let price {
+                    // The amount that is billed, with its period, is the largest price on the page (3.1.2).
+                    Text(Self.billed(kind, price))
+                        .font(.headline.monospacedDigit())
+                } else {
+                    // The App Store did not give this plan (say, not attached to the version yet):
+                    // no planned price stands in for it, and it cannot be chosen.
+                    Text(Loc.t("Şu anda alınamıyor"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(16)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
@@ -180,6 +203,8 @@ struct PaywallView: View {
             .contentShape(shape)
         }
         .buttonStyle(.plain)
+        .disabled(price == nil)
+        .opacity(price == nil ? 0.6 : 1)
         .accessibilityAddTraits(chosen ? .isSelected : [])
     }
 
@@ -191,8 +216,7 @@ struct PaywallView: View {
         }
     }
 
-    private func billed(_ kind: ProPlan.Product.Kind) -> String {
-        let price = store.price(ProPlan.product(kind))
+    private static func billed(_ kind: ProPlan.Product.Kind, _ price: String) -> String {
         switch kind {
         case .yearly: return Loc.t("{0}/yıl", price)
         case .monthly: return Loc.t("{0}/ay", price)
@@ -202,13 +226,19 @@ struct PaywallView: View {
 
     private func detail(_ kind: ProPlan.Product.Kind) -> String {
         switch kind {
-        case .yearly: return Loc.t("Aylık plana göre %{0} daha ucuz", "\(store.yearlySaving)")
+        case .yearly:
+            // The saving is only claimed from the App Store's own prices, never the planned ones.
+            if let saving = store.yearlySaving, saving > 0 {
+                return Loc.t("Aylık plana göre %{0} daha ucuz", "\(saving)")
+            }
+            return Loc.t("İstediğin zaman iptal et")
         case .monthly: return Loc.t("İstediğin zaman iptal et")
         case .lifetime: return Loc.t("Tek ödeme, abonelik yok")
         }
     }
 
-    private var purchase: some View {
+    /// The button, what the chosen plan costs in plain words, and the last purchase's message.
+    private func purchase(_ price: String) -> some View {
         VStack(spacing: 12) {
             Button {
                 Task {
@@ -233,11 +263,11 @@ struct PaywallView: View {
             .disabled(store.purchasing)
             if plan == .yearly && store.trialEligible {
                 // What the trial turns into, in readable type right under the button.
-                Text(Loc.t("{0} gün ücretsiz, sonra yılda {1}", "\(store.trialDays)", store.price(ProPlan.product(.yearly))))
+                Text(Loc.t("{0} gün ücretsiz, sonra yılda {1}", "\(store.trialDays)", price))
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
-            Text(terms)
+            Text(terms(price))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -262,8 +292,7 @@ struct PaywallView: View {
     }
 
     /// What the purchase means, said before it (App Store guideline 3.1.2).
-    private var terms: String {
-        let price = store.price(ProPlan.product(plan))
+    private func terms(_ price: String) -> String {
         let manage = Loc.t("Ödeme Apple hesabından alınır. Aboneliği Ayarlar > Apple Hesabı > Abonelikler'den yönetebilir ve iptal edebilirsin.")
         switch plan {
         case .yearly where store.trialEligible:

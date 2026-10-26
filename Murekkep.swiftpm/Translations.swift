@@ -1298,5 +1298,11 @@ enum Translations {
         "Fotoğraflar tek bir PDF olur, her fotoğraf bir sayfa.": "Photos become one PDF, one page per photo.",
         "PDF / Foto": "PDF / Photo",
         "Fotoğraf okunamadı.": "Couldn't read the photo.",
+        // Purchases (1.1, 2026-10-26)
+        "Şu anda alınamıyor": "Not available right now",
+        "Bu plan şu anda alınamıyor.": "This plan can't be bought right now.",
+        "Bu plan bulunduğun ülkenin App Store'unda satılmıyor.": "This plan isn't sold in your country's App Store.",
+        "Bu iPad'de ya da Apple hesabında satın almaya izin verilmiyor; Ekran Süresi kısıtlamalarına bak.": "Purchases aren't allowed on this iPad or Apple Account; check the Screen Time restrictions.",
+        "Satın alma tamamlanamadı. Biraz sonra yeniden dene.": "The purchase couldn't be completed. Try again in a moment.",
     ]
 }

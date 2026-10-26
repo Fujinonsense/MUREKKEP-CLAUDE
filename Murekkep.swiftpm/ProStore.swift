@@ -10,14 +10,13 @@ final class ProStore: ObservableObject {
     static let shared = ProStore()
 
     static let sells = ProPlan.sells
-    /// Planned prices are in lira in Turkey and in dollars elsewhere, until the App Store answers.
-    private static let inTurkey = Locale.current.region?.identifier == "TR"
 
     @Published private(set) var isPro: Bool
     /// The App Store's products by id; empty until it answers (or outside the App Store).
     @Published private(set) var products: [String: Product] = [:]
-    /// True when the App Store could not give the prices; the Pro page then says so instead of
-    /// showing plans that cannot be bought.
+    /// True when the App Store gave none of the prices; the Pro page then says so instead of
+    /// showing plans that cannot be bought. A plan missing on its own (say, not attached to the
+    /// version yet) is shown as unavailable while the others are sold.
     @Published private(set) var pricesFailed = false
     /// Only when the yearly plan has a free trial in App Store Connect and this account may still use it.
     @Published private(set) var trialEligible = false
@@ -57,8 +56,13 @@ final class ProStore: ObservableObject {
 
     func refresh() async {
         guard Self.sells else { return }
-        if let loaded = try? await Product.products(for: ProPlan.products.map(\.id)) {
+        do {
+            let loaded = try await Product.products(for: ProPlan.products.map(\.id))
             products = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, $0) })
+            let missing = ProPlan.products.map(\.id).filter { products[$0] == nil }
+            if !missing.isEmpty {
+                print("Mürekkep: the App Store gave no product for \(missing.joined(separator: ", "))")
+            }
             if let yearly = products[ProPlan.product(.yearly).id], let subscription = yearly.subscription,
                let offer = subscription.introductoryOffer, offer.paymentMode == .freeTrial {
                 trialDays = Self.days(offer.period)
@@ -66,8 +70,11 @@ final class ProStore: ObservableObject {
             } else {
                 trialEligible = false
             }
+        } catch {
+            print("Mürekkep: App Store products failed: \(error)")
         }
-        pricesFailed = ProPlan.products.contains { products[$0.id] == nil }
+        // Only when none of the plans came; the ones that did are sold either way.
+        pricesFailed = products.isEmpty
         await updateEntitlements()
     }
 
@@ -108,8 +115,43 @@ final class ProStore: ObservableObject {
                 break
             }
         } catch {
-            message = error.localizedDescription
+            // StoreKit's own texts are English and technical: they go to the log, the user gets a line.
+            print("Mürekkep: purchase of \(id) failed: \(error)")
+            message = Self.friendly(error)
         }
+    }
+
+    /// What to tell the user when a purchase fails, or nil when nothing needs saying (they cancelled).
+    private static func friendly(_ error: Error) -> String? {
+        let network = Loc.t("İnternet bağlantını kontrol edip yeniden dene.")
+        if let error = error as? StoreKitError {
+            switch error {
+            case .userCancelled:
+                return nil
+            case .networkError:
+                return network
+            case let .systemError(inner) where inner is URLError:
+                return network
+            case .notAvailableInStorefront:
+                return Loc.t("Bu plan bulunduğun ülkenin App Store'unda satılmıyor.")
+            default:
+                break
+            }
+        }
+        if let error = error as? Product.PurchaseError {
+            switch error {
+            case .purchaseNotAllowed:
+                return Loc.t("Bu iPad'de ya da Apple hesabında satın almaya izin verilmiyor; Ekran Süresi kısıtlamalarına bak.")
+            case .productUnavailable:
+                return Loc.t("Bu plan şu anda alınamıyor.")
+            default:
+                break
+            }
+        }
+        if error is URLError {
+            return network
+        }
+        return Loc.t("Satın alma tamamlanamadı. Biraz sonra yeniden dene.")
     }
 
     func restore() async {
@@ -125,10 +167,10 @@ final class ProStore: ObservableObject {
         try? await AppStore.showManageSubscriptions(in: scene)
     }
 
-    /// The App Store's price of a plan, or the planned price until it answers.
-    func price(_ plan: ProPlan.Product) -> String {
-        if let product = products[plan.id] { return product.displayPrice }
-        return Self.inTurkey ? plan.fallbackPriceTR : plan.fallbackPriceUS
+    /// The App Store's price of a plan; nil until it answers, and for a plan it did not give. The
+    /// planned prices in ProPlan never stand in: a plan without its App Store price is not sold.
+    func price(_ plan: ProPlan.Product) -> String? {
+        products[plan.id]?.displayPrice
     }
 
     private static func days(_ period: Product.SubscriptionPeriod) -> Int {
@@ -141,17 +183,14 @@ final class ProStore: ObservableObject {
         }
     }
 
-    /// How much less the yearly plan costs than twelve months, in whole percent.
-    var yearlySaving: Int {
-        let monthly = ProPlan.product(.monthly)
-        let yearly = ProPlan.product(.yearly)
-        if let m = products[monthly.id], let y = products[yearly.id] {
-            return ProPlan.yearlySaving(monthly: NSDecimalNumber(decimal: m.price).doubleValue,
-                                        yearly: NSDecimalNumber(decimal: y.price).doubleValue)
+    /// How much less the yearly plan costs than twelve months, in whole percent; nil until the App
+    /// Store has given both prices.
+    var yearlySaving: Int? {
+        guard let m = products[ProPlan.product(.monthly).id], let y = products[ProPlan.product(.yearly).id] else {
+            return nil
         }
-        return Self.inTurkey
-            ? ProPlan.yearlySaving(monthly: monthly.fallbackAmountTR, yearly: yearly.fallbackAmountTR)
-            : ProPlan.yearlySaving(monthly: monthly.fallbackAmountUS, yearly: yearly.fallbackAmountUS)
+        return ProPlan.yearlySaving(monthly: NSDecimalNumber(decimal: m.price).doubleValue,
+                                    yearly: NSDecimalNumber(decimal: y.price).doubleValue)
     }
 
     // MARK: The free plan

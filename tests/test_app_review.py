@@ -3,7 +3,10 @@
 From the 2026-10-25 review audit: the 2–6 GB model must not come down before the user says so
 (guideline 4.2.3), the Claude key must not ship (5.1.2, the app collects no data), the paywall may
 only promise what exists and must show the billed price and period plainly (3.1.2), the privacy
-policy needs a real link (5.1.1), AI answers need a way to report them (1.2)."""
+policy needs a real link (5.1.1), AI answers need a way to report them (1.2).
+
+From the 1.1 purchase review: one plan the App Store did not give must not block the other two or
+blame the connection, and a failed purchase is told in the app's words, not StoreKit's."""
 import re
 from pathlib import Path
 
@@ -75,9 +78,49 @@ def test_every_plan_needs_its_app_store_price():
     # A plan the App Store did not return (say, not attached to the version) must not be sold at a
     # planned price; and nothing is for sale before the App Store answers.
     store = src("ProStore.swift")
-    assert "pricesFailed = ProPlan.products.contains { products[$0.id] == nil }" in store
+    assert "func price(_ plan: ProPlan.Product) -> String?" in store
+    assert "products[plan.id]?.displayPrice" in store
+    assert "fallbackPrice" not in store and "fallbackAmount" not in store
+    assert "var yearlySaving: Int?" in store
     paywall = src("PaywallView.swift")
     assert re.search(r"else if store\.products\.isEmpty \{\s*ProgressView\(\)", paywall)
+    # The button only ever buys the chosen plan with its App Store price; the saving is claimed from
+    # the App Store's prices alone.
+    assert re.search(r"if let price = store\.price\(ProPlan\.product\(plan\)\) \{\s*purchase\(price\)", paywall)
+    assert "if let saving = store.yearlySaving, saving > 0" in paywall
+
+
+def test_one_missing_plan_does_not_block_the_others():
+    # The full "prices couldn't load" state is for when none came; a plan missing on its own is shown
+    # as unavailable, with a neutral note instead of a price, and cannot be chosen.
+    store = src("ProStore.swift")
+    assert "pricesFailed = products.isEmpty" in store
+    assert "pricesFailed = ProPlan.products.contains" not in store
+    paywall = src("PaywallView.swift")
+    assert 'Text(Loc.t("Şu anda alınamıyor"))' in paywall
+    assert "let chosen = plan == kind && price != nil" in paywall
+    assert ".disabled(price == nil)" in paywall
+    # The chosen plan moves to one the App Store gave, on opening and whenever the products change.
+    assert ".onChange(of: store.products, initial: true) { _, _ in keepPlanSellable() }" in paywall
+    assert re.search(r"guard store\.price\(ProPlan\.product\(plan\)\) == nil,\s*let first = Self\.shown\.first", paywall)
+
+
+def test_purchase_errors_are_told_in_the_apps_words():
+    # StoreKit's texts are English and technical: the raw error goes to the log only, and the common
+    # cases get a line of their own. Cancelling says nothing; Ask to Buy is waiting, not failing.
+    store = src("ProStore.swift")
+    purchase = store[store.index("func purchase("):store.index("func restore(")]
+    assert "localizedDescription" not in purchase
+    assert re.search(r'print\("Mürekkep: purchase of \\\(id\) failed: \\\(error\)"\)', purchase)
+    assert "message = Self.friendly(error)" in purchase
+    friendly = purchase[purchase.index("static func friendly("):]
+    assert re.search(r"case \.userCancelled:\s*return nil", friendly)
+    assert re.search(r"case \.networkError:\s*return network", friendly)
+    assert 'let network = Loc.t("İnternet bağlantını kontrol edip yeniden dene.")' in friendly
+    assert "case .purchaseNotAllowed:" in friendly and "case .productUnavailable:" in friendly
+    assert "case .notAvailableInStorefront:" in friendly
+    assert re.search(r'return Loc\.t\("Satın alma tamamlanamadı\. Biraz sonra yeniden dene\."\)\s*\}', friendly)
+    assert re.search(r'case \.pending:\s*message = Loc\.t\("Satın alma onay bekliyor', purchase)
 
 
 def test_no_claude_text_in_the_app_store_edition():
