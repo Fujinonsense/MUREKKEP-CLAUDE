@@ -308,6 +308,20 @@ struct GameCornerPanel: View {
         // The card keeps every touch to itself: nothing reaches the page beneath it.
         .onTapGesture {}
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: game)
+        #if DEMO
+        // The ad recordings (tools/demo) pick the layer and the game.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.pickLayer)) { note in
+            if let raw = note.object as? String, let picked = BreakLayer(rawValue: raw) { layer = picked }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.pickGame)) { note in
+            if let raw = note.object as? String, let picked = MiniGame(rawValue: raw) {
+                layer = picked.layer
+                game = picked
+            } else {
+                game = nil
+            }
+        }
+        #endif
     }
 
     private var subtitle: String {

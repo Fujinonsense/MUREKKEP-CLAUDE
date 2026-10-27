@@ -40,6 +40,11 @@ final class ProStore: ObservableObject {
         let d = UserDefaults.standard
         isPro = !Self.sells || d.bool(forKey: Self.cacheKey)
         usage = (d.data(forKey: Self.usageKey)).flatMap { try? JSONDecoder().decode(ProPlan.Usage.self, from: $0) } ?? ProPlan.Usage()
+        #if DEMO
+        // The ad recordings (tools/demo) show the inks as Pro has them; nothing is bought or checked.
+        isPro = true
+        if isPro { return }
+        #endif
         guard Self.sells else { return }
         updates = Task.detached { [weak self] in
             for await result in Transaction.updates {
@@ -80,6 +85,9 @@ final class ProStore: ObservableObject {
 
     func updateEntitlements() async {
         guard Self.sells else { return }
+        #if DEMO
+        if isPro { return }
+        #endif
         var active = false
         for await result in Transaction.currentEntitlements {
             if case let .verified(transaction) = result, transaction.revocationDate == nil,

@@ -160,6 +160,9 @@ struct LivingInkGame: View {
             guard !Task.isCancelled else { return }
             model.wake()
         }
+        #if DEMO
+        .onAppear { DemoStage.shared.pond = model }
+        #endif
         .onChange(of: paused) { _, stopped in
             if stopped { model.pause() }
         }

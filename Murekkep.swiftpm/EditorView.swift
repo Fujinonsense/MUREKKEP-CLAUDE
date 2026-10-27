@@ -249,6 +249,15 @@ struct EditorContent: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: editor.pencilProDetected)
+        #if DEMO
+        // The ad recordings (tools/demo) open and enlarge the break corner.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.games)) { note in
+            withAnimation(GameCorner.animation(reduceMotion: reduceMotion)) {
+                showGames = note.userInfo?["open"] as? Bool ?? true
+                gamesExpanded = note.userInfo?["expanded"] as? Bool ?? false
+            }
+        }
+        #endif
         .navigationTitle(editor.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

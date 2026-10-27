@@ -30,3 +30,6 @@ entities.json
 # Local secrets (Higgsfield API key and the like) never go to GitHub.
 .env.local
 .env*.local
+
+# Scene previews from tools/demo/make_scenes.py
+tools/demo/previews/

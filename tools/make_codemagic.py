@@ -91,8 +91,58 @@ def build():
                 "scripts": [script("PDFKit ile Sayfa Metni", PROBE)],
                 "artifacts": ["pdfkit_*"],
             },
+            # The ad recordings (tools/demo): the App Store edition's plain build with the DEMO flag on
+            # an iPad simulator, every scene filmed by the simulator in English and in Turkish. No keys,
+            # no upload; started by hand.
+            "demo-kayit": {
+                "name": "Murekkep Reklam Kaydi (simulator)",
+                "instance_type": "mac_mini_m2",
+                "max_build_duration": 60,
+                "environment": {"xcode": XCODE, "vars": {"EDITION": "appstore"}},
+                "scripts": [
+                    script("Xcode ve Simulatorler", "xcodebuild -version\nxcrun simctl list runtimes\n"),
+                    script("Klasor Yapisini Hazirla", s["Klasor Yapisini Hazirla"]["run"]),
+                    script("Info.plist ve Xcode Projesi Olustur", s["Info.plist ve Xcode Projesi Olustur"]["run"]),
+                    script("Demo Surumunu Hazirla", DEMO_PREPARE),
+                    script("Simulator Icin Derle", DEMO_BUILD),
+                    script("Sahneleri Kaydet", DEMO_RECORD),
+                ],
+                "artifacts": ["demo-out/*.mp4", "demo-out/*.json", "demo-out/*.png", "demo-out/*.start",
+                              "demo-out/*.log", "*.log"],
+            },
         }
     }
+
+
+# Only the recording build gets the demo player and the scenes; the App Store build never has them.
+DEMO_PREPARE = """\
+cp tools/demo/DemoPlayer.swift AppSource/
+cp tools/demo/scenes/DemoScene-*.json AppSource/
+python3 - << 'PYEOF'
+text = open("project-plain.yml", encoding="utf-8").read()
+assert 'MUREKKEP_PLAIN APPSTORE"' in text, "the plain project lacks the App Store flag"
+text = text.replace('MUREKKEP_PLAIN APPSTORE"', 'MUREKKEP_PLAIN APPSTORE DEMO"')
+open("project-plain.yml", "w", encoding="utf-8").write(text)
+PYEOF
+xcodegen generate --spec project-plain.yml
+"""
+
+DEMO_BUILD = """\
+set -o pipefail
+if ! xcodebuild -project Murekkep.xcodeproj -scheme Murekkep -configuration Release \\
+  -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \\
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build > build.log 2>&1; then
+  grep -E "error:" build.log | sort -u | head -60
+  echo "::error::Simulator build failed (build.log)"
+  exit 1
+fi
+codesign --force --sign - --deep build/Build/Products/Release-iphonesimulator/Murekkep.app
+"""
+
+DEMO_RECORD = """\
+bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out \\
+  notes-en textpen-en inks-en ebru-en living-en notes-tr textpen-tr inks-tr ebru-tr living-tr
+"""
 
 
 PROBE = """\

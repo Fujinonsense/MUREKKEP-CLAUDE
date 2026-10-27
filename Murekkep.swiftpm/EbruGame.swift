@@ -197,6 +197,9 @@ struct EbruGame: View {
             }
             .font(.subheadline.weight(.semibold))
         }
+        #if DEMO
+        .onAppear { DemoStage.shared.ebru = model }
+        #endif
         .onChange(of: paused) { _, stopped in
             if stopped { model.pause() }
         }

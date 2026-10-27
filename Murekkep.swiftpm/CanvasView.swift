@@ -2547,3 +2547,74 @@ extension CanvasView {
         setNeedsRender()
     }
 }
+
+#if DEMO
+// MARK: - Ad recordings (tools/demo)
+
+/// Recording builds only (the DEMO flag; never the App Store edition): a scripted pencil goes the way
+/// a real one does, through the stroke builder, the live stroke and the page (see DemoPlayer).
+extension CanvasView {
+    func demoPenDown(page: Int, _ sample: InputSample) {
+        guard model.layout.pageRects.indices.contains(page) else { return }
+        gestureTool = model.tool
+        switch gestureTool {
+        case .brush, .textPen:
+            break
+        default:
+            return
+        }
+        if gestureTool == .textPen { model.textPenTouched() }
+        let brush = model.activeBrush
+        let random = Float.random(in: 0..<1)
+        let seed = brush == .grass ? GrassGenerator.seed(level: model.settings.flowerLevel, random: random) : random
+        var b = StrokeBuilder(brush: brush, color: model.color(for: brush), width: model.width(for: brush), seed: seed)
+        b.nibAngle = Float(model.settings.nibAngle * .pi / 180)
+        b.useRoll = model.settings.rollRotatesNib
+        b.add(sample)
+        builder = b
+        strokeStart = Date().timeIntervalSinceReferenceDate
+        activeStroke = ActiveStroke(page: page, brush: brush, color: b.color, width: b.width, seed: b.seed,
+                                    points: b.preview(predicted: []), startTime: strokeStart)
+        refreshLoop()
+        setNeedsRender()
+    }
+
+    func demoPenMoved(_ samples: [InputSample]) {
+        guard var b = builder, var active = activeStroke else { return }
+        for s in samples {
+            b.add(s)
+        }
+        builder = b
+        active.points = b.preview(predicted: [])
+        activeStroke = active
+        setNeedsRender()
+    }
+
+    func demoPenUp(_ samples: [InputSample]) {
+        guard var b = builder, let active = activeStroke else { return }
+        for s in samples {
+            b.add(s)
+        }
+        let points = b.finish()
+        builder = nil
+        activeStroke = nil
+        if !points.isEmpty {
+            let now = Date().timeIntervalSinceReferenceDate
+            let stroke = Stroke(brush: active.brush, color: active.color, width: active.width,
+                                birth: now, seed: active.seed, points: points,
+                                duration: max(0, now - active.startTime))
+            model.addStroke(stroke, toPage: active.page)
+            if gestureTool == .textPen {
+                model.queueTextStroke(stroke.id, page: active.page)
+            }
+        }
+        endGestureState()
+    }
+
+    /// Where a page point is in the window, for the recording's pen track.
+    func demoWindowPoint(page: Int, _ point: CGPoint) -> CGPoint {
+        let o = pageOrigin(page)
+        return zoomContainer.convert(CGPoint(x: o.x + point.x, y: o.y + point.y), to: nil)
+    }
+}
+#endif

@@ -162,6 +162,13 @@ struct LibraryView: View {
                     Text(Loc.t("Not bulunamadı"))
                 }
             }
+            #if DEMO
+            // The ad recordings (tools/demo) open their notebook and play their scene.
+            .onReceive(NotificationCenter.default.publisher(for: DemoStage.openNote)) { note in
+                if let id = note.object as? UUID { path = [id] }
+            }
+            .task { await DemoStage.shared.begin(store: store, settings: settings) }
+            #endif
             .confirmationDialog(Loc.t("PDF ya da fotoğraf ekle"), isPresented: $askImportSource, titleVisibility: .visible) {
                 Button(Loc.t("Dosyalar'dan (PDF ya da fotoğraf)")) { showImporter = true }
                 Button(Loc.t("Fotoğraflar'dan")) { showPhotoPicker = true }

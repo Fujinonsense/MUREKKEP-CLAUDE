@@ -609,3 +609,399 @@ workflows:
         "$RUNNER_TEMP/probe" tests/fixtures/calculus_p14.pdf pdfkit_calculus_p14.txt
     artifacts:
     - pdfkit_*
+  demo-kayit:
+    name: Murekkep Reklam Kaydi (simulator)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: '26.5'
+      vars:
+        EDITION: appstore
+    scripts:
+    - name: Xcode ve Simulatorler
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        xcodebuild -version
+        xcrun simctl list runtimes
+    - name: Klasor Yapisini Hazirla
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        which xcodegen || brew install xcodegen
+        rm -rf AppSource
+        mkdir -p AppSource
+        if [ -d "Murekkep.swiftpm" ]; then
+          cp -R Murekkep.swiftpm/* AppSource/
+        else
+          find . -maxdepth 1 -not -name "." -not -name ".git" -not -name ".github" -not -name "AppSource" -not -name "sherpa-out" -not -name "sherpa-src" -exec cp -R {} AppSource/ \;
+        fi
+        find . -maxdepth 1 -name "*.swift" -not -name "*_2.swift" -exec cp -f {} AppSource/ \;
+
+        python3 - << 'PYEOF'
+        import pathlib, shutil
+
+        app_dir = pathlib.Path("AppSource")
+
+        # GitHub'a ayni adla tekrar yuklenen dosyalar "_2" ekiyle gelir: yenisi eskisinin yerine gecer.
+        for search_dir in [pathlib.Path("."), pathlib.Path("Murekkep.swiftpm"), app_dir]:
+            if not search_dir.exists():
+                continue
+            for f in list(search_dir.glob("*_2.swift")):
+                if f.name == "InkShaders_2.swift":
+                    main_shader = app_dir / "InkShaders.swift"
+                    if main_shader.exists() and "shadeSculptedWave" in main_shader.read_text(encoding="utf-8"):
+                        continue
+                clean_name = f.name[:-8] + ".swift"
+                target = app_dir / clean_name
+                if f.resolve() != target.resolve():
+                    shutil.copy2(f, target)
+
+        for pattern in ["*_2.swift", "* (1)*", "Package*.swift", "AppInfo*.plist", "*.jpg", "Contents*.json"]:
+            for f in list(app_dir.glob(pattern)):
+                if f.is_file():
+                    f.unlink(missing_ok=True)
+        PYEOF
+
+        # The voice engine and the voices (from the cache or the step above).
+        mkdir -p Frameworks
+        if [ -d sherpa-out/sherpa-onnx.xcframework ]; then
+          cp -R sherpa-out/sherpa-onnx.xcframework sherpa-out/onnxruntime.xcframework Frameworks/
+          cp -R sherpa-out/AppVoices AppSource/AppVoices
+        fi
+
+        echo "Derlenecek Swift dosyalari: $(ls AppSource/*.swift | wc -l)"
+    - name: Info.plist ve Xcode Projesi Olustur
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        cat << 'EOF' > AppSource/Info.plist
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>en</string>
+            <key>CFBundleLocalizations</key>
+            <array>
+                <string>en</string>
+                <string>tr</string>
+            </array>
+            <key>CFBundleDisplayName</key>
+            <string>Mürekkep</string>
+            <key>CFBundleExecutable</key>
+            <string>$(EXECUTABLE_NAME)</string>
+            <key>CFBundleIdentifier</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>$(PRODUCT_NAME)</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>$(MARKETING_VERSION)</string>
+            <key>CFBundleVersion</key>
+            <string>$(CURRENT_PROJECT_VERSION)</string>
+            <key>LSRequiresIPhoneOS</key>
+            <true/>
+            <key>ITSAppUsesNonExemptEncryption</key>
+            <false/>
+            <key>UIDesignRequiresCompatibility</key>
+            <true/>
+            <key>UIBackgroundModes</key>
+            <array>
+                <string>audio</string>
+            </array>
+            <key>NSPhotoLibraryAddUsageDescription</key>
+            <string>Video özetlerini Fotoğraflar'a kaydetmek için.</string>
+            <key>NSLocalNetworkUsageDescription</key>
+            <string>Aynı Wi-Fi'deki bilgisayarında çalışan yapay zekâya (Ollama, LM Studio) bağlanmak için.</string>
+            <key>NSMicrophoneUsageDescription</key>
+            <string>Dersi kaydetmek için: yazdıkların sesle eşleşir, mürekkebe dokununca o ana gidersin.</string>
+            <key>UIApplicationSceneManifest</key>
+            <dict>
+                <key>UIApplicationSupportsMultipleScenes</key>
+                <true/>
+            </dict>
+            <key>UILaunchScreen</key>
+            <dict/>
+            <key>UISupportedInterfaceOrientations</key>
+            <array>
+                <string>UIInterfaceOrientationPortrait</string>
+                <string>UIInterfaceOrientationLandscapeLeft</string>
+                <string>UIInterfaceOrientationLandscapeRight</string>
+            </array>
+            <key>UISupportedInterfaceOrientations~ipad</key>
+            <array>
+                <string>UIInterfaceOrientationPortrait</string>
+                <string>UIInterfaceOrientationPortraitUpsideDown</string>
+                <string>UIInterfaceOrientationLandscapeLeft</string>
+                <string>UIInterfaceOrientationLandscapeRight</string>
+            </array>
+        </dict>
+        </plist>
+        EOF
+
+        # Permission prompts in the iPad's language (the store's first language is English; the
+        # Turkish texts above are only the fallback).
+        mkdir -p AppSource/en.lproj AppSource/tr.lproj
+        cat << 'EOF' > AppSource/en.lproj/InfoPlist.strings
+        "NSMicrophoneUsageDescription" = "Mürekkep records the lecture so your ink stays in sync with the audio: tap any ink to jump to that moment.";
+        "NSPhotoLibraryAddUsageDescription" = "Mürekkep saves the video summaries you export to Photos.";
+        "NSLocalNetworkUsageDescription" = "Only if you set it up: Mürekkep connects to an AI (Ollama, LM Studio) running on your own computer on the same Wi-Fi.";
+        EOF
+        cat << 'EOF' > AppSource/tr.lproj/InfoPlist.strings
+        "NSMicrophoneUsageDescription" = "Dersi kaydetmek için: yazdıkların sesle eşleşir, mürekkebe dokununca o ana gidersin.";
+        "NSPhotoLibraryAddUsageDescription" = "Video özetlerini Fotoğraflar'a kaydetmek için.";
+        "NSLocalNetworkUsageDescription" = "Aynı Wi-Fi'deki bilgisayarında çalışan yapay zekâya (Ollama, LM Studio) bağlanmak için.";
+        EOF
+
+        # Not: XcodeGen'in "info:" anahtari Info.plist'i her seferinde bastan uretip ustteki ayarlari
+        # silerdi (UILaunchScreen gidince uygulama dusuk cozunurlukte acilir). Bu yuzden dosya
+        # INFOPLIST_FILE ile oldugu gibi kullaniliyor.
+        cat << 'EOF' > project.yml
+        name: Murekkep
+        options:
+          bundleIdPrefix: com.murekkep
+          deploymentTarget:
+            iOS: "17.0"
+        packages:
+          MLXSwift:
+            url: https://github.com/ml-explore/mlx-swift
+            exactVersion: 0.32.3
+          MLXSwiftLM:
+            url: https://github.com/ml-explore/mlx-swift-lm
+            exactVersion: 3.32.3
+          SwiftTransformers:
+            url: https://github.com/huggingface/swift-transformers
+            exactVersion: 1.3.5
+        targets:
+          Murekkep:
+            type: application
+            platform: iOS
+            sources:
+              - path: AppSource
+                excludes:
+                  - "Info.plist"
+                  - "AppInfo*.plist"
+                  - "Package*.swift"
+                  - "*_2.swift"
+                  - "AppVoices/**"
+                  - "PrivacyInfo.xcprivacy"
+                  - "*.entitlements"
+              - path: AppSource/AppVoices
+                type: folder
+                buildPhase: resources
+              - path: AppSource/PrivacyInfo.xcprivacy
+                buildPhase: resources
+            dependencies:
+              - framework: Frameworks/sherpa-onnx.xcframework
+                embed: false
+              - framework: Frameworks/onnxruntime.xcframework
+                embed: false
+              - package: MLXSwift
+                product: MLX
+              - package: MLXSwiftLM
+                product: MLXLLM
+              - package: MLXSwiftLM
+                product: MLXLMCommon
+              - package: SwiftTransformers
+                product: Tokenizers
+            settings:
+              base:
+                PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
+                PRODUCT_NAME: Murekkep
+                INFOPLIST_FILE: AppSource/Info.plist
+                CODE_SIGN_ENTITLEMENTS: AppSource/Murekkep.entitlements
+                GENERATE_INFOPLIST_FILE: NO
+                MARKETING_VERSION: "3.0"
+                CURRENT_PROJECT_VERSION: "29"
+                SWIFT_VERSION: "5.0"
+                TARGETED_DEVICE_FAMILY: "1,2"
+                ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                OTHER_LDFLAGS: "$(inherited) -lc++ -framework CoreML -framework Accelerate"
+                CODE_SIGN_IDENTITY: ""
+                CODE_SIGNING_REQUIRED: NO
+                CODE_SIGNING_ALLOWED: NO
+                ENABLE_USER_SCRIPT_SANDBOXING: NO
+        EOF
+
+        # Sade proje: gomulu sesler ve Apple'in cihaz modeli olmadan (MUREKKEP_PLAIN). Ilk derleme
+        # olmazsa bununla derlenir, kullanici yine bir IPA alir.
+        cat << 'EOF' > project-plain.yml
+        name: Murekkep
+        options:
+          bundleIdPrefix: com.murekkep
+          deploymentTarget:
+            iOS: "17.0"
+        targets:
+          Murekkep:
+            type: application
+            platform: iOS
+            sources:
+              - path: AppSource
+                excludes:
+                  - "Info.plist"
+                  - "AppInfo*.plist"
+                  - "Package*.swift"
+                  - "*_2.swift"
+                  - "AppVoices/**"
+                  - "PrivacyInfo.xcprivacy"
+                  - "*.entitlements"
+              - path: AppSource/PrivacyInfo.xcprivacy
+                buildPhase: resources
+            settings:
+              base:
+                PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app
+                PRODUCT_NAME: Murekkep
+                INFOPLIST_FILE: AppSource/Info.plist
+                CODE_SIGN_ENTITLEMENTS: AppSource/Murekkep.entitlements
+                GENERATE_INFOPLIST_FILE: NO
+                MARKETING_VERSION: "3.0"
+                CURRENT_PROJECT_VERSION: "29"
+                SWIFT_VERSION: "5.0"
+                SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) MUREKKEP_PLAIN"
+                TARGETED_DEVICE_FAMILY: "1,2"
+                ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                CODE_SIGN_IDENTITY: ""
+                CODE_SIGNING_REQUIRED: NO
+                CODE_SIGNING_ALLOWED: NO
+                ENABLE_USER_SCRIPT_SANDBOXING: NO
+        EOF
+
+        # App Store surumu: her sey acik yerine Murekkep Pro'yu satar (APPSTORE bayragi, StoreKit).
+        # project.yml'den MLX'siz proje kesilmeden once eklenir; uc derleme de bayragi alir.
+        if [ "$EDITION" = "appstore" ]; then
+        python3 - << 'PYEOF'
+        import os
+        for name in ["project.yml", "project-plain.yml"]:
+            text = open(name, encoding="utf-8").read()
+            if "MUREKKEP_PLAIN" in text:
+                text = text.replace("MUREKKEP_PLAIN\"", "MUREKKEP_PLAIN APPSTORE\"")
+            else:
+                text = text.replace("SWIFT_VERSION: \"5.0\"",
+                                    "SWIFT_VERSION: \"5.0\"\n        SWIFT_ACTIVE_COMPILATION_CONDITIONS: \"$(inherited) APPSTORE\"")
+            assert "APPSTORE" in text, name
+            # iPad only: marked for iPhone too, review would want iPhone screenshots and test it there.
+            text = text.replace("TARGETED_DEVICE_FAMILY: \"1,2\"", "TARGETED_DEVICE_FAMILY: \"2\"")
+            assert "TARGETED_DEVICE_FAMILY: \"2\"" in text, name
+            # Its own bundle ID (App Store Connect: Murekkep, team DW66Y98N3Z), so it installs next to
+            # the personal build; the store version (1.0 is live/in review, 1.1 next), and a new build number for every upload.
+            text = text.replace("PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.app",
+                                "PRODUCT_BUNDLE_IDENTIFIER: com.murekkep.notebook")
+            text = text.replace("MARKETING_VERSION: \"3.0\"", "MARKETING_VERSION: \"1.1\"")
+            if os.environ.get("TESTFLIGHT") == "yes":
+                build = 100 + int(os.environ["GITHUB_RUN_NUMBER"])
+                text = text.replace("CURRENT_PROJECT_VERSION: \"29\"", f"CURRENT_PROJECT_VERSION: \"{build}\"")
+            assert "com.murekkep.notebook" in text and "MARKETING_VERSION: \"1.1\"" in text, name
+            open(name, "w", encoding="utf-8").write(text)
+        PYEOF
+        fi
+
+        # MLX'siz proje: tam proje, indirilebilir model (MLX) paketleri olmadan. MLX derlenemezse
+        # sesler ve Apple'in cihaz modeli bununla korunur.
+        python3 - << 'PYEOF'
+        lines = open("project.yml", encoding="utf-8").read().split("\n")
+        out = []
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            if line == "packages:":
+                # the block and its indented lines
+                i += 1
+                while i < len(lines) and lines[i].startswith("  "):
+                    i += 1
+                continue
+            if line.strip().startswith("- package:"):
+                # the dependency and its product line
+                i += 2
+                continue
+            out.append(line)
+            i += 1
+        open("project-nomlx.yml", "w", encoding="utf-8").write("\n".join(out))
+        PYEOF
+        if grep -q "package" project-nomlx.yml; then
+          echo "::warning::project-nomlx.yml hala paket iceriyor"
+        fi
+    - name: Demo Surumunu Hazirla
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        cp tools/demo/DemoPlayer.swift AppSource/
+        cp tools/demo/scenes/DemoScene-*.json AppSource/
+        python3 - << 'PYEOF'
+        text = open("project-plain.yml", encoding="utf-8").read()
+        assert 'MUREKKEP_PLAIN APPSTORE"' in text, "the plain project lacks the App Store flag"
+        text = text.replace('MUREKKEP_PLAIN APPSTORE"', 'MUREKKEP_PLAIN APPSTORE DEMO"')
+        open("project-plain.yml", "w", encoding="utf-8").write(text)
+        PYEOF
+        xcodegen generate --spec project-plain.yml
+    - name: Simulator Icin Derle
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        set -o pipefail
+        if ! xcodebuild -project Murekkep.xcodeproj -scheme Murekkep -configuration Release \
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+          ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build > build.log 2>&1; then
+          grep -E "error:" build.log | sort -u | head -60
+          echo "::error::Simulator build failed (build.log)"
+          exit 1
+        fi
+        codesign --force --sign - --deep build/Build/Products/Release-iphonesimulator/Murekkep.app
+    - name: Sahneleri Kaydet
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out \
+          notes-en textpen-en inks-en ebru-en living-en notes-tr textpen-tr inks-tr ebru-tr living-tr
+    artifacts:
+    - demo-out/*.mp4
+    - demo-out/*.json
+    - demo-out/*.png
+    - demo-out/*.start
+    - demo-out/*.log
+    - '*.log'
