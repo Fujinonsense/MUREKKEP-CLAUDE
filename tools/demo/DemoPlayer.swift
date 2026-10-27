@@ -29,6 +29,13 @@ final class DemoStage {
     }
 }
 
+/// How much slower than real time the break corner's games run in a recording: the scene's "clock".
+/// The simulator's recorder keeps only some frames a second, so the pond and the tray move slower
+/// and the edit speeds them up as much. 1 in every other scene.
+enum DemoClock {
+    static var rate: Double = 1
+}
+
 /// One step of a scene. Every field but `op` is optional; each step reads the ones it needs.
 private struct DemoStep: Decodable {
     let op: String
@@ -53,6 +60,7 @@ private struct DemoStep: Decodable {
 
 private struct DemoScene: Decodable {
     let steps: [DemoStep]
+    var clock: Double?
 }
 
 @MainActor
@@ -80,6 +88,7 @@ private final class DemoPlayer {
             finish(error: "scene \(name): \(error)")
             return
         }
+        DemoClock.rate = max(scene.clock ?? 1, 0.1)
         for step in scene.steps {
             await perform(step)
         }

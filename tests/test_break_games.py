@@ -142,7 +142,9 @@ def test_the_games_draw_with_the_pencil_keep_their_touches_and_pause():
     assert "min(max((Double(point.x) - f.dx) / f.scale, 0), width)" in ebru and "min(max((Double(point.x) - f.dx) / f.scale, 0), width)" in living
     assert "if touchStart == value.startLocation {" in living and "model.pondPoint(value.location, in: geo.size)" in living
     # The drawing wakes once the pencil has stayed off the pond: every stroke begun or ended restarts the wait.
-    assert ".task(id: model.strokes)" in living and "UInt64(InkPond.wakeDelay * 1_000_000_000)" in living
+    # The ad recordings (DEMO only) stretch the wait; the app itself waits InkPond.wakeDelay.
+    assert ".task(id: model.strokes)" in living and "let delay = InkPond.wakeDelay\n" in living
+    assert "UInt64(delay * 1_000_000_000)" in living
     assert re.search(r"guard !Task\.isCancelled else \{ return \}\s*model\.wake\(\)", living)
     assert "guard !isDrawing, !drawing.isEmpty else { return }" in living
     for name in VIEWS:

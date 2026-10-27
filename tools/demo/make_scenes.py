@@ -29,7 +29,9 @@ RATE = 240.0  # Apple Pencil's samples a second
 # alone are filmed this much slower and sped up as much in the edit; the app's own timings (the text
 # pen's pause, ink drying, lava cooling) stretch alike through launch arguments, so the finished
 # video shows them at their real lengths. Ebru and the living ink run on their own clocks: pace 1.
-PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8}
+PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8, "ebru": 2.5, "living": 2.5}
+# The games run on the app's DEMO clock at the same slower rate (their moves and time per frame).
+CLOCKED = {"ebru", "living"}
 LANGS = ("en",)  # the app's language in the recordings
 
 
@@ -505,7 +507,7 @@ def break_intro(s, lang, rng):
     """A page of notes written briskly, then the break corner opened from it."""
     hand = Hand(Font("EMSNeato"), seed=5 if lang == "en" else 6, slant=0.04)
     s.add("note", title=TEXT[lang]["break.title"], paper="lined", seconds=1.0)
-    notes_lines(s, lang, hand, rng, speed=2.2, head=False, count=2)
+    notes_lines(s, lang, hand, rng, speed=4.0, head=False, count=2)
     s.add("wait", seconds=0.8)
     s.add("games", open=True, expanded=False)
     s.add("wait", seconds=1.4)
@@ -659,7 +661,8 @@ def main():
                 stretch(script, pace)
             name = f"{key}-{lang}"
             (SCENES / f"DemoScene-{name}.json").write_text(
-                json.dumps({"pace": pace, "launch": script.launch, "steps": script.steps},
+                json.dumps({"pace": pace, "clock": pace if key in CLOCKED else 1.0, "launch": script.launch,
+                            "steps": script.steps},
                            ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             seconds = sum(st.get("seconds", 0) for st in script.steps) + sum(
                 max((s[-1][0] for s in st["strokes"]), default=0) for st in script.steps if "strokes" in st)

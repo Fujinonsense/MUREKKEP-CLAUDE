@@ -90,7 +90,12 @@ final class LivingInkModel: ObservableObject {
 
     /// One frame. The timeline redraws the pond by itself, so only a meal is published.
     func advance(to now: Date) {
+        #if DEMO
+        // The ad recordings run the pond slower (DemoClock).
+        let dt = (last.map { now.timeIntervalSince($0) } ?? 0) / DemoClock.rate
+        #else
         let dt = last.map { now.timeIntervalSince($0) } ?? 0
+        #endif
         last = now
         guard dt > 0, isMoving else { return }
         pond?.advance(by: dt)
@@ -156,7 +161,12 @@ struct LivingInkGame: View {
             }
         }
         .task(id: model.strokes) {
-            try? await Task.sleep(nanoseconds: UInt64(InkPond.wakeDelay * 1_000_000_000))
+            #if DEMO
+            let delay = InkPond.wakeDelay * DemoClock.rate
+            #else
+            let delay = InkPond.wakeDelay
+            #endif
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
             model.wake()
         }

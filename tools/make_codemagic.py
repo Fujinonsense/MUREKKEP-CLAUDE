@@ -139,9 +139,9 @@ fi
 codesign --force --sign - --deep build/Build/Products/Release-iphonesimulator/Murekkep.app
 """
 
+# The scenes listed in tools/demo/film.txt: a run films only what changed.
 DEMO_RECORD = """\
-bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out \\
-  notes-en textpen-en inks-en ebru-en living-en
+bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out
 """
 
 

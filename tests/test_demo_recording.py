@@ -39,25 +39,29 @@ def test_every_demo_hook_in_the_app_is_behind_the_flag():
             elif s == "#endif" and depth:
                 # The #endif closes DEMO when no other #if opened after it on the way.
                 depth -= 1
-            if re.search(r"\bDemoStage\b|\bdemoPen|\bdemoWindowPoint", line):
+            if re.search(r"\bDemoStage\b|\bDemoClock\b|\bdemoPen|\bdemoWindowPoint|\bdemoFrame\b", line):
                 assert depth > 0, f"{path.name}:{n} uses the demo outside #if DEMO"
         assert depth == 0, f"{path.name}: an #if DEMO is never closed"
 
 
-def test_the_recording_job_films_every_scene_in_both_languages():
+def test_the_recording_job_films_the_listed_scenes_once():
     flow = workflows()["demo-kayit"]
     assert flow["instance_type"] == "mac_mini_m2" and flow["max_build_duration"] <= 60
     assert "groups" not in flow["environment"], "no keys: nothing is uploaded"
     body = "\n".join(s["script"] for s in flow["scripts"])
     assert "cp tools/demo/DemoPlayer.swift AppSource/" in body
     assert "MUREKKEP_PLAIN APPSTORE DEMO" in body and "-sdk iphonesimulator" in body
-    filmed = re.search(r"demo-out \\\n(.*)\n", body).group(1).split()
+    assert "tools/demo/record.sh" in body
+    # A run films what tools/demo/film.txt lists: every one a scene, the app in English.
+    filmed = [l.strip() for l in (DEMO / "film.txt").read_text(encoding="utf-8").splitlines()
+              if l.strip() and not l.startswith("#")]
     names = {p.stem.removeprefix("DemoScene-") for p in SCENES} - {"warmup"}
-    assert set(filmed) == names
-    # One video for everyone: no scene is filmed twice in two languages.
+    assert filmed and set(filmed) <= names
+    # One video for everyone: no scene in two languages.
     scenes = [n.rsplit("-", 1)[0] for n in names]
-    assert len(scenes) == len(set(scenes)), "a scene is filmed twice"
+    assert len(scenes) == len(set(scenes)) and all(n.endswith("-en") for n in names)
     assert (DEMO / "record.sh").read_bytes().count(b"\r\n") == 0, "bash on the Mac needs LF line ends"
+    assert (DEMO / "film.txt").read_bytes().count(b"\r\n") == 0
 
 
 def test_scenes_use_only_steps_the_player_knows():

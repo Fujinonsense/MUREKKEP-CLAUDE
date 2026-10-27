@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The ad recordings (tools/demo): installs the DEMO build on a new iPad simulator and films each
 # scene with the simulator's own screen recorder (H.264), at the iPad's full resolution.
-# usage: record.sh <Murekkep.app> <out dir> <scene-lang>...   (say notes-en textpen-tr)
+# usage: record.sh <Murekkep.app> <out dir> [<scene-lang>...]   (say notes-en textpen-tr; none: the
+# scenes listed in tools/demo/film.txt)
 # For each scene: <scene-lang>.mp4, <scene-lang>.json (the pen's track for the edit's zoom),
 # <scene-lang>.start (wall clock just before the launch) and <scene-lang>-end.png.
 set -euo pipefail
@@ -84,6 +85,9 @@ print("\n".join(json.load(open(sys.argv[1])).get("launch", [])))' "$APP/DemoScen
   echo "$name: done"
 }
 
+if [ "$#" -eq 0 ]; then
+  set -- $(grep -v '^#' "$(dirname "$0")/film.txt")
+fi
 # Once through every ink first, so the filmed scenes do not wait for the shaders.
 run_scene warmup en no
 for scene in "$@"; do

@@ -1,0 +1,4 @@
+# The scenes the next demo-kayit run films (tools/demo/record.sh). Filmed 2026-10-28 at pace 1.8:
+# notes-en textpen-en inks-en
+ebru-en
+living-en

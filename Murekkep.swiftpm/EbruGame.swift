@@ -42,6 +42,9 @@ final class EbruModel: ObservableObject {
     @Published var pigment = 1
     private(set) var tray: EbruTray?
     private var last: Date?
+    #if DEMO
+    private var demoFrame = 0
+    #endif
 
     var isMoving: Bool { tray?.isPlaying == true || tray?.isSpreading == true }
     var canUndo: Bool { tray?.canUndo == true }
@@ -121,9 +124,17 @@ final class EbruModel: ObservableObject {
     /// the last frame.
     func advance(to now: Date) {
         guard tray != nil else { return }
+        #if DEMO
+        // The ad recordings run the tray slower (DemoClock): its time, and a pattern's move every few frames.
+        let dt = (last.map { now.timeIntervalSince($0) } ?? 0) / DemoClock.rate
+        demoFrame += 1
+        let step = demoFrame % max(1, Int(DemoClock.rate.rounded())) == 0
+        #else
         let dt = last.map { now.timeIntervalSince($0) } ?? 0
+        let step = true
+        #endif
         last = now
-        let played = tray?.advance() == true
+        let played = step && tray?.advance() == true
         let spread = dt > 0 && tray?.hold(for: dt) == true
         if played || spread { changed() }
     }
