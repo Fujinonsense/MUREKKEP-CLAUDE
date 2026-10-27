@@ -30,30 +30,27 @@ func visible(_ s: String) -> String {
 
 print("===== PDFKit page.string (\(text.count) characters) =====")
 print(visible(text))
-// Every character of page.string with its own tight box in page points (origin bottom-left), one per
-// line: the UTF-16 code in hex, then x, y, width, height to a tenth of a point; "-" for a line break.
-// characterBounds(at:) counts no line breaks, so its index runs behind string's by the breaks before
-// it; a one-character selection (whose box is the whole line's) checks that every x agrees.
+// Every glyph's own tight box in page points (origin bottom-left), one per line: the UTF-16 code of
+// the character PDFKit finds at the box's centre (characterIndex(at:), in page.string's numbering),
+// then x, y, width, height to a tenth of a point. characterBounds(at:) is numbered in drawing
+// order, which is not page.string's, so the box is asked which character it is.
 let units = text as NSString
-print("===== Glyphs (\(units.length)) =====")
 var glyphs = ""
-var breaks = 0
-var outOfStep = 0
-for i in 0..<units.length {
-    let unit = units.character(at: i)
-    let code = String(unit, radix: 16, uppercase: true)
-    if unit == 0x0A {
-        breaks += 1
-        glyphs += "G A - - - -\n"
-        continue
-    }
-    let r = page.characterBounds(at: i - breaks)
-    if let sel = page.selection(for: NSRange(location: i, length: 1)), abs(sel.bounds(for: page).minX - r.minX) > 2 {
-        outOfStep += 1
-    }
-    glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", code, r.minX, r.minY, r.width, r.height)
+var count = 0
+var seen = Set<Int>()
+for j in 0..<page.numberOfCharacters {
+    let r = page.characterBounds(at: j)
+    guard r.width > 0, r.height > 0 else { continue }
+    let k = page.characterIndex(at: CGPoint(x: r.midX, y: r.midY))
+    guard k >= 0, k < units.length else { continue }
+    let unit = units.character(at: k)
+    guard unit != 0x20, unit != 0x0A else { continue }
+    seen.insert(k)
+    count += 1
+    glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", String(unit, radix: 16, uppercase: true), r.minX, r.minY, r.width, r.height)
 }
-print("===== Boxes out of step with the text: \(outOfStep) =====")
+let printable = (0..<units.length).filter { units.character(at: $0) != 0x20 && units.character(at: $0) != 0x0A }.count
+print("===== Glyphs: \(count) boxes, \(seen.count) of \(printable) printable characters found =====")
 print(glyphs, terminator: "")
 try glyphs.write(toFile: args[2] + ".glyphs", atomically: true, encoding: .utf8)
 print("===== Questions and the engine's answers =====")
