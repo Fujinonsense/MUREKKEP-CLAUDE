@@ -1024,9 +1024,85 @@ enum ExactMath {
             let half = sd * twoA.reciprocal
             guard let r1 = base + half, let r2 = base + (-half) else { return nil }
             return .list(sorted([r1, r2]))
+        case 3, 4:
+            guard let (found, rest) = rationalFactors(p), let more = roots(rest), case let .list(list) = more else { return nil }
+            return .list(sorted(found.map { ExactNumber($0) } + list))
         default:
             return nil
         }
+    }
+
+    /// p as (x − r₁)…(x − rₖ)·rest, every rational root taken out by the rational root test on its
+    /// integer coefficients until rest has degree two or less ("−x³ + 3x² − 5x + 15" → 3 and
+    /// −x² − 5); nil when that is not reached.
+    static func rationalFactors(_ p: RPoly) -> (roots: [Fraction], rest: RPoly)? {
+        var rest = p
+        var found: [Fraction] = []
+        while rest.degree > 2 {
+            let (q, _) = integerized(rest, .eq)
+            let a0 = abs(q.coefficient(0).num)
+            let an = abs(q.lead.num)
+            var root: Fraction?
+            if a0 == 0 {
+                root = .zero
+            } else {
+                guard a0 <= 10_000, an <= 10_000 else { return nil }
+                search: for d in divisors(an) {
+                    for n in divisors(a0) {
+                        for s in [1, -1] {
+                            let r = Fraction(s * n, d)
+                            if let v = rest.evaluate(ExactNumber(r)), v.isZero {
+                                root = r
+                                break search
+                            }
+                        }
+                    }
+                }
+            }
+            guard let r = root else { return nil }
+            found.append(r)
+            rest = divided(rest, by: r)
+        }
+        return (found, rest)
+    }
+
+    private static func divisors(_ n: Int) -> [Int] {
+        (1...n).filter { n % $0 == 0 }
+    }
+
+    /// p / (x − r) for a root r of p, by synthetic division.
+    private static func divided(_ p: RPoly, by r: Fraction) -> RPoly {
+        let n = p.degree
+        var b = [Fraction](repeating: .zero, count: n)
+        b[n - 1] = p.coefficient(n)
+        for k in stride(from: n - 1, to: 0, by: -1) {
+            b[k - 1] = p.coefficient(k) + r * b[k]
+        }
+        return RPoly(b)
+    }
+
+    /// Every x with p(x) rel 0 from p's real roots and its sign between them.
+    private static func signChart(_ p: RPoly, _ roots: [ExactNumber], _ rel: Relation) -> IntervalSet {
+        func sign(at x: Double) -> Int {
+            let v = p.c.enumerated().reduce(0.0) { $0 + $1.element.double * pow(x, Double($1.offset)) }
+            return v > 0 ? 1 : (v < 0 ? -1 : 0)
+        }
+        let rs = sorted(roots)
+        guard !rs.isEmpty else { return rel.holds(sign: sign(at: 0)) ? .all : .empty }
+        var parts: [Interval] = []
+        let bounds: [Bound] = [.negInf] + rs.map { .value($0) } + [.posInf]
+        for k in 0..<(bounds.count - 1) {
+            let lo = k == 0 ? rs[0].double - 1 : rs[k - 1].double
+            let hi = k == rs.count ? rs[rs.count - 1].double + 1 : rs[k].double
+            if rel.holds(sign: sign(at: (lo + hi) / 2)) {
+                parts.append(Interval(lo: bounds[k], hi: bounds[k + 1], loClosed: false, hiClosed: false))
+            }
+        }
+        var set = IntervalSet(parts)
+        if rel.holds(sign: 0) {
+            for r in rs { set = set.union(IntervalSet([.point(r)])) }
+        }
+        return set
     }
 
     static func sorted(_ list: [ExactNumber]) -> [ExactNumber] {
@@ -1086,6 +1162,9 @@ enum ExactMath {
             case .lt, .le: return positive ? inside : outside
             case .gt, .ge: return positive ? outside : inside
             }
+        case 3, 4:
+            guard let rs = roots(p), case let .list(list) = rs else { return nil }
+            return signChart(p, list, rel)
         default:
             return nil
         }
@@ -1178,7 +1257,15 @@ enum ExactMath {
             }
             return s
         default:
-            return q.text(v) + " = 0"
+            // "(x − 3)(x² + 5) = 0 ⇒ x = 3": the rational roots taken out, then what is left.
+            guard let (found, rest) = rationalFactors(q), let rs = roots(q), case let .list(list) = rs else { return q.text(v) + " = 0" }
+            var factors = found.map { "(\(v) \(signed(-ExactNumber($0))))" }
+            if rest.degree > 0 {
+                factors.append("(\(rest.text(v)))")
+            } else if rest.constant != .one {
+                factors.insert(rest.constant.text, at: 0)
+            }
+            return factors.joined() + " = 0 ⇒ " + text(.roots(list), variable: v)
         }
     }
 
@@ -1195,7 +1282,7 @@ enum ExactMath {
             let c = q.coefficient(0)
             if a == .one { return result }
             return "\(a.text)\(v) \(r.text) \((-c).text) ⇒ " + result
-        case 2:
+        case 2, 3, 4:
             guard let rs = roots(q), case let .list(list) = rs else { return nil }
             let rootsText = list.isEmpty ? L("kök yok", "no root") : list.map { "\(v) = \($0.text)" }.joined(separator: ", ")
             return "\(q.text(v)) \(r.text) 0 ⇒ " + L("kökler: ", "roots: ") + rootsText + " ⇒ " + result

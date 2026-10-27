@@ -176,10 +176,17 @@ AnswerLanguage.bound = .english
 
 for stem in ["Show that x = 2 satisfies x² − 4 = 0.", "Find a and b if 2a + b = 5 and a − b = 1.", "If f(x) = 3x + 2, find f(4).",
              "Ali'nin 3 elması var, 2 tane daha alırsa kaç elması olur?", "x = 5 is a solution of which equation?",
-             "Explain why |x| ≥ 0 for every x.", "Solve the equation x³ − x = 0.", "Solve sin x = 0.5.", "Evaluate 3 + 4 × 2.",
+             "Explain why |x| ≥ 0 for every x.", "Solve the equation x³ − 2 = 0.", "Solve sin x = 0.5.", "Evaluate 3 + 4 × 2.",
              "Solve |x| + |x − 1| = 3.", "Solve x|x| = 4.", "Solve the equation x² = y."] {
     check(exact(stem) == "-", "the model's: \"\(stem)\"", got: exact(stem))
 }
+// A cubic or quartic whose rational roots leave a quadratic is the engine's (the rational root test).
+check(exact("Solve the equation x³ − x = 0.") == "x = −1 or x = 0 or x = 1", "rational roots: a cubic equation",
+      got: exact("Solve the equation x³ − x = 0."))
+check(exact("Solve the inequality x³ − x² + 2x − 2 > 0.") == "x > 1", "rational roots: a cubic inequality",
+      got: exact("Solve the inequality x³ − x² + 2x − 2 > 0."))
+check(exact("Solve the equation x⁴ − 5x² + 4 = 0.") == "x = −2 or x = −1 or x = 1 or x = 2", "rational roots: a quartic",
+      got: exact("Solve the equation x⁴ − 5x² + 4 = 0."))
 
 // MARK: Exact numbers
 
@@ -355,7 +362,29 @@ for (n, a) in mayLeave.sorted(by: { $0.key < $1.key }) {
 let poppler = pageAnswers(fixture)
 check([12, 14, 15, 17, 18].allSatisfy { poppler[$0] == mayLeave[$0] }, "poppler: the split fractions and the quadratic in |x + 3| are solved",
       got: [12, 14, 15, 17, 18].map { "\($0): \(poppler[$0] ?? "nil")" }.joined(separator: " | "))
-check(poppler[5] == "-" && poppler[16] == "-", "poppler: cubic denominators stay the model's", got: "\(poppler[5] ?? "nil") \(poppler[16] ?? "nil")")
+check([5, 16].allSatisfy { poppler[$0] == "-" || poppler[$0] == mayLeave[$0] }, "poppler: cubic denominators solved right or the model's",
+      got: "\(poppler[5] ?? "nil") \(poppler[16] ?? "nil")")
+
+// The page as the iPad reads it from its glyph boxes (PageGlyphs on a Mac, tests/fixtures/
+// calculus_p14_glyphs.txt): every question but the sketch is the engine's, and right.
+var boxed: [PageLayout.Glyph] = []
+for line in ((try? String(contentsOfFile: root + "/tests/fixtures/calculus_p14_glyphs.txt", encoding: .utf8)) ?? "").split(separator: "\n") {
+    let f = line.split(separator: " ")
+    guard f.count == 5, let code = UInt32(f[0], radix: 16), let scalar = Unicode.Scalar(code),
+          let x = Double(f[1]), let y = Double(f[2]), let w = Double(f[3]), let h = Double(f[4]) else { continue }
+    boxed.append(PageLayout.Glyph(char: Character(scalar), x: x, y: y, w: w, h: h))
+}
+check(boxed.count == 1281, "every glyph box of the page is read", got: "\(boxed.count)")
+let laidOut = pageAnswers(PageLayout.text(boxed) ?? "")
+check(laidOut.count == 18, "glyph boxes: 18 questions split", got: "\(laidOut.keys.sorted())")
+for (n, a) in mustSolve.merging(mayLeave, uniquingKeysWith: { a, _ in a }).sorted(by: { $0.key < $1.key }) {
+    check(laidOut[n] == a, "glyph boxes (\(n)): \(a)", got: laidOut[n] ?? "nil")
+}
+check(laidOut[8] == "-", "glyph boxes (8): a graph is the model's", got: laidOut[8] ?? "nil")
+let rebuiltPage = PageLayout.text(boxed) ?? ""
+check(rebuiltPage.contains("(3x)/(x² + 2) ≥ (1)/(x−1). Express") && rebuiltPage.contains("|x² + 2|= |x² −11|")
+      && rebuiltPage.contains("Answer: [,) ∪[ 2 ,) .") && rebuiltPage.contains("2|x+ 3|² −15|x+ 3|+ 7 = 0."),
+      "glyph boxes: fractions, powers, blanks' commas and moved pieces in place")
 // The pieces: squares put back, a lost sign marked, a template read, the fractions rebuilt.
 check(MathText.restoredSquares("|x2 + 2| = |x2 - 11| and |x - 2|2 + 3|x - 2| - 4 = 0 and 2|x + 3|2 - 15|x + 3|, x3 + x2, 3|2 - x| < 2, x = 2")
       == "|x² + 2| = |x² − 11| and |x − 2|² + 3|x − 2| − 4 = 0 and 2|x + 3|² − 15|x + 3|, x³ + x², 3|2 − x| < 2, x = 2"

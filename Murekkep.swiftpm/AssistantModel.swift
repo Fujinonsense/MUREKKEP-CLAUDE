@@ -327,12 +327,18 @@ final class AssistantModel: ObservableObject {
             }
             let solving = Self.wantsSolving(question: question, action: action)
             if solving {
-                // The text layer as the engine and the model read it: lookalike characters (𝑥, ⩽) as
-                // plain ones, fractions split over lines rebuilt, printed blanks it lost ("where a = and
-                // b =") written back as "____".
+                // The text layer as the engine and the model read it: a page of typeset math from where
+                // its glyphs stand (PDFKit's reading order scatters fractions and drops powers), then
+                // lookalike characters (𝑥, ⩽) as plain ones, fractions split over lines rebuilt, printed
+                // blanks it lost ("where a = and b =") written back as "____".
                 pages = pages.map { page in
                     var p = page
-                    p.text = MathText.pageForSolving(page.text)
+                    var text = page.text
+                    if !page.fromOCR, page.source == nil, MathText.looksMath(page.text, questions: 2),
+                       let layout = editor.layoutText(page: page.page), !layout.isEmpty {
+                        text = layout
+                    }
+                    p.text = MathText.pageForSolving(text)
                     return p
                 }
             }
@@ -685,6 +691,10 @@ final class AssistantModel: ObservableObject {
                         case nil:
                             note = AnswerLanguage.$bound.withValue(language, operation: { L("hesap motoru doğrulayamadı", "the math engine could not confirm it") })
                         }
+                    }
+                    if QuestionSolving.finalAnswer(of: answer) == nil {
+                        // No result line at all (the model ran out or left "Cevap:" empty): never shown as an answer.
+                        note = AnswerLanguage.$bound.withValue(language, operation: { L("net bir sonuç yazılmadı; hesap motoru doğrulayamadı", "no clear result; the math engine could not confirm it") })
                     }
                     appendToAnswer(QuestionSolving.openLine(q, answer: MathText.withoutFiller(MathText.tidy(answer), question: q.stem),
                                                             language: language, note: note))

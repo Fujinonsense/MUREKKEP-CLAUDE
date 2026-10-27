@@ -123,6 +123,12 @@ check(QuestionSolving.openLine(q2, answer: "Cevap: **x = 3**\n- 4x = 12", langua
       "bold inside the answer line", got: QuestionSolving.openLine(q2, answer: "Cevap: **x = 3**\n- 4x = 12", language: .turkish))
 check(QuestionSolving.openLine(q2, answer: "x = −7/4 because 4x + 23 = −(4x − 9).", language: .english)
       == "**2)** x = −7/4 because 4x + 23 = −(4x − 9).\n\n", "no answer line: the text as it is")
+check(QuestionSolving.openLine(q2, answer: "Cevap:\n1. Inequaliteyi düzenle.", language: .english, note: "no clear result")
+      == "**2)** ⚠️ no clear result\n1. Inequaliteyi düzenle.\n\n", "an empty result line is dropped and the answer is marked",
+      got: QuestionSolving.openLine(q2, answer: "Cevap:\n1. Inequaliteyi düzenle.", language: .english, note: "no clear result"))
+check(QuestionSolving.mathInstructions(language: .english).hasPrefix("RESPONSE LANGUAGE: English.")
+      && QuestionSolving.mathInstructions(language: .english).contains("\"Answer: …\"")
+      && QuestionSolving.mathInstructions(language: .turkish).contains("\"Cevap: …\""), "the math teacher's language, first and last")
 check(QuestionSolving.finalAnswer(in: "**Answer:** a = −4") == "a = −4" && QuestionSolving.finalAnswer(in: "1. Remove the bars.") == nil,
       "answer line read")
 check(QuestionSolving.mathInstructions(language: .english).contains("LaTeX kullanma")

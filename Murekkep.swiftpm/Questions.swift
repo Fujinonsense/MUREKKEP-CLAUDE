@@ -172,7 +172,11 @@ enum QuestionSolving {
     /// blanks to fill): the working and every check happen while it thinks, and the answer is the
     /// clean result a textbook prints — "Cevap:" first, a few steps, no LaTeX, no second thoughts.
     static func mathInstructions(language: AnswerLanguage) -> String {
-        "Sen titiz bir matematik öğretmenisin. Soruyu dikkatle oku; metin bir sayfadan okundu, OCR hatası ya da kaybolmuş boşluk olabilir (\"a = ____ ve b = ____\" iki boşluk demektir, ikisini de doldur). Bütün hesabı ve kontrolü düşünürken yap: her adımı doğrula, bulduğun sonucu soruda yerine koy, kararsızlığı düşünürken bitir. Düşünmen bitince yalnızca son hâli yaz: ilk satıra \"Cevap: …\" ve kesin sonuç, altına en fazla üç kısa adım (madde madde). Yazdığın cevapta tereddüt, düzeltme, ikinci deneme ya da OCR yorumu olmasın (\"dur\", \"aslında\", \"düzeltme\", \"wait\", \"correction\" yazma). LaTeX kullanma ($, \\frac, \\le, \\sqrt yazma); matematiği düz metin ve Unicode ile yaz: ≤ ≥ ≠ × ÷ √ ² ³ π ∞, kesir (−15 + 7)/2, mutlak değer |x − 2|, aralık [2, ∞). "
+        // The language first as well as last: a small model keeps to what opens and closes its brief.
+        language.directive + " "
+            + "Sen titiz bir matematik öğretmenisin. Soruyu dikkatle oku; metin bir sayfadan okundu, OCR hatası ya da kaybolmuş boşluk olabilir (\"a = ____ ve b = ____\" iki boşluk demektir, ikisini de doldur). Bütün hesabı ve kontrolü düşünürken yap: her adımı doğrula, bulduğun sonucu soruda yerine koy, kararsızlığı düşünürken bitir. Düşünmen bitince yalnızca son hâli yaz: ilk satıra "
+            + (language == .english ? "\"Answer: …\"" : "\"Cevap: …\"")
+            + " ve kesin sonuç, altına en fazla üç kısa adım (madde madde). Yazdığın cevapta tereddüt, düzeltme, ikinci deneme ya da OCR yorumu olmasın (\"dur\", \"aslında\", \"düzeltme\", \"wait\", \"correction\" yazma). LaTeX kullanma ($, \\frac, \\le, \\sqrt yazma); matematiği düz metin ve Unicode ile yaz: ≤ ≥ ≠ × ÷ √ ² ³ π ∞, kesir (−15 + 7)/2, mutlak değer |x − 2|, aralık [2, ∞). "
             + language.directive
     }
 
@@ -197,6 +201,9 @@ enum QuestionSolving {
 
     private static let finalLine = try! NSRegularExpression(
         pattern: #"^[\s*_#>-]*(?:cevap|yan[ıi]t|answer|sonu[çc]|result)\s*[:：]\s*(.+?)\s*$"#, options: [.caseInsensitive])
+
+    /// A "Cevap:" line with nothing after it, which says nothing and is dropped.
+    private static let emptyFinalLine = #"^[\s*_#>-]*(cevap|yan[ıi]t|answer|sonu[çc]|result)\s*[:：][\s*_]*$"#
 
     /// What a "Cevap: …" / "Answer: …" line states, without its emphasis; nil for any other line.
     static func finalAnswer(in line: String) -> String? {
@@ -237,13 +244,13 @@ enum QuestionSolving {
         for line in answer.components(separatedBy: "\n") {
             if let a = finalAnswer(in: line) {
                 final = a
-            } else {
+            } else if line.range(of: emptyFinalLine, options: [.regularExpression, .caseInsensitive]) == nil {
                 steps.append(line)
             }
         }
         let body = stepsBody(steps)
         var head = "**\(q.number))** "
-        guard let final else { return head + body + "\n\n" }
+        guard let final else { return head + (note.map { "⚠️ " + $0 + "\n" } ?? "") + body + "\n\n" }
         head += "**\(language == .english ? "Answer" : "Cevap"): \(final)**"
         if let note { head += " ⚠️ " + note }
         return head + (body.isEmpty ? "" : "\n" + body) + "\n\n"

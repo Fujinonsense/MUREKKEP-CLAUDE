@@ -1506,6 +1506,13 @@ final class EditorModel: ObservableObject {
         return doc.page(at: index)?.string ?? ""
     }
 
+    /// One PDF page read from where its glyphs stand (PageGlyphs, PageLayout): typeset fractions,
+    /// powers and the pieces PDFKit's reading order moves come back whole; nil without a text layer.
+    func layoutText(page index: Int) -> String? {
+        guard let doc = pdfKitDocument, index >= 0, index < doc.pageCount, let page = doc.page(at: index) else { return nil }
+        return PageGlyphs.text(page)
+    }
+
     /// The page with its ink as a JPEG (what the user sees, minus the 3D effects).
     func pageImageJPEG(_ index: Int, longEdge: CGFloat = 2000) -> Data? {
         pageImage(index, longEdge: longEdge)?.jpegData(compressionQuality: 0.82)
