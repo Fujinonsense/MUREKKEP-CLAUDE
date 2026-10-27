@@ -54,6 +54,8 @@ struct GameProgress: Equatable {
         static func difficulty(_ game: String) -> String { "break.\(game).difficulty" }
         /// A game left half-way (Sudoku), to go on with later.
         static func saved(_ game: String) -> String { "break.\(game).saved" }
+        /// The break card's layer last open (games or things to make).
+        static let layer = "break.layer"
         /// The bubbles' best from before the difficulties, read once when the medium best is empty.
         static let legacyBubblesBest = "breakBubblesBest"
     }

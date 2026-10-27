@@ -1,6 +1,6 @@
-"""The break corner: a glass tile at the bottom-left of the page opens a compact card of six calm
-games (the ink mandala, the ink bubbles, XOX against the iPad, the flying drop, the colour popper,
-Sudoku), held in the source.
+"""The break corner: a glass tile at the bottom-left of the page opens a compact card with two layers,
+games to play (the ink bubbles, XOX against the iPad, the flying drop, the colour popper, Sudoku)
+and things to make (ebru on water, the ink mandala), held in the source.
 
 The tile stands above the writing sound's switch and goes away while a lecture is recorded; the
 panel opens above that column, keeps its touches off the page, springs in and out (fades with Reduce
@@ -13,8 +13,9 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent / "Murekkep.swiftpm"
 TOOLS = Path(__file__).resolve().parent.parent / "tools" / "gamescheck"
-VIEWS = ("GameCorner.swift", "MandalaGame.swift", "BubblesGame.swift", "XOXGame.swift", "FlyerGame.swift", "ShooterGame.swift", "SudokuGame.swift")
-LOGIC = ("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift")
+VIEWS = ("GameCorner.swift", "MandalaGame.swift", "BubblesGame.swift", "XOXGame.swift", "FlyerGame.swift", "ShooterGame.swift", "SudokuGame.swift",
+         "EbruGame.swift")
+LOGIC = ("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift", "EbruLogic.swift")
 
 
 def src(name):
@@ -81,10 +82,10 @@ def test_the_tile_and_the_panel():
     assert 'headerButton("chevron.left", label: Loc.t("Oyunlara dön"))' in corner
     assert 'headerButton("arrow.counterclockwise", label: Loc.t("Yeniden başlat"))' in corner
     assert 'label: expanded ? Loc.t("Küçült") : Loc.t("Büyüt")' in corner
-    # The six games, with icons and names, in a grid.
-    assert "ForEach(MiniGame.allCases)" in corner and "Image(systemName: item.symbol)" in corner and "Text(item.title)" in corner
-    assert "case mandala, bubbles, xox, flyer, shooter, sudoku" in corner
-    for line in ("case .mandala: InkMandalaGame()", "case .bubbles: InkBubblesGame(store: store)", "case .xox: XOXGame(store: store)",
+    # The tiles of the layer on show, with icons and names, in a grid.
+    assert "ForEach(MiniGame.allCases.filter { $0.layer == layer })" in corner and "Image(systemName: item.symbol)" in corner and "Text(item.title)" in corner
+    assert "case ebru, mandala, bubbles, xox, flyer, shooter, sudoku" in corner
+    for line in ("case .ebru: EbruGame()", "case .mandala: InkMandalaGame()", "case .bubbles: InkBubblesGame(store: store)", "case .xox: XOXGame(store: store)",
                  "case .flyer: FlyerGame(store: store)", "case .shooter: ShooterGame(store: store)", "case .sudoku: SudokuGame(store: store)"):
         assert line in corner, line
     # Not Pro-gated, no network, no assets.
@@ -117,6 +118,11 @@ def test_the_games_draw_with_the_pencil_keep_their_touches_and_pause():
     assert "Task.detached(priority: .userInitiated)" in sudoku and "Sudoku.generate(difficulty: difficulty, seed: seed)" in sudoku
     assert "ForEach(1...9, id: \\.self)" in sudoku and 'Loc.t("Notlar")' in sudoku and 'Loc.t("Sil")' in sudoku
     assert "conflicts.contains(i) { tint = Color.red.opacity(0.16) }" in sudoku
+    ebru = src("EbruGame.swift")
+    assert "TimelineView(.animation(paused: paused))" in ebru and "scenePhase != .active || !model.isMoving" in ebru
+    assert "model.advance(to: now)" in ebru and "if stopped { model.pause() }" in ebru
+    # A touch that starts somewhere else is a new one, even after a touch cancelled without ending.
+    assert "if touchStart == value.startLocation {" in ebru and "model.trayPoint(value.location, in: geo.size)" in ebru
     for name in VIEWS:
         text = src(name)
         assert "DragGesture(minimumDistance: 0" in text or name == "GameCorner.swift", name
@@ -210,14 +216,46 @@ def test_the_logic_is_foundation_only_and_checked():
     assert "struct FlyerWorld" in src("FlyerLogic.swift")
     assert "struct ShooterBoard" in src("ShooterLogic.swift") and "struct HexGrid" in src("ShooterLogic.swift")
     assert "enum Sudoku" in src("SudokuLogic.swift") and "struct SudokuSave: Codable" in src("SudokuLogic.swift")
+    assert "struct EbruTray: Equatable" in src("EbruLogic.swift") and "enum EbruMove: Equatable" in src("EbruLogic.swift")
     run = (TOOLS / "run.ps1").read_text(encoding="utf-8")
     for name in LOGIC:
         assert name in run, name
     main = (TOOLS / "main.swift").read_text(encoding="utf-8")
     for needle in ("MandalaSymmetry.copies", "BubbleField(size:", "TicTacToe", "xox trap", "xox zor: never loses", "GameProgress()",
                    "GamePanelSize.larger", "autopilot(level:", "ShooterLevels.all.enumerated()", "Sudoku.generate(difficulty:", "SudokuSave.decode",
-                   ".blot(points: 5, seconds: 3)", "combos == [1, 2, 3, 4, 4]", "ShooterBoard.deadRow == 9"):
+                   ".blot(points: 5, seconds: 3)", "combos == [1, 2, 3, 4, 4]", "ShooterBoard.deadRow == 9",
+                   "EbruTray(size: traySize", "every colour keeps its area", "a held drop stops at 60 pt", "the needle leaves paint far from its path alone",
+                   "the comb pulls only along its axis", "undo stops a pattern and brings the tray back"):
         assert needle in main, needle
+
+
+def test_the_creative_layer():
+    corner = src("GameCorner.swift")
+    # Two layers in a segmented control, the last one open kept; games first, as the tile is a game controller.
+    assert "enum BreakLayer: String, CaseIterable, Identifiable" in corner and "case games, creative" in corner
+    assert 'Loc.t("Oyunlar")' in corner and 'Loc.t("Yaratıcılık")' in corner
+    assert "@AppStorage(GameProgress.Keys.layer) private var layer: BreakLayer = .games" in corner
+    assert 'static let layer = "break.layer"' in src("MiniGameLogic.swift")
+    assert re.search(r'Picker\(Loc\.t\("Katman"\), selection: \$layer\)', corner) and ".pickerStyle(.segmented)" in corner
+    assert "case .ebru, .mandala: return .creative" in corner and "case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games" in corner
+    assert "var hasDifficulty: Bool { layer == .games }" in corner
+    # Ebru: six traditional pigments, three tools, a sprinkle, four patterns, undo; at once with Reduce Motion.
+    ebru = src("EbruGame.swift")
+    for name in ("Çivit mavisi", "Lal kırmızısı", "Zırnık sarısı", "Yeşil", "Toprak", "Beyaz", "Gelgit", "Taraklı", "Şal", "Bülbül yuvası",
+                 "Damla", "Biz", "Tarak", "Serp", "Desen", "Geri al"):
+        assert f'Loc.t("{name}")' in ebru, name
+    assert "model.sprinkle(instantly: reduceMotion)" in ebru and "model.play(pattern, instantly: reduceMotion)" in ebru
+    assert "ForEach(EbruPattern.allCases)" in ebru and ".menuStyle(.button)" in ebru
+    assert ".accessibilityAddTraits(model.pigment == i ? .isSelected : [])" in ebru and ".frame(width: 40, height: 40)" in ebru
+    # The timeline runs only while paint moves; the tray is redrawn from a revision counter.
+    assert "var isMoving: Bool { tray?.isPlaying == true || tray?.isSpreading == true }" in ebru
+    assert "@Published private(set) var revision = 0" in ebru and "private(set) var tray: EbruTray?" in ebru
+    logic = src("EbruLogic.swift")
+    for case in ("case drop(centre: CGPoint, radius: Double, pigment: Int)", "case spread(centre: CGPoint, radius: Double)",
+                 "case line(through:", "case comb(through:", "case wave(through:", "case swirl(centre:", "case needle(tip:", "case combStep(tip:"):
+        assert case in logic, case
+    assert "case gelgit" in logic and "case tarakli" in logic and "case sal" in logic and "case bulbul" in logic
+    assert "static let budget = 60_000" in logic and "static let historyLimit = 10" in logic
 
 
 def test_every_text_of_the_corner_goes_through_loc():

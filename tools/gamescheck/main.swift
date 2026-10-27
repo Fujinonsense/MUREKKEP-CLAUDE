@@ -529,5 +529,176 @@ let saved = save.encoded()
 check(saved != nil && SudokuSave.decode(saved!) == save, "sudoku: a half-done puzzle survives a save")
 check(SudokuSave.decode(Data("{}".utf8)) == nil && SudokuSave.decode(Data("nonsense".utf8)) == nil, "sudoku: a broken save is nothing")
 
+// MARK: Ebru (EbruTray)
+
+func ebruRadius(_ outline: [CGPoint], _ centre: CGPoint) -> (min: Double, max: Double) {
+    let d = outline.map { EbruTray.distance($0, centre) }
+    return (d.min() ?? 0, d.max() ?? 0)
+}
+let traySize = CGSize(width: 316, height: 260)
+var tray = EbruTray(size: traySize, seed: 3)
+check(tray.paints.isEmpty && !tray.isPlaying && !tray.canUndo && !tray.isHoldingDrop, "ebru: an empty tray at the start")
+
+// A drop pushes a point at distance d out to exactly √(d² + r²); paint right under it goes to its rim.
+let push = EbruTray.map(.drop(centre: CGPoint(x: 100, y: 100), radius: 20, pigment: 0))
+check(abs(EbruTray.distance(push(CGPoint(x: 130, y: 100)), CGPoint(x: 100, y: 100)) - 1300.0.squareRoot()) < 1e-9, "ebru: a drop pushes a point out to √(d² + r²)")
+check(abs(EbruTray.distance(push(CGPoint(x: 100, y: 100)), CGPoint(x: 100, y: 100)) - 20) < 1e-9, "ebru: paint right under a drop goes to its rim")
+
+// Two drops side by side: the first keeps its area when the second pushes it.
+tray.touchBegan(at: CGPoint(x: 120, y: 130), tool: .drop, pigment: 0)
+tray.touchEnded()
+let firstArea = EbruTray.area(of: tray.paints[0].outline)
+check(abs(firstArea - Double.pi * 81) / (Double.pi * 81) < 0.02, "ebru: a touch drops a circle of 9 pt (\(firstArea))")
+tray.touchBegan(at: CGPoint(x: 150, y: 130), tool: .drop, pigment: 1)
+tray.touchEnded()
+check(tray.paints.count == 2 && tray.paints[1].pigment == 1 && tray.canUndo, "ebru: the second drop lies on top in its own colour")
+let pushedArea = EbruTray.area(of: tray.paints[0].outline)
+check(abs(pushedArea - firstArea) / firstArea < 0.01, "ebru: the pushed drop keeps its area (\(firstArea) → \(pushedArea))")
+
+// Held still, a drop spreads (r² grows 900 a second) up to 60 pt; a long gap counts as 0.1 s.
+var held = EbruTray(size: traySize, seed: 3)
+let heldCentre = CGPoint(x: 158, y: 130)
+held.touchBegan(at: heldCentre, tool: .drop, pigment: 2)
+for _ in 0..<10 { held.hold(for: 0.1) }
+let heldSecond = ebruRadius(held.paints[0].outline, heldCentre)
+check(abs(heldSecond.max - 981.0.squareRoot()) < 1e-6 && heldSecond.max - heldSecond.min < 0.05, "ebru: held for a second, the drop spreads to √(81 + 900) (\(heldSecond))")
+held.hold(for: 5)
+check(abs(ebruRadius(held.paints[0].outline, heldCentre).max - 1071.0.squareRoot()) < 1e-6, "ebru: a long gap spreads it by a tenth of a second only")
+for _ in 0..<60 { held.hold(for: 0.1) }
+check(abs(ebruRadius(held.paints[0].outline, heldCentre).max - 60) < 1e-6, "ebru: a held drop stops at 60 pt")
+let heldFull = held
+held.hold(for: 0.1)
+check(held == heldFull && held.isHoldingDrop && !held.isSpreading, "ebru: no spreading past the limit")
+held.touchEnded()
+check(!held.isHoldingDrop, "ebru: lifting the pencil stops the spreading")
+
+// Moved while down, the drop tool leaves a trail of small drops, one every 16 pt or more.
+var trail = EbruTray(size: traySize, seed: 1)
+trail.touchBegan(at: CGPoint(x: 40, y: 130), tool: .drop, pigment: 3)
+trail.touchMoved(to: CGPoint(x: 50, y: 130))
+check(trail.paints.count == 1, "ebru: a short move adds no drop")
+trail.touchMoved(to: CGPoint(x: 60, y: 130))
+trail.touchMoved(to: CGPoint(x: 90, y: 130))
+check(trail.paints.count == 3 && trail.isHoldingDrop, "ebru: a moving drop leaves a trail (\(trail.paints.count))")
+trail.touchEnded()
+
+// The needle drags paint along its path and leaves paint far from it exactly where it was.
+var needled = EbruTray(size: traySize, seed: 3)
+needled.touchBegan(at: CGPoint(x: 80, y: 130), tool: .drop, pigment: 0)
+for _ in 0..<3 { needled.hold(for: 0.1) }
+needled.touchEnded()
+needled.touchBegan(at: CGPoint(x: 240, y: 60), tool: .drop, pigment: 1)
+needled.touchEnded()
+let farPaint = needled.paints[1].outline
+let rightEdge = needled.paints[0].outline.map { Double($0.x) }.max() ?? 0
+needled.touchBegan(at: CGPoint(x: 40, y: 130), tool: .needle, pigment: 0)
+needled.touchMoved(to: CGPoint(x: 90, y: 130))
+needled.touchMoved(to: CGPoint(x: 160, y: 130))
+needled.touchEnded()
+let dragged = needled.paints[0].outline.map { Double($0.x) }.max() ?? 0
+check(needled.paints[1].outline == farPaint, "ebru: the needle leaves paint far from its path alone")
+check(dragged > rightEdge + 12, "ebru: the needle drags the drop along (right edge \(rightEdge) → \(dragged))")
+
+// The comb waits until its axis is clear, then pulls only along it.
+var combed = EbruTray(size: traySize, seed: 3)
+combed.touchBegan(at: CGPoint(x: 158, y: 130), tool: .drop, pigment: 2)
+for _ in 0..<5 { combed.hold(for: 0.1) }
+combed.touchEnded()
+let combRadius = 531.0.squareRoot()
+let beforeComb = combed.paints[0].outline
+combed.touchBegan(at: CGPoint(x: 150, y: 40), tool: .comb, pigment: 0)
+combed.touchMoved(to: CGPoint(x: 152, y: 43))
+check(combed.paints[0].outline == beforeComb, "ebru: the comb waits until its axis is clear")
+combed.touchMoved(to: CGPoint(x: 165, y: 220))
+combed.touchEnded()
+let combXs = combed.paints[0].outline.map { Double($0.x) }
+let combYs = combed.paints[0].outline.map { Double($0.y) }
+check((combXs.min() ?? 0) >= 158 - combRadius - 1e-6 && (combXs.max() ?? 0) <= 158 + combRadius + 1e-6, "ebru: the comb pulls only along its axis")
+check((combYs.max() ?? 0) > 130 + combRadius + 8, "ebru: the comb pulls the paint down (bottom \(combYs.max() ?? 0))")
+
+// A sprinkle queues its drops and they fall one a frame; the same seed gives the same tray.
+var sprinkled = EbruTray(size: traySize, seed: 8)
+sprinkled.sprinkle(pigment: 0)
+check(sprinkled.pending.count == 34 && sprinkled.paints.isEmpty && sprinkled.isPlaying, "ebru: a sprinkle queues 34 drops on this tray")
+var frames = 0
+while sprinkled.advance() { frames += 1 }
+check(frames == 34 && sprinkled.paints.count > 15 && !sprinkled.isPlaying, "ebru: the drops fall one a frame (\(sprinkled.paints.count) on the tray)")
+var sprinkledAtOnce = EbruTray(size: traySize, seed: 8)
+sprinkledAtOnce.sprinkle(pigment: 0)
+sprinkledAtOnce.finish()
+check(sprinkledAtOnce == sprinkled, "ebru: the same seed sprinkles the same tray, frame by frame or at once")
+var bigTray = EbruTray(size: CGSize(width: 376, height: 340), seed: 8)
+bigTray.sprinkle(pigment: 0)
+check(bigTray.pending.count == 53, "ebru: a larger tray gets more drops (\(bigTray.pending.count))")
+
+// Patterns: each tine and swirl in parts; tines and swirls keep every colour's area.
+var inside = EbruTray(size: traySize, seed: 1)
+for (i, centre) in [(100.0, 90.0), (158.0, 130.0), (215.0, 175.0), (125.0, 180.0), (205.0, 85.0)].enumerated() {
+    inside.touchBegan(at: CGPoint(x: centre.0, y: centre.1), tool: .drop, pigment: i % 6)
+    for _ in 0..<3 { inside.hold(for: 0.1) }
+    inside.touchEnded()
+}
+let insideAreas = inside.paints.map { EbruTray.area(of: $0.outline) }
+let expectedParts: [EbruPattern: Int] = [.gelgit: 48, .tarakli: 6, .sal: 42, .bulbul: 84]
+for pattern in EbruPattern.allCases {
+    var t = inside
+    t.play(pattern)
+    let parts = t.pending.count
+    t.finish()
+    let after = t.paints.map { EbruTray.area(of: $0.outline) }
+    let worst = zip(insideAreas, after).map { abs($1 - $0) / $0 }.max() ?? 1
+    check(parts == expectedParts[pattern] && after.count == insideAreas.count && worst < 0.02,
+          "ebru \(pattern.rawValue): \(parts) parts, every colour keeps its area (worst \(String(format: "%.4f", worst)))")
+}
+// A tine's parts add up exactly to the whole tine.
+let whole = EbruTray.map(.line(through: CGPoint(x: 0, y: 50), direction: CGPoint(x: 1, y: 0), shift: 36, sharpness: 10))
+let part = EbruTray.map(.line(through: CGPoint(x: 0, y: 50), direction: CGPoint(x: 1, y: 0), shift: 9, sharpness: 10))
+let probe = CGPoint(x: 37, y: 61)
+check(close(part(part(part(part(probe)))), whole(probe), 1e-9), "ebru: four quarter tines make one tine")
+check(EbruTray.nearestTine(27, spacing: 20) == 7 && EbruTray.nearestTine(-3, spacing: 20) == 3, "ebru: the distance to the nearest tine")
+let fourSteps = EbruTray.steps(from: .zero, to: CGPoint(x: 10, y: 0))
+check(fourSteps.count == 4 && abs(Double(fourSteps[3].tip.x) - 10) < 1e-9 && abs(Double(fourSteps[0].step.x) - 2.5) < 1e-9, "ebru: a 10 pt drag goes in four steps of 2.5")
+check(EbruTray.steps(from: .zero, to: .zero).isEmpty, "ebru: no movement, no steps")
+
+// Undo stops a pattern and brings the tray back; ten steps are kept.
+var undone = inside
+undone.play(.bulbul)
+undone.advance()
+undone.advance()
+undone.undo()
+check(undone.paints == inside.paints && !undone.isPlaying, "ebru: undo stops a pattern and brings the tray back")
+var many = EbruTray(size: traySize, seed: 1)
+for i in 0..<14 {
+    many.touchBegan(at: CGPoint(x: 20 + Double(i) * 20, y: 130), tool: .drop, pigment: 0)
+    many.touchEnded()
+}
+var undos = 0
+while many.canUndo {
+    many.undo()
+    undos += 1
+}
+check(undos == 10 && many.paints.count == 4, "ebru: ten steps back at most (\(undos), \(many.paints.count) drops left)")
+
+// Paint pushed wholly off the tray is let go.
+var crowded = EbruTray(size: traySize, seed: 1)
+crowded.touchBegan(at: CGPoint(x: 10, y: 130), tool: .drop, pigment: 0)
+crowded.touchEnded()
+crowded.touchBegan(at: CGPoint(x: 70, y: 130), tool: .drop, pigment: 1)
+for _ in 0..<60 { crowded.hold(for: 0.1) }
+crowded.touchEnded()
+check(crowded.paints.count == 1 && crowded.paints[0].pigment == 1, "ebru: paint pushed off the tray is let go")
+
+// A full tray: four sprinkles and the nightingale's nest stay inside the point budget.
+var busyTray = EbruTray(size: traySize, seed: 5)
+for pigment in [0, 2, 1, 5] {
+    busyTray.sprinkle(pigment: pigment)
+    busyTray.finish()
+}
+busyTray.play(.gelgit)
+busyTray.finish()
+busyTray.play(.bulbul)
+busyTray.finish()
+check(busyTray.pointCount < Int(Double(EbruTray.budget) * 1.6), "ebru: a busy tray stays near the budget (\(busyTray.pointCount) points)")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

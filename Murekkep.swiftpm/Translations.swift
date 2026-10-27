@@ -5,7 +5,7 @@ enum Translations {
     static let english: [String: String] = {
         var all: [String: String] = [:]
         all.reserveCapacity(920)
-        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11, part12, part13] {
+        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11, part12, part13, part14] {
             all.merge(part) { first, _ in first }
         }
         return all
@@ -1391,5 +1391,33 @@ enum Translations {
         "{0} balon · {1} leke": "{0} bubbles · {1} blots",
         "Dokun ya da boşluk tuşu: damla yükselsin": "Tap or press Space to lift the drop",
         "Bulmacayı bırakıp yenisine geçilsin mi?": "Leave this puzzle for a new one?",
+    ]
+
+    /// The break corner's creativity layer (2026-10-27).
+    private static let part14: [String: String] = [
+        "Oyunlar": "Games",
+        "Yaratıcılık": "Create",
+        "Katman": "Layer",
+        "Suya boya damlat; bizle, tarakla desen çek.": "Drop paint on the water; pull patterns with the needle and the comb.",
+        "Battal, gelgit, bülbül yuvası.": "Stone, back and forth, nightingale's nest.",
+        "Çivit mavisi": "Indigo",
+        "Lal kırmızısı": "Ruby red",
+        "Zırnık sarısı": "Orpiment yellow",
+        "Yeşil": "Green",
+        "Toprak": "Earth",
+        "Beyaz": "White",
+        "Gelgit": "Back and forth",
+        "Taraklı": "Combed",
+        "Şal": "Shawl",
+        "Bülbül yuvası": "Nightingale's nest",
+        "Araç": "Tool",
+        "Damla": "Drop",
+        "Biz": "Needle",
+        "Tarak": "Comb",
+        "Serp": "Sprinkle",
+        "Seçili renkten tablanın her yerine damlalar serper.": "Sprinkles drops of the chosen color all over the tray.",
+        "Desen": "Pattern",
+        "Ebru teknesi": "Ebru tray",
+        "Dokun, boya damlasın; basılı tut, yayılsın. Ya da Serp'e bas.": "Tap to drop paint; hold to let it spread. Or press Sprinkle.",
     ]
 }

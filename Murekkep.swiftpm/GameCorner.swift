@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The break corner: a small tile at the bottom-left of the page opens a card of six calm games
-/// (the ink mandala, the ink bubbles, XOX against the iPad, the flying drop, the colour popper,
-/// Sudoku). Free in every edition; nothing leaves the iPad, and what is kept (levels, stars, best
-/// scores, a half-done Sudoku) lives in UserDefaults under `GameProgress.Keys`. The games' logic is
-/// in MiniGameLogic, FlyerLogic, ShooterLogic and SudokuLogic.
+/// The break corner: a small tile at the bottom-left of the page opens a card with two layers:
+/// games to play (the ink bubbles, XOX against the iPad, the flying drop, the colour popper, Sudoku)
+/// and things to make (ebru, the ink mandala). Free in every edition; nothing leaves the iPad, and
+/// what is kept (levels, stars, best scores, a half-done Sudoku, the layer last open) lives in
+/// UserDefaults under `GameProgress.Keys`. The logic is in MiniGameLogic, FlyerLogic, ShooterLogic,
+/// SudokuLogic and EbruLogic.
 enum GameCorner {
     static let panelSize = GamePanelSize.compact
     static let radius: CGFloat = 24
@@ -54,14 +55,36 @@ extension GameDifficulty {
     }
 }
 
-/// The six games of the break corner.
-enum MiniGame: String, CaseIterable, Identifiable {
-    case mandala, bubbles, xox, flyer, shooter, sudoku
+/// The two layers of the break card: games to play, and things to make.
+enum BreakLayer: String, CaseIterable, Identifiable {
+    case games, creative
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .games: return Loc.t("Oyunlar")
+        case .creative: return Loc.t("Yaratıcılık")
+        }
+    }
+}
+
+/// The games and the makings of the break corner, in the order their tiles stand.
+enum MiniGame: String, CaseIterable, Identifiable {
+    case ebru, mandala, bubbles, xox, flyer, shooter, sudoku
+
+    var id: String { rawValue }
+
+    var layer: BreakLayer {
+        switch self {
+        case .ebru, .mandala: return .creative
+        case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .ebru: return Loc.t("Ebru")
         case .mandala: return Loc.t("Mürekkep mandalası")
         case .bubbles: return Loc.t("Mürekkep balonları")
         case .xox: return Loc.t("XOX")
@@ -73,6 +96,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
 
     var hint: String {
         switch self {
+        case .ebru: return Loc.t("Suya boya damlat; bizle, tarakla desen çek.")
         case .mandala: return Loc.t("Çiz; her çizgi sekiz kat açılır.")
         case .bubbles: return Loc.t("Balonları patlat, lekelere dokunma. 60 saniye.")
         case .xox: return Loc.t("iPad'e karşı; sen X'sin.")
@@ -84,6 +108,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .ebru: return "paintbrush.pointed"
         case .mandala: return "circle.hexagongrid"
         case .bubbles: return "drop.circle"
         case .xox: return "squareshape.split.3x3"
@@ -102,7 +127,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
         }
     }
 
-    var hasDifficulty: Bool { self != .mandala }
+    var hasDifficulty: Bool { layer == .games }
 }
 
 /// What the player keeps of every game, read from and written to UserDefaults.
@@ -154,6 +179,8 @@ final class GameProgressStore: ObservableObject {
     func summary(of game: MiniGame) -> String {
         let kept = self[game]
         switch game {
+        case .ebru:
+            return Loc.t("Battal, gelgit, bülbül yuvası.")
         case .mandala:
             return Loc.t("Puan yok, sadece akış.")
         case .flyer, .shooter:
@@ -230,15 +257,17 @@ struct GameCornerButton: View {
     }
 }
 
-/// The break card: a header, the six games to pick from, the game itself. Every touch inside the
-/// card stays in it, so no stroke reaches the page beneath; the pencil draws here like a finger.
-/// One step larger on request, never more than a quarter of the canvas.
+/// The break card: a header, the two layers with their tiles to pick from, the game itself. Every
+/// touch inside the card stays in it, so no stroke reaches the page beneath; the pencil draws here
+/// like a finger. One step larger on request, never more than a quarter of the canvas.
 struct GameCornerPanel: View {
     let size: CGSize
     @Binding var expanded: Bool
     let onClose: () -> Void
     @StateObject private var store = GameProgressStore()
     @State private var game: MiniGame?
+    /// The layer last open; games the first time, as the corner's tile is a game controller.
+    @AppStorage(GameProgress.Keys.layer) private var layer: BreakLayer = .games
     /// Counts the restarts; each one builds the game afresh.
     @State private var round = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -331,13 +360,23 @@ struct GameCornerPanel: View {
     }
 
     private var picker: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(MiniGame.allCases) { item in
-                    gameTile(item)
+        VStack(spacing: 10) {
+            Picker(Loc.t("Katman"), selection: $layer) {
+                ForEach(BreakLayer.allCases) { item in
+                    Text(item.title).tag(item)
                 }
             }
-            .padding(.vertical, 2)
+            .pickerStyle(.segmented)
+            .accessibilityLabel(Loc.t("Katman"))
+            ScrollView(showsIndicators: false) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    ForEach(MiniGame.allCases.filter { $0.layer == layer }) { item in
+                        gameTile(item)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: layer)
         }
     }
 
@@ -377,6 +416,7 @@ struct GameCornerPanel: View {
     @ViewBuilder
     private func gameView(_ game: MiniGame) -> some View {
         switch game {
+        case .ebru: EbruGame()
         case .mandala: InkMandalaGame()
         case .bubbles: InkBubblesGame(store: store)
         case .xox: XOXGame(store: store)
