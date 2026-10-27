@@ -30,14 +30,19 @@ func visible(_ s: String) -> String {
 
 print("===== PDFKit page.string (\(text.count) characters) =====")
 print(visible(text))
-// Every character with its box in page points (origin bottom-left), one per line: the UTF-16 code
-// in hex, then x, y, width, height to a tenth of a point.
-print("===== Glyphs (\(page.numberOfCharacters)) =====")
+// Every character of page.string with its box in page points (origin bottom-left), one per line: the
+// UTF-16 code in hex, then x, y, width, height to a tenth of a point. Read through a one-character
+// selection, which keeps text and box together (characterBounds(at:) runs out of step with string).
 let units = text as NSString
+print("===== Glyphs (\(units.length)) =====")
 var glyphs = ""
-for i in 0..<page.numberOfCharacters {
-    let r = page.characterBounds(at: i)
-    let code = i < units.length ? String(units.character(at: i), radix: 16, uppercase: true) : "?"
+for i in 0..<units.length {
+    let code = String(units.character(at: i), radix: 16, uppercase: true)
+    guard let sel = page.selection(for: NSRange(location: i, length: 1)), let s = sel.string, !s.isEmpty else {
+        glyphs += "G \(code) - - - -\n"
+        continue
+    }
+    let r = sel.bounds(for: page)
     glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", code, r.minX, r.minY, r.width, r.height)
 }
 print(glyphs, terminator: "")
