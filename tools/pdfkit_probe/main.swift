@@ -30,6 +30,18 @@ func visible(_ s: String) -> String {
 
 print("===== PDFKit page.string (\(text.count) characters) =====")
 print(visible(text))
+// Every character with its box in page points (origin bottom-left), one per line: the UTF-16 code
+// in hex, then x, y, width, height to a tenth of a point.
+print("===== Glyphs (\(page.numberOfCharacters)) =====")
+let units = text as NSString
+var glyphs = ""
+for i in 0..<page.numberOfCharacters {
+    let r = page.characterBounds(at: i)
+    let code = i < units.length ? String(units.character(at: i), radix: 16, uppercase: true) : "?"
+    glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", code, r.minX, r.minY, r.width, r.height)
+}
+print(glyphs, terminator: "")
+try glyphs.write(toFile: args[2] + ".glyphs", atomically: true, encoding: .utf8)
 print("===== Questions and the engine's answers =====")
 for q in QuestionSplitter.split(MathText.pageForSolving(text)) {
     let answer = ExactMath.solve(q.stem)?.answer ?? "-"

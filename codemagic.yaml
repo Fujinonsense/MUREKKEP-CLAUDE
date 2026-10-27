@@ -608,4 +608,4 @@ workflows:
           -o "$RUNNER_TEMP/probe"
         "$RUNNER_TEMP/probe" tests/fixtures/calculus_p14.pdf pdfkit_calculus_p14.txt
     artifacts:
-    - pdfkit_*.txt
+    - pdfkit_*

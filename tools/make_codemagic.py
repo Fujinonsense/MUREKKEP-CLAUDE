@@ -89,7 +89,7 @@ def build():
                 "max_build_duration": 15,
                 "environment": {"xcode": XCODE},
                 "scripts": [script("PDFKit ile Sayfa Metni", PROBE)],
-                "artifacts": ["pdfkit_*.txt"],
+                "artifacts": ["pdfkit_*"],
             },
         }
     }
