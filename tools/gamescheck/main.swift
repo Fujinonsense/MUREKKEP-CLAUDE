@@ -887,5 +887,118 @@ var busyPond = InkPond(size: pondSize, seed: 1)
 busyPond.wake(scribble, ink: 0)
 check(busyPond.creatures[0].strokes.reduce(0) { $0 + $1.count } <= InkPond.pointBudget, "living ink: a busy drawing is thinned to the budget")
 
+// MARK: Kare kapmaca (DotsBoard, DotsAI)
+
+func across(_ row: Int, _ col: Int) -> DotsEdge { DotsEdge(horizontal: true, row: row, col: col) }
+func down(_ row: Int, _ col: Int) -> DotsEdge { DotsEdge(horizontal: false, row: row, col: col) }
+
+var dotsBoard = DotsBoard(size: 3)
+check(dotsBoard.edges.count == 24 && dotsBoard.freeEdges.count == 24 && dotsBoard.turn == .you && !dotsBoard.isOver, "dots: a 3×3 board has 24 lines, the player first")
+check(DotsBoard.size(.easy) == 3 && DotsBoard.size(.medium) == 4 && DotsBoard.size(.hard) == 5, "dots: 3×3, 4×4, 5×5")
+check(dotsBoard.boxes(beside: across(0, 1)) == [1] && dotsBoard.boxes(beside: across(1, 1)) == [1, 4] && dotsBoard.boxes(beside: down(2, 3)) == [8],
+      "dots: a line borders one box at the edge, two inside")
+check((0..<9).allSatisfy { box in dotsBoard.edges(ofBox: box).allSatisfy { dotsBoard.boxes(beside: $0).contains(box) } }, "dots: every box's four lines border it")
+check(dotsBoard.draw(across(0, 0)) == [] && dotsBoard.turn == .device && dotsBoard.draw(across(0, 0)) == nil, "dots: a line that closes nothing passes the turn; a line is drawn once")
+dotsBoard.draw(down(0, 0))
+dotsBoard.draw(across(1, 0))
+check(dotsBoard.closes(down(0, 1)) == 1 && !dotsBoard.opens(down(2, 3)) && dotsBoard.turn == .device,
+      "dots: three sides drawn, the fourth closes the box")
+check(dotsBoard.draw(down(0, 1)) == [0] && dotsBoard.owners[0] == .device && dotsBoard.turn == .device && dotsBoard.score(.device) == 1,
+      "dots: the box is the iPad's, and it draws again")
+
+// Orta takes a box it can, and hands over nothing while a safe line is left.
+var dotsRandom = GameRandom(seed: 6)
+var greedyBoard = DotsBoard(size: 3)
+for edge in [across(0, 0), down(0, 0), across(1, 0)] { greedyBoard.draw(edge) }
+check(DotsAI.move(on: greedyBoard, difficulty: .medium, rng: &dotsRandom) == down(0, 1), "dots orta: takes the box it can")
+var carefulBoard = DotsBoard(size: 4)
+var neverGave = true
+var carefulMoves = 0
+while !carefulBoard.isOver, let move = DotsAI.move(on: carefulBoard, difficulty: .medium, rng: &dotsRandom) {
+    let couldTake = carefulBoard.freeEdges.contains { carefulBoard.closes($0) > 0 }
+    let hadSafe = carefulBoard.freeEdges.contains { carefulBoard.closes($0) == 0 && !carefulBoard.opens($0) }
+    if !couldTake && hadSafe && carefulBoard.opens(move) { neverGave = false }
+    carefulBoard.draw(move)
+    carefulMoves += 1
+}
+check(neverGave && carefulBoard.isOver && carefulMoves == 40 && carefulBoard.score(.you) + carefulBoard.score(.device) == 16,
+      "dots orta: never hands over a box while a safe line is left; a 4×4 game is 40 lines")
+// When every line gives something, the cheapest one: a lone box rather than a chain of three.
+var givingBoard = DotsBoard(size: 2)
+for edge in [across(0, 0), across(0, 1), down(0, 0), down(0, 2), down(1, 0), down(1, 2), across(2, 0), across(2, 1)] { givingBoard.draw(edge) }
+check(givingBoard.freeEdges.count == 4 && givingBoard.freeEdges.allSatisfy { givingBoard.opens($0) }, "dots: a board where every line gives")
+check(DotsAI.handedOver(by: down(0, 1), on: givingBoard) == 4, "dots: one line here hands over all four boxes")
+
+// Zor's search (alpha-beta with a table) picks a line worth exactly what a plain search of every
+// set of lines says the position is worth.
+func oracleValue(_ board: DotsBoard) -> Int {
+    let edges = board.edges
+    let index = Dictionary(uniqueKeysWithValues: edges.enumerated().map { ($1, $0) })
+    let boxMasks: [UInt64] = (0..<(board.size * board.size)).map { box in
+        board.edges(ofBox: box).reduce(UInt64(0)) { $0 | (1 << UInt64(index[$1] ?? 0)) }
+    }
+    let beside = edges.map { board.boxes(beside: $0) }
+    let full: UInt64 = (1 << UInt64(edges.count)) - 1
+    var drawnLines: UInt64 = 0
+    for (i, e) in edges.enumerated() where board.lines[e] != nil { drawnLines |= 1 << UInt64(i) }
+    var memo: [UInt64: Int] = [:]
+    func value(_ mask: UInt64) -> Int {
+        if mask == full { return 0 }
+        if let known = memo[mask] { return known }
+        var bestValue = Int.min
+        for i in 0..<edges.count where mask & (1 << UInt64(i)) == 0 {
+            let after = mask | (1 << UInt64(i))
+            var gained = 0
+            for b in beside[i] where after & boxMasks[b] == boxMasks[b] { gained += 1 }
+            bestValue = max(bestValue, gained > 0 ? gained + value(after) : -value(after))
+        }
+        memo[mask] = bestValue
+        return bestValue
+    }
+    return value(drawnLines)
+}
+var oracleChecked = 0
+var oracleAgrees = 0
+for size in [3, 4] {
+    for seed in 1...12 {
+        var board = DotsBoard(size: size)
+        var random = GameRandom(seed: UInt64(seed * 7))
+        while board.freeEdges.count > 11 + seed % 5, let move = DotsAI.move(on: board, difficulty: .medium, rng: &random) { board.draw(move) }
+        guard !board.isOver, let pick = DotsAI.best(on: board) else { continue }
+        var after = board
+        let gained = after.draw(pick)?.count ?? 0
+        let rest = oracleValue(after)
+        oracleChecked += 1
+        if gained + (after.turn == board.turn ? rest : -rest) == oracleValue(board) { oracleAgrees += 1 }
+    }
+}
+check(oracleChecked >= 20 && oracleAgrees == oracleChecked, "dots zor: its line is the best line in every endgame tried (\(oracleAgrees) of \(oracleChecked))")
+
+// Zor counts the end through: it beats Orta on 4×4 and on 5×5; Orta beats Kolay.
+func duel(size: Int, you: GameDifficulty, device: GameDifficulty, first: DotsPlayer, seed: UInt64) -> DotsBoard {
+    var board = DotsBoard(size: size, first: first)
+    var random = GameRandom(seed: seed)
+    while !board.isOver, let move = DotsAI.move(on: board, difficulty: board.turn == .you ? you : device, rng: &random) {
+        board.draw(move)
+    }
+    return board
+}
+func tally(size: Int, you: GameDifficulty, device: GameDifficulty, games: Int) -> (device: Int, you: Int) {
+    var result = (device: 0, you: 0)
+    for seed in 1...games {
+        let board = duel(size: size, you: you, device: device, first: seed % 2 == 0 ? .you : .device, seed: UInt64(seed))
+        if board.winner == .device { result.device += 1 } else if board.winner == .you { result.you += 1 }
+    }
+    return result
+}
+let mediumOverEasy = tally(size: 4, you: .easy, device: .medium, games: 20)
+check(mediumOverEasy.device >= 15, "dots: orta beats kolay (\(mediumOverEasy.device) to \(mediumOverEasy.you))")
+let hardOverMedium = tally(size: 4, you: .medium, device: .hard, games: 20)
+check(hardOverMedium.device >= 14 && hardOverMedium.device > 3 * hardOverMedium.you, "dots: zor beats orta on 4×4 (\(hardOverMedium.device) to \(hardOverMedium.you))")
+let searchStart = Date()
+let bigDuel = tally(size: 5, you: .medium, device: .hard, games: 4)
+let searchTime = Date().timeIntervalSince(searchStart)
+check(bigDuel.device >= 3 && searchTime < 30, "dots: zor wins on 5×5 too (\(bigDuel.device) of 4, \(Int(searchTime)) s for four games)")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

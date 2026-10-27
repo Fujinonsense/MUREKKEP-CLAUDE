@@ -14,8 +14,9 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent.parent / "Murekkep.swiftpm"
 TOOLS = Path(__file__).resolve().parent.parent / "tools" / "gamescheck"
 VIEWS = ("GameCorner.swift", "MandalaGame.swift", "BubblesGame.swift", "XOXGame.swift", "FlyerGame.swift", "ShooterGame.swift", "SudokuGame.swift",
-         "EbruGame.swift", "LivingInkGame.swift")
-LOGIC = ("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift", "EbruLogic.swift", "LivingInkLogic.swift")
+         "EbruGame.swift", "LivingInkGame.swift", "DotsGame.swift")
+LOGIC = ("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift", "EbruLogic.swift", "LivingInkLogic.swift",
+         "DotsLogic.swift")
 
 
 def src(name):
@@ -84,8 +85,8 @@ def test_the_tile_and_the_panel():
     assert 'label: expanded ? Loc.t("Küçült") : Loc.t("Büyüt")' in corner
     # The tiles of the layer on show, with icons and names, in a grid.
     assert "ForEach(MiniGame.allCases.filter { $0.layer == layer })" in corner and "Image(systemName: item.symbol)" in corner and "Text(item.title)" in corner
-    assert "case ebru, creatures, mandala, bubbles, xox, flyer, shooter, sudoku" in corner
-    for line in ("case .ebru: EbruGame()", "case .creatures: LivingInkGame()", "case .mandala: InkMandalaGame()", "case .bubbles: InkBubblesGame(store: store)", "case .xox: XOXGame(store: store)",
+    assert "case ebru, creatures, mandala, bubbles, xox, dots, flyer, shooter, sudoku" in corner
+    for line in ("case .ebru: EbruGame()", "case .creatures: LivingInkGame()", "case .mandala: InkMandalaGame()", "case .bubbles: InkBubblesGame(store: store)", "case .xox: XOXGame(store: store)", "case .dots: DotsGame(store: store)",
                  "case .flyer: FlyerGame(store: store)", "case .shooter: ShooterGame(store: store)", "case .sudoku: SudokuGame(store: store)"):
         assert line in corner, line
     # Not Pro-gated, no network, no assets.
@@ -270,6 +271,31 @@ def test_the_levelled_games_grew():
         assert needle in main, needle
 
 
+def test_kare_kapmaca():
+    # A notebook's back-page game against the iPad: 3x3, 4x4, 5x5 by difficulty; a tap between two dots or a
+    # short stroke draws the line nearest its middle; the iPad keeps drawing while it closes boxes, its search
+    # off the main thread; wins are counted like XOX's.
+    dots = src("DotsGame.swift")
+    assert "_board = State(initialValue: DotsBoard(size: DotsBoard.size(store[.dots].difficulty)))" in dots
+    assert "edge(near: Self.middle(value.startLocation, value.location), inset: inset, step: step)" in dots
+    assert "while pendingReply > 0, !board.isOver, board.turn == .device {" in dots
+    assert "await Task.detached(priority: .userInitiated)" in dots and "guard !Task.isCancelled, board == snapshot, let move else { return }" in dots
+    assert "store.record(.dots, score: wins + 1, at: difficulty)" in dots and ".task(id: pendingReply)" in dots
+    for key in ("Sen", "Sıra sende: bir çizgi çiz.", "Kare kapmaca tahtası", "Kazandın!", "iPad kazandı.", "Berabere."):
+        assert f'Loc.t("{key}")' in dots, key
+    logic = src("DotsLogic.swift")
+    assert "case .easy: return 3" in logic and "case .medium: return 4" in logic and "case .hard: return 5" in logic
+    assert "static let searchLimit = 28" in logic and "static let searchBudget = 400_000" in logic
+    assert "if free.count <= searchLimit, let choice = best(on: board) { return choice }" in logic
+    corner = src("GameCorner.swift")
+    assert 'case .dots: return Loc.t("Kare kapmaca")' in corner and 'case .dots: return "circle.grid.3x3"' in corner
+    assert "case .xox, .dots:" in corner
+    main = (TOOLS / "main.swift").read_text(encoding="utf-8")
+    for needle in ("dots orta: never hands over a box while a safe line is left", "its line is the best line in every endgame tried",
+                   "dots: orta beats kolay", "dots: zor beats orta on 4×4", "dots: zor wins on 5×5 too"):
+        assert needle in main, needle
+
+
 def test_the_creative_layer():
     corner = src("GameCorner.swift")
     # Two layers in a segmented control, the last one open kept; games first, as the tile is a game controller.
@@ -278,7 +304,7 @@ def test_the_creative_layer():
     assert "@AppStorage(GameProgress.Keys.layer) private var layer: BreakLayer = .games" in corner
     assert 'static let layer = "break.layer"' in src("MiniGameLogic.swift")
     assert re.search(r'Picker\(Loc\.t\("Katman"\), selection: \$layer\)', corner) and ".pickerStyle(.segmented)" in corner
-    assert "case .ebru, .creatures, .mandala: return .creative" in corner and "case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games" in corner
+    assert "case .ebru, .creatures, .mandala: return .creative" in corner and "case .bubbles, .xox, .dots, .flyer, .shooter, .sudoku: return .games" in corner
     assert "var hasDifficulty: Bool { layer == .games }" in corner
     # Ebru: six traditional pigments, three tools, a sprinkle, four patterns, undo; at once with Reduce Motion.
     ebru = src("EbruGame.swift")

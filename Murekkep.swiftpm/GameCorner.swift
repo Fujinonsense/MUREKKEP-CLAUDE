@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The break corner: a small tile at the bottom-left of the page opens a card with two layers:
-/// games to play (the ink bubbles, XOX against the iPad, the flying drop, the colour popper, Sudoku)
+/// games to play (the ink bubbles, XOX and kare kapmaca against the iPad, the flying drop, the colour
+/// popper, Sudoku)
 /// and things to make (ebru, living ink, the ink mandala). Free in every edition; nothing leaves the
 /// iPad, and what is kept (levels, stars, best scores, a half-done Sudoku, the layer last open) lives
 /// in UserDefaults under `GameProgress.Keys`. The logic is in MiniGameLogic, FlyerLogic,
@@ -71,14 +72,14 @@ enum BreakLayer: String, CaseIterable, Identifiable {
 
 /// The games and the makings of the break corner, in the order their tiles stand.
 enum MiniGame: String, CaseIterable, Identifiable {
-    case ebru, creatures, mandala, bubbles, xox, flyer, shooter, sudoku
+    case ebru, creatures, mandala, bubbles, xox, dots, flyer, shooter, sudoku
 
     var id: String { rawValue }
 
     var layer: BreakLayer {
         switch self {
         case .ebru, .creatures, .mandala: return .creative
-        case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games
+        case .bubbles, .xox, .dots, .flyer, .shooter, .sudoku: return .games
         }
     }
 
@@ -89,6 +90,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
         case .mandala: return Loc.t("Mürekkep mandalası")
         case .bubbles: return Loc.t("Mürekkep balonları")
         case .xox: return Loc.t("XOX")
+        case .dots: return Loc.t("Kare kapmaca")
         case .flyer: return Loc.t("Uçan damla")
         case .shooter: return Loc.t("Renk patlat")
         case .sudoku: return Loc.t("Sudoku")
@@ -102,6 +104,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
         case .mandala: return Loc.t("Çiz; her çizgi sekiz kat açılır.")
         case .bubbles: return Loc.t("Balonları patlat, lekelere dokunma. 60 saniye.")
         case .xox: return Loc.t("iPad'e karşı; sen X'sin.")
+        case .dots: return Loc.t("Noktaları birleştir; kareyi kapatan alır, bir daha oynar.")
         case .flyer: return Loc.t("Dokun, damla yükselsin; kalemlerin arasından geç.")
         case .shooter: return Loc.t("Nişan al, aynı renkten üçünü patlat.")
         case .sudoku: return Loc.t("Her satır, sütun ve kutuda 1–9.")
@@ -115,6 +118,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
         case .mandala: return "circle.hexagongrid"
         case .bubbles: return "drop.circle"
         case .xox: return "squareshape.split.3x3"
+        case .dots: return "circle.grid.3x3"
         case .flyer: return "paperplane"
         case .shooter: return "paintpalette"
         case .sudoku: return "number.square"
@@ -192,7 +196,7 @@ final class GameProgressStore: ObservableObject {
             return Loc.t("{0} yıldız", "\(kept.totalStars)") + " · " + Loc.t("Seviye {0}", "\(kept.unlockedLevel)")
         case .bubbles:
             return Loc.t("En iyi: {0}", "\(kept.best[kept.difficulty] ?? 0)") + " · " + kept.difficulty.title
-        case .xox:
+        case .xox, .dots:
             return Loc.t("Galibiyet: {0}", "\(kept.best[kept.difficulty] ?? 0)") + " · " + kept.difficulty.title
         case .sudoku:
             if let best = kept.best[kept.difficulty] {
@@ -426,6 +430,7 @@ struct GameCornerPanel: View {
         case .mandala: InkMandalaGame()
         case .bubbles: InkBubblesGame(store: store)
         case .xox: XOXGame(store: store)
+        case .dots: DotsGame(store: store)
         case .flyer: FlyerGame(store: store)
         case .shooter: ShooterGame(store: store)
         case .sudoku: SudokuGame(store: store)

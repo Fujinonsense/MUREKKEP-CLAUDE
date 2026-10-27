@@ -1433,5 +1433,13 @@ enum Translations {
         "Sonsuz uçuş": "Endless flight",
         "Bayrak yok; uçtukça hızlanır.": "No flag; it speeds up as you fly.",
         "Uçuş bitti": "Flight over",
+        "Kare kapmaca": "Dots and boxes",
+        "Noktaları birleştir; kareyi kapatan alır, bir daha oynar.": "Join the dots; whoever closes a box takes it and goes again.",
+        "Kare kapmaca tahtası": "Dots and boxes board",
+        "Sen": "You",
+        "Sıra sende: bir çizgi çiz.": "Your turn: draw a line.",
+        "Kolay: 3×3; iPad sık sık dalgın.": "Easy: 3×3; the iPad is often careless.",
+        "Orta: 4×4; iPad kolay kare vermez.": "Medium: 4×4; the iPad gives nothing away lightly.",
+        "Zor: 5×5; iPad oyunun sonunu hesaplar.": "Hard: 5×5; the iPad counts the endgame through.",
     ]
 }
