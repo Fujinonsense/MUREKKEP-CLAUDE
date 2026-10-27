@@ -1,5 +1,5 @@
 from ports.lasso import A4, layout
-from ports.navigation import page_index, pull_action, single_page_offset, single_page_target
+from ports.navigation import page_index, single_page_offset, single_page_target
 
 
 def test_typed_page_number_goes_to_that_page():
@@ -41,9 +41,3 @@ def test_single_page_offset_puts_the_page_in_the_middle():
     y = single_page_offset(rects[1], zoom, view_h)
     page_mid_on_screen = (rects[1][1] + rects[1][3] / 2) * zoom - y
     assert abs(page_mid_on_screen - view_h / 2) < 1e-6
-
-
-def test_pulling_past_the_end_adds_a_page_only_when_the_last_one_is_used():
-    assert pull_action(120, True) == "add"
-    assert pull_action(120, False) == "show_last"
-    assert pull_action(40, True) is None

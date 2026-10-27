@@ -299,6 +299,14 @@ final class EditorModel: ObservableObject {
                 pages[i].stickers = list
             }
         }
+        // An opened notebook ends in a blank page too (see keepBlankPageAtEnd), in memory only:
+        // opening a note writes nothing; the page is saved with the next change.
+        if meta.kind == .notebook, !readOnly, let last = pages.last, !(last.strokes.isEmpty && last.stickers.isEmpty) {
+            pages.append(PageInk(strokes: [], version: 1))
+            layout = DocumentLayout(pageSizes: layout.pageSizes + [NoteMeta.a4])
+            pageCount = pages.count
+            self.meta.pageCount = pages.count
+        }
     }
 
     // MARK: Tools
@@ -1327,6 +1335,18 @@ final class EditorModel: ObservableObject {
 
     func addPage() {
         guard !isPDF, allowsEdit() else { return }
+        appendBlankPage()
+    }
+
+    /// A notebook always ends in a blank page: the moment ink or a picture lands on the last page, a
+    /// blank one joins after it, so the next page is there before the pen gets to it (no pulling at
+    /// the end). Pages only come this way, they never go: an undo leaves the blank page in place.
+    private func keepBlankPageAtEnd() {
+        guard !isPDF, let last = pages.indices.last, pageIsUsed(last) else { return }
+        appendBlankPage()
+    }
+
+    private func appendBlankPage() {
         var sizes = layout.pageSizes
         sizes.append(NoteMeta.a4)
         layout = DocumentLayout(pageSizes: sizes)
@@ -1361,6 +1381,7 @@ final class EditorModel: ObservableObject {
         updateUndoFlags()
         markDirty()
         onInkChange?()
+        keepBlankPageAtEnd()
     }
 
     private func trimUndo() {
@@ -1579,9 +1600,11 @@ final class EditorModel: ObservableObject {
     /// Flattens the note (PDF + ink) into a new PDF file for sharing.
     func exportPDF() throws -> URL {
         let first = layout.pageSizes.first ?? NoteMeta.a4
+        // A notebook's blank pages at the end (there is always one) stay out of the shared file.
+        let count = isPDF ? layout.count : (pages.indices.last(where: pageIsUsed) ?? 0) + 1
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: first))
         let data = renderer.pdfData { ctx in
-            for i in 0..<layout.count {
+            for i in 0..<count {
                 let size = layout.pageSizes[i]
                 ctx.beginPage(withBounds: CGRect(origin: .zero, size: size), pageInfo: [:])
                 let cg = ctx.cgContext

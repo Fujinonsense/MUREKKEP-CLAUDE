@@ -31,13 +31,6 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private let overlay = CanvasOverlayView(frame: .zero)
     private let eraserRing = UIView()
     private let messageLabel = UILabel()
-    /// Under the last page while the end of a notebook is pulled up: how to add a page, then that
-    /// letting go adds one.
-    private let pullHint = UILabel()
-    private var pullArmed = false
-    /// Where the last page's bottom edge was on screen when the drag began: a pull counts from there,
-    /// so a zoomed-out notebook whose end is already in view does not add a page on any small drag.
-    private var pullStartBottom: CGFloat = .infinity
     /// Hover preview: tool cursor and a soft "tool shadow" like Apple Pencil Pro apps show.
     private let cursorView = UIView()
     private let hoverCursor = CAShapeLayer()
@@ -201,12 +194,6 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         scrollView.addSubview(zoomContainer)
         rotationHost.addSubview(scrollView)
         rotationHost.addSubview(overlay)
-        pullHint.font = .preferredFont(forTextStyle: .footnote)
-        pullHint.adjustsFontForContentSizeCategory = true
-        pullHint.textAlignment = .center
-        pullHint.alpha = 0
-        pullHint.isUserInteractionEnabled = false
-        rotationHost.addSubview(pullHint)
 
         inkGesture.delegate = self
         inkGesture.onBegan = { [weak self] touch, event in self?.touchBegan(touch, event) }
@@ -626,10 +613,6 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     /// A drag faster than this (points per millisecond) goes on to the next page.
     private static let pageFlick: CGFloat = 0.3
-    /// Pulling the last page's bottom edge up this share of the screen adds a page. It is measured
-    /// from the page itself, not from the end of the free margin under it (that margin is a third of
-    /// the screen, so a pull counted from its end needed a long scroll through empty space first).
-    private static let pullToAddPage: CGFloat = 0.4
 
     /// One page at a time (see `EditorModel.singlePage`).
     func applyPageMode(single: Bool) {
@@ -683,84 +666,12 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         dragStartPage = model.currentPage
-        pullStartBottom = lastPageBottom() ?? .infinity
     }
 
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
                                    targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-        // Let go while the end is pulled up far enough, and not flung back down.
-        if let pull = pullProgress(), pull >= 1, velocity.y >= 0 {
-            pulledPastEnd()
-            return
-        }
         guard singlePage, let page = singlePageTarget(velocity: velocity.y) else { return }
         targetContentOffset.pointee = singlePageOffset(page)
-    }
-
-    /// The last page's bottom edge on screen (rotation host points). Nil for PDFs.
-    private func lastPageBottom() -> CGFloat? {
-        guard !model.isPDF, let last = model.layout.pageRects.last else { return nil }
-        return zoomContainer.convert(CGPoint(x: last.midX, y: last.maxY), to: rotationHost).y
-    }
-
-    /// How far the end of a notebook is pulled up during this drag: 0 where it started (or at the
-    /// bottom of the screen, if it started below), 1 after `pullToAddPage` of the screen height.
-    /// Nil for PDFs and while the end is not on screen.
-    private func pullProgress() -> CGFloat? {
-        guard let bottom = lastPageBottom() else { return nil }
-        let height = canvasSize.height
-        guard bottom < height else { return nil }
-        return (min(pullStartBottom, height) - bottom) / max(height * Self.pullToAddPage, 1)
-    }
-
-    /// Shows the hint under the last page while it is dragged up, with a tick when letting go would
-    /// add a page.
-    private func updatePullHint() {
-        guard scrollView.isTracking, let pull = pullProgress(), pull > 0.15,
-              let last = model.layout.pageRects.last else {
-            if pullHint.alpha > 0 {
-                UIView.animate(withDuration: 0.2) { self.pullHint.alpha = 0 }
-            }
-            pullArmed = false
-            return
-        }
-        let adds = model.pageIsUsed(model.pageCount - 1)
-        let armed = pull >= 1
-        if armed != pullArmed {
-            pullArmed = armed
-            if armed && adds { playHaptic(.selection, at: nil) }
-        }
-        if !adds {
-            pullHint.text = Loc.t("Son sayfa henüz boş")
-        } else {
-            pullHint.text = armed ? Loc.t("Bırak, yeni sayfa eklensin") : Loc.t("Yeni sayfa için yukarı çek")
-        }
-        pullHint.textColor = armed && adds ? tintColor : .secondaryLabel
-        pullHint.sizeToFit()
-        let bottom = zoomContainer.convert(CGPoint(x: last.midX, y: last.maxY), to: rotationHost)
-        pullHint.center = CGPoint(x: bottom.x, y: min(bottom.y + 28, canvasSize.height - 40))
-        pullHint.alpha = min(1, (pull - 0.15) / 0.4)
-    }
-
-    /// The notebook was pulled past its end: a new page when the last one is written on,
-    /// otherwise the empty last page is shown.
-    private func pulledPastEnd() {
-        let add = model.pageIsUsed(model.pageCount - 1)
-        // After the finger lifts and the pull springs back.
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if add {
-                self.model.addPage()
-                self.playHaptic(.completed, at: nil)
-                self.model.banner = Loc.t("Yeni sayfa eklendi")
-            }
-            let last = self.model.pageCount - 1
-            if self.singlePage {
-                self.fitWholePage(last)
-            } else {
-                self.scrollToPage(last, animated: true)
-            }
-        }
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
@@ -771,7 +682,6 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         if scrollView.isTracking || scrollView.isDecelerating || scrollView.isZooming {
             lastViewportChange = CACurrentMediaTime()
         }
-        updatePullHint()
         setNeedsRender()
         scheduleDetail()
     }

@@ -951,7 +951,6 @@ enum Translations {
         "İşareti kaldır": "Remove bookmark",
         "Henüz yer imi yok. Sağ üstteki kurdeleye dokunarak bu sayfayı işaretle.": "No bookmarks yet. Tap the ribbon at the top right to bookmark this page.",
         "Bu PDF'te içindekiler bölümü yok.": "This PDF has no table of contents.",
-        "Yeni sayfa eklendi": "New page added",
         "Boya": "Paint",
         "Doğa": "Nature",
         "Işıltı": "Shine",
@@ -1317,10 +1316,6 @@ enum Translations {
         "Açıksa yalnızca aranan kelimeler Wikipedia ve DuckDuckGo'ya gider; notların gönderilmez.": "When it's on, only the words being searched go to Wikipedia and DuckDuckGo; your notes are never sent.",
         // Studio interruptions (1.1, 2026-10-26)
         "Uygulama arka plana geçince durdu; geri dönünce yeniden başlar.": "Stopped when the app went to the background; it starts again when you come back.",
-        // Pull to add a page (1.1, 2026-10-26)
-        "Son sayfa henüz boş": "The last page is still empty",
-        "Bırak, yeni sayfa eklensin": "Let go to add a page",
-        "Yeni sayfa için yukarı çek": "Pull up for a new page",
         // Break corner games (1.1, 2026-10-26)
         "Mola": "Break",
         "Mola: küçük oyunlar": "Break: small games",

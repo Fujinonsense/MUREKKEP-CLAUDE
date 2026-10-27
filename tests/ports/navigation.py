@@ -1,8 +1,8 @@
 """Port of page navigation: the number typed in "Sayfaya git" (PageNavigator), single-page snapping
-and pulling past the end of a notebook (CanvasView.scrollViewWillEndDragging)."""
+(CanvasView.scrollViewWillEndDragging) and the blank page every notebook ends in
+(EditorModel.keepBlankPageAtEnd, its in-memory twin in EditorModel.init, exportPDF)."""
 
 GAP = 22.0
-PULL_TO_ADD = 90.0
 FLICK = 0.3
 
 
@@ -31,8 +31,21 @@ def single_page_offset(rect, zoom, view_h):
     return (rect[1] + rect[3] / 2) * zoom - view_h / 2
 
 
-def pull_action(overscroll, last_page_has_ink):
-    """What pulling `overscroll` view points past the end of a notebook does on release."""
-    if overscroll <= PULL_TO_ADD:
-        return None
-    return "add" if last_page_has_ink else "show_last"
+def keep_blank_page_at_end(used, is_pdf=False):
+    """The pages after an edit, one bool per page (ink or a picture on it): a notebook whose last page
+    is used gets a blank page after it. Pages are only added, never taken away."""
+    if is_pdf or not used or not used[-1]:
+        return list(used)
+    return list(used) + [False]
+
+
+def pages_on_open(used, is_pdf=False, read_only=False):
+    """The pages an opened note shows: the same blank page, unless the note opened read-only."""
+    return list(used) if read_only else keep_blank_page_at_end(used, is_pdf)
+
+
+def shared_page_count(used, is_pdf=False):
+    """Pages in the shared PDF: a notebook's blank pages at the end stay out (at least one page)."""
+    if is_pdf:
+        return len(used)
+    return max((i for i, u in enumerate(used) if u), default=0) + 1
