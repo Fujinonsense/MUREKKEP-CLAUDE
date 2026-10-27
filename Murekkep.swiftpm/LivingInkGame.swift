@@ -35,10 +35,13 @@ final class LivingInkModel: ObservableObject {
         return (scale, (Double(size.width) - width * scale) / 2, (Double(size.height) - height * scale) / 2)
     }
 
-    /// A point of the board in the pond's own points.
+    /// A point of the board in the pond's own points, kept inside the pond (a larger card leaves bands
+    /// beside it).
     func pondPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
         let f = fit(in: size)
-        return CGPoint(x: (Double(point.x) - f.dx) / f.scale, y: (Double(point.y) - f.dy) / f.scale)
+        let width = Double(pond?.size.width ?? size.width)
+        let height = Double(pond?.size.height ?? size.height)
+        return CGPoint(x: min(max((Double(point.x) - f.dx) / f.scale, 0), width), y: min(max((Double(point.y) - f.dy) / f.scale, 0), height))
     }
 
     func began(at point: CGPoint) {
@@ -54,8 +57,10 @@ final class LivingInkModel: ObservableObject {
         changed()
     }
 
-    /// The pencil lifts. A tap on a creature pokes it instead of leaving a dot.
+    /// The pencil lifts (once a stroke; a cancelled touch ends it too). A tap on a creature pokes it
+    /// instead of leaving a dot.
     func ended() {
+        guard isDrawing else { return }
         isDrawing = false
         if let stroke = drawing.last, let first = stroke.first,
            stroke.allSatisfy({ InkPond.distance($0, first) < 6 }), pond?.poke(at: first) == true {
@@ -83,13 +88,13 @@ final class LivingInkModel: ObservableObject {
         last = nil
     }
 
+    /// One frame. The timeline redraws the pond by itself, so only a meal is published.
     func advance(to now: Date) {
         let dt = last.map { now.timeIntervalSince($0) } ?? 0
         last = now
         guard dt > 0, isMoving else { return }
         pond?.advance(by: dt)
         if let eaten = pond?.meals, eaten != meals { meals = eaten }
-        changed()
     }
 
     private func changed() {
@@ -106,6 +111,9 @@ struct LivingInkGame: View {
     /// Where the touch under way began: a touch from somewhere else is a new one, even when the last
     /// one was cancelled without ending.
     @State private var touchStart: CGPoint?
+    /// True while a finger or the pencil is down; it falls back by itself when the system cancels the
+    /// touch, which then ends the stroke as a lift would.
+    @GestureState private var pressing = false
 
     private static let line = StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round)
     /// Clear water by day and by night, so every ink shows.
@@ -166,7 +174,8 @@ struct LivingInkGame: View {
     private var board: some View {
         ZStack {
             GeometryReader { geo in
-                TimelineView(.animation(paused: paused)) { timeline in
+                // Sixty frames a second are plenty for a pond, and spare the battery on 120 Hz screens.
+                TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused)) { timeline in
                     Canvas { context, size in
                         draw(&context, size: size, time: timeline.date.timeIntervalSinceReferenceDate)
                     }
@@ -180,6 +189,7 @@ struct LivingInkGame: View {
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .updating($pressing) { _, down, _ in down = true }
                         .onChanged { value in
                             let point = model.pondPoint(value.location, in: geo.size)
                             if touchStart == value.startLocation {
@@ -194,6 +204,12 @@ struct LivingInkGame: View {
                             model.ended()
                         }
                 )
+                .onChange(of: pressing) { _, down in
+                    if !down, touchStart != nil {
+                        touchStart = nil
+                        model.ended()
+                    }
+                }
             }
             .accessibilityLabel(Loc.t("Canlı mürekkep havuzu"))
             if model.isEmpty {
@@ -222,6 +238,7 @@ struct LivingInkGame: View {
         let f = model.fit(in: size)
         context.translateBy(x: CGFloat(f.dx), y: CGFloat(f.dy))
         context.scaleBy(x: CGFloat(f.scale), y: CGFloat(f.scale))
+        context.clip(to: Path(CGRect(origin: .zero, size: pond.size)))
         let width = Double(pond.size.width)
         let height = Double(pond.size.height)
         // Weeds swaying on the bottom.

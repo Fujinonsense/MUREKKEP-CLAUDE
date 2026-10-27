@@ -328,7 +328,7 @@ private struct ShooterPlay: View {
         }
         .sensoryFeedback(.impact(weight: .light, intensity: 0.5), trigger: model.score)
         .sensoryFeedback(.success, trigger: over) { _, done in done && model.phase == .won }
-        .sensoryFeedback(.impact(weight: .heavy, intensity: 0.7), trigger: model.blots)
+        .sensoryFeedback(.impact(weight: .heavy, intensity: 0.7), trigger: model.blots) { old, new in new > old }
         .sensoryFeedback(.selection, trigger: model.swaps)
     }
 

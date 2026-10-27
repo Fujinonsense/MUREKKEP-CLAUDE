@@ -15,6 +15,11 @@ struct DotsGame: View {
     /// The line under the pencil before it lifts, and the line drawn last.
     @State private var hover: DotsEdge?
     @State private var latest: DotsEdge?
+    /// Games won here, for the success tap (the kept wins change with the difficulty).
+    @State private var wonRounds = 0
+    /// True while a finger or the pencil is down; it falls back by itself when the system cancels the
+    /// touch, which then clears the line under it.
+    @GestureState private var pressing = false
 
     /// The iPad's lines and boxes, in amber against the player's ink.
     private static let deviceInk = GameCorner.ink(3)
@@ -79,11 +84,12 @@ struct DotsGame: View {
             counted = true
             if board.winner == .you {
                 store.record(.dots, score: wins + 1, at: difficulty)
+                wonRounds += 1
             }
         }
-        .sensoryFeedback(.success, trigger: wins)
-        .sensoryFeedback(.selection, trigger: board.lines.count)
-        .sensoryFeedback(.impact(weight: .medium, intensity: 0.6), trigger: board.owners.count)
+        .sensoryFeedback(.success, trigger: wonRounds)
+        .sensoryFeedback(.selection, trigger: board.lines.count) { old, new in new > old }
+        .sensoryFeedback(.impact(weight: .medium, intensity: 0.6), trigger: board.owners.count) { old, new in new > old }
     }
 
     private var status: String {
@@ -126,6 +132,7 @@ struct DotsGame: View {
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .updating($pressing) { _, down, _ in down = true }
                 .onChanged { value in
                     let line = edge(near: Self.middle(value.startLocation, value.location), inset: inset, step: step)
                     if hover != line { hover = line }
@@ -137,6 +144,9 @@ struct DotsGame: View {
                     }
                 }
         )
+        .onChange(of: pressing) { _, down in
+            if !down { hover = nil }
+        }
         .accessibilityLabel(Loc.t("Kare kapmaca tahtası"))
         .accessibilityValue(status)
     }

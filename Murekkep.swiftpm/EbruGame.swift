@@ -63,10 +63,13 @@ final class EbruModel: ObservableObject {
         return (scale, (Double(size.width) - width * scale) / 2, (Double(size.height) - height * scale) / 2)
     }
 
-    /// A point of the board in the tray's own points.
+    /// A point of the board in the tray's own points, kept on the tray (a larger card leaves bands
+    /// beside it).
     func trayPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
         let f = fit(in: size)
-        return CGPoint(x: (Double(point.x) - f.dx) / f.scale, y: (Double(point.y) - f.dy) / f.scale)
+        let width = Double(tray?.size.width ?? size.width)
+        let height = Double(tray?.size.height ?? size.height)
+        return CGPoint(x: min(max((Double(point.x) - f.dx) / f.scale, 0), width), y: min(max((Double(point.y) - f.dy) / f.scale, 0), height))
     }
 
     func began(at point: CGPoint) {
@@ -139,6 +142,9 @@ struct EbruGame: View {
     /// Where the touch under way began: a touch from somewhere else is a new one, even when the last
     /// one was cancelled without ending.
     @State private var touchStart: CGPoint?
+    /// True while a finger or the pencil is down; it falls back by itself when the system cancels the
+    /// touch, which then lifts the tool as a lift would (a held drop stops spreading).
+    @GestureState private var pressing = false
 
     private var paused: Bool { scenePhase != .active || !model.isMoving }
 
@@ -214,6 +220,7 @@ struct EbruGame: View {
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .updating($pressing) { _, down, _ in down = true }
                         .onChanged { value in
                             let point = model.trayPoint(value.location, in: geo.size)
                             if touchStart == value.startLocation {
@@ -228,6 +235,12 @@ struct EbruGame: View {
                             model.ended()
                         }
                 )
+                .onChange(of: pressing) { _, down in
+                    if !down, touchStart != nil {
+                        touchStart = nil
+                        model.ended()
+                    }
+                }
             }
             .accessibilityLabel(Loc.t("Ebru teknesi"))
             if model.isEmpty {
@@ -276,6 +289,7 @@ struct EbruGame: View {
         let f = model.fit(in: size)
         context.translateBy(x: CGFloat(f.dx), y: CGFloat(f.dy))
         context.scaleBy(x: CGFloat(f.scale), y: CGFloat(f.scale))
+        context.clip(to: Path(CGRect(origin: .zero, size: tray.size)))
         for paint in tray.paints {
             var path = Path()
             path.addLines(paint.outline)

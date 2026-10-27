@@ -127,7 +127,19 @@ def test_the_games_draw_with_the_pencil_keep_their_touches_and_pause():
     # A touch that starts somewhere else is a new one, even after a touch cancelled without ending.
     assert "if touchStart == value.startLocation {" in ebru and "model.trayPoint(value.location, in: geo.size)" in ebru
     living = src("LivingInkGame.swift")
-    assert "TimelineView(.animation(paused: paused))" in living and "scenePhase != .active || !model.isMoving" in living
+    # Sixty frames a second at most: the pond is redrawn by its timeline, not by publishing every frame.
+    assert "TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused))" in living and "scenePhase != .active || !model.isMoving" in living
+    advance = living[living.index("func advance(to now: Date) {"):living.index("private func changed()")]
+    assert "changed()" not in advance and "if let eaten = pond?.meals, eaten != meals { meals = eaten }" in advance
+    # A touch the system cancels ends like a lift (the stroke wakes, a held drop stops, no line stays under the pencil).
+    for name in ("EbruGame.swift", "LivingInkGame.swift", "DotsGame.swift"):
+        view = src(name)
+        assert "@GestureState private var pressing = false" in view and ".updating($pressing) { _, down, _ in down = true }" in view, name
+        assert ".onChange(of: pressing) { _, down in" in view, name
+    assert "guard isDrawing else { return }" in living
+    # Touches in the bands a larger card leaves stay on the tray and the pond, and drawing is clipped to them.
+    assert "context.clip(to: Path(CGRect(origin: .zero, size: tray.size)))" in ebru and "context.clip(to: Path(CGRect(origin: .zero, size: pond.size)))" in living
+    assert "min(max((Double(point.x) - f.dx) / f.scale, 0), width)" in ebru and "min(max((Double(point.x) - f.dx) / f.scale, 0), width)" in living
     assert "if touchStart == value.startLocation {" in living and "model.pondPoint(value.location, in: geo.size)" in living
     # The drawing wakes once the pencil has stayed off the pond: every stroke begun or ended restarts the wait.
     assert ".task(id: model.strokes)" in living and "UInt64(InkPond.wakeDelay * 1_000_000_000)" in living
@@ -281,6 +293,9 @@ def test_kare_kapmaca():
     assert "while pendingReply > 0, !board.isOver, board.turn == .device {" in dots
     assert "await Task.detached(priority: .userInitiated)" in dots and "guard !Task.isCancelled, board == snapshot, let move else { return }" in dots
     assert "store.record(.dots, score: wins + 1, at: difficulty)" in dots and ".task(id: pendingReply)" in dots
+    # Taps only for what grew: a restart or another difficulty is silent.
+    assert ".sensoryFeedback(.success, trigger: wonRounds)" in dots and "trigger: board.lines.count) { old, new in new > old }" in dots
+    assert "trigger: model.blots) { old, new in new > old }" in src("ShooterGame.swift")
     for key in ("Sen", "Sıra sende: bir çizgi çiz.", "Kare kapmaca tahtası", "Kazandın!", "iPad kazandı.", "Berabere."):
         assert f'Loc.t("{key}")' in dots, key
     logic = src("DotsLogic.swift")
