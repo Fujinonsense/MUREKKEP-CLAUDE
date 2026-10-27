@@ -1,6 +1,7 @@
-"""The ad recordings' scenes (tools/demo): what the scripted pencil writes and draws, in English and in
-Turkish with the same care, as scenes/DemoScene-<scene>-<lang>.json for DemoPlayer.swift, with a
-preview PNG of every page and board in previews/.
+"""The ad recordings' scenes (tools/demo): what the scripted pencil writes and draws, as
+scenes/DemoScene-<scene>-<language of the app>.json for DemoPlayer.swift, with a preview PNG of
+every page and board in previews/. One video for everyone: the app in English, and the notebook
+holds one line in English and one in Turkish (the ad's captions are English).
 
 The handwriting is a neat hand made from single-line fonts (EMS Neato and EMS Tech, SVG fonts by
 Windell Oskay under the SIL Open Font License, see fonts/OFL.txt): every letter a little different,
@@ -24,7 +25,7 @@ PREVIEWS = HERE / "previews"
 PAGE = (595.28, 841.89)
 RULE_TOP, RULE_STEP, MARGIN = 84.0, 28.0, 72.0
 RATE = 240.0  # Apple Pencil's samples a second
-LANGS = ("en", "tr")
+LANGS = ("en",)  # the app's language in the recordings
 
 
 # MARK: - Single-line fonts
@@ -361,28 +362,16 @@ TEXT = {
     "en": {
         "notes.title": "Biology",
         "notes.head": "Cell Biology",
+        # One line in English, the same idea in Turkish under it.
         "notes.lines": ["Mitochondria are the powerhouse of the cell.",
-                        "DNA is a double helix (Watson & Crick).",
-                        "Photosynthesis: light + water + CO2 = sugar"],
+                        "Mitokondri hücrenin enerji santralidir."],
         "notes.mark": "powerhouse of the cell",
+        "notes.under": "enerji santralidir",
         "textpen.title": "Notes",
-        "textpen.lines": ["The cell is the basic unit of life.", "f(x) = 2x + 1, f(3) = 7"],
+        "textpen.lines": ["The cell is the basic unit of life.", "Hücre canlının en küçük birimidir."],
         "inks.title": "Inks",
-        "inks.lava": "Exam!", "inks.gold": "A+", "inks.galaxy": "Dream big",
+        "inks.lava": "Sınav!", "inks.gold": "A+", "inks.galaxy": "Dream big",
         "break.title": "Study",
-    },
-    "tr": {
-        "notes.title": "Biyoloji",
-        "notes.head": "Hücre Biyolojisi",
-        "notes.lines": ["Mitokondri hücrenin enerji santralidir.",
-                        "DNA çift sarmal yapıdadır (Watson & Crick).",
-                        "Fotosentez: ışık + su + CO2 = şeker"],
-        "notes.mark": "enerji santralidir",
-        "textpen.title": "Notlar",
-        "textpen.lines": ["Hücre canlının en küçük birimidir.", "f(x) = 2x + 1, f(3) = 7"],
-        "inks.title": "Mürekkepler",
-        "inks.lava": "Sınav!", "inks.gold": "100", "inks.galaxy": "Hayal et",
-        "break.title": "Ders",
     },
 }
 
@@ -433,7 +422,7 @@ def scene_notes(lang):
     s.add("note", title=t["notes.title"], paper="lined", seconds=1.2)
     starts = notes_lines(s, lang, hand, rng)
     s.add("wait", seconds=0.6)
-    # The highlighter over the key phrase, then DNA underlined in red.
+    # The highlighter over the English key phrase, the Turkish one underlined in red.
     first = t["notes.lines"][0]
     mark = t["notes.mark"]
     a = first.index(mark)
@@ -445,7 +434,10 @@ def scene_notes(lang):
     s.write(hl, "highlighter", YELLOW, 14)
     s.add("wait", seconds=0.5)
     s.add("pen", brush="pen", color=RED, width=2.2)
-    under = [list(zip(np.linspace(starts[1][0] - 2, starts[1][3] + 1, 40), rule(4) + 1.2 + np.linspace(0.6, -0.8, 40)))]
+    second = t["notes.lines"][1]
+    b = second.index(t["notes.under"])
+    under = [list(zip(np.linspace(starts[1][b] - 2, starts[1][b + len(t["notes.under"])] + 1, 40),
+                      rule(4) + 1.6 + np.linspace(0.6, -0.8, 40)))]
     un, _ = timed(under, rng, xh=14, speed=1.0)
     s.write(un, "pen", RED, 2.2)
     s.add("wait", seconds=2.5)

@@ -1,5 +1,6 @@
 """The ad recordings (tools/demo): a DEMO-only player that the App Store edition never compiles, the
-scenes it plays in English and in Turkish, and the Codemagic job that films them on a simulator."""
+scenes it plays (the app in English, the notebook in English and Turkish), and the Codemagic job that
+films them on a simulator."""
 import json
 import re
 from pathlib import Path
@@ -53,8 +54,9 @@ def test_the_recording_job_films_every_scene_in_both_languages():
     filmed = re.search(r"demo-out \\\n(.*)\n", body).group(1).split()
     names = {p.stem.removeprefix("DemoScene-") for p in SCENES} - {"warmup"}
     assert set(filmed) == names
-    for scene in {n.rsplit("-", 1)[0] for n in names}:
-        assert {f"{scene}-en", f"{scene}-tr"} <= names, f"{scene} must come in both languages"
+    # One video for everyone: no scene is filmed twice in two languages.
+    scenes = [n.rsplit("-", 1)[0] for n in names]
+    assert len(scenes) == len(set(scenes)), "a scene is filmed twice"
     assert (DEMO / "record.sh").read_bytes().count(b"\r\n") == 0, "bash on the Mac needs LF line ends"
 
 

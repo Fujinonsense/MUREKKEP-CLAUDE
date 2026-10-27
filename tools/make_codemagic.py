@@ -92,8 +92,8 @@ def build():
                 "artifacts": ["pdfkit_*"],
             },
             # The ad recordings (tools/demo): the App Store edition's plain build with the DEMO flag on
-            # an iPad simulator, every scene filmed by the simulator in English and in Turkish. No keys,
-            # no upload; started by hand.
+            # an iPad simulator, every scene filmed once by the simulator (the app in English, the
+            # notebook in English and Turkish). No keys, no upload; started by hand.
             "demo-kayit": {
                 "name": "Murekkep Reklam Kaydi (simulator)",
                 "instance_type": "mac_mini_m2",
@@ -141,7 +141,7 @@ codesign --force --sign - --deep build/Build/Products/Release-iphonesimulator/Mu
 
 DEMO_RECORD = """\
 bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out \\
-  notes-en textpen-en inks-en ebru-en living-en notes-tr textpen-tr inks-tr ebru-tr living-tr
+  notes-en textpen-en inks-en ebru-en living-en
 """
 
 

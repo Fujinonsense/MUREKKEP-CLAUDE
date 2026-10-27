@@ -997,7 +997,7 @@ workflows:
         # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
         export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
         bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out \
-          notes-en textpen-en inks-en ebru-en living-en notes-tr textpen-tr inks-tr ebru-tr living-tr
+          notes-en textpen-en inks-en ebru-en living-en
     artifacts:
     - demo-out/*.mp4
     - demo-out/*.json
