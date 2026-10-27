@@ -700,5 +700,116 @@ busyTray.play(.bulbul)
 busyTray.finish()
 check(busyTray.pointCount < Int(Double(EbruTray.budget) * 1.6), "ebru: a busy tray stays near the budget (\(busyTray.pointCount) points)")
 
+// MARK: Living ink (InkPond)
+
+/// A fish drawn the usual way: the body from the nose round, then the tail fin, then an eye.
+func fishDrawing(facingRight: Bool, at centre: CGPoint = CGPoint(x: 120, y: 120)) -> [[CGPoint]] {
+    let body = (0...48).map { i -> CGPoint in
+        let a = Double(i) / 48 * 2 * .pi
+        return CGPoint(x: 40 * cos(a), y: 18 * sin(a))
+    }
+    let tail = [CGPoint(x: -40, y: 0), CGPoint(x: -62, y: -22), CGPoint(x: -62, y: 22), CGPoint(x: -40, y: 0)]
+    let eye = [CGPoint(x: 24, y: -5), CGPoint(x: 25, y: -5)]
+    let k: Double = facingRight ? 1 : -1
+    return [body, tail, eye].map { $0.map { CGPoint(x: Double(centre.x) + k * Double($0.x), y: Double(centre.y) + Double($0.y)) } }
+}
+
+func sameStrokes(_ a: [[CGPoint]], _ b: [[CGPoint]], _ tolerance: Double = 1e-9) -> Bool {
+    a.count == b.count && zip(a, b).allSatisfy { s, t in s.count == t.count && zip(s, t).allSatisfy { close($0, $1, tolerance) } }
+}
+
+let pondSize = CGSize(width: 316, height: 300)
+check(InkPond.facesRight(fishDrawing(facingRight: true)), "living ink: a fish with its tail fin on the left faces right")
+check(!InkPond.facesRight(fishDrawing(facingRight: false)), "living ink: its mirror image faces left")
+let oval = (0...40).map { i -> CGPoint in
+    let a = .pi + Double(i) / 40 * 2 * .pi
+    return CGPoint(x: 150 + 40 * cos(a), y: 150 + 20 * sin(a))
+}
+check(!InkPond.facesRight([oval]) && InkPond.facesRight([oval.reversed().map { CGPoint(x: 300 - $0.x, y: $0.y) }]),
+      "living ink: a drawing with even ends faces where it was begun")
+
+var pond = InkPond(size: pondSize, seed: 4)
+check(pond.isStill && pond.wake([[CGPoint(x: 5, y: 5)]], ink: 0) == nil, "living ink: a lone point does not wake")
+let rightFish = fishDrawing(facingRight: true)
+let leftFish = fishDrawing(facingRight: false, at: CGPoint(x: 200, y: 200))
+pond.wake(rightFish, ink: 2)
+pond.wake(leftFish, ink: 0)
+check(pond.creatures.count == 2 && close(pond.creatures[0].position, CGPoint(x: 109, y: 120)), "living ink: a creature wakes in the middle of its drawing (\(pond.creatures.first?.position ?? .zero))")
+check(pond.creatures[0].facing == 1 && pond.creatures[1].facing == -1, "living ink: each faces the way it was drawn")
+check(sameStrokes(InkPond.pose(pond.creatures[0]), rightFish) && sameStrokes(InkPond.pose(pond.creatures[1]), leftFish),
+      "living ink: just woken, it is exactly the drawing")
+let startPosition = pond.creatures[0].position
+for _ in 0..<30 { pond.advance(by: 1.0 / 60) }
+check(!close(pond.creatures[0].position, startPosition, 0.5) && !sameStrokes(InkPond.pose(pond.creatures[0]), rightFish, 0.5),
+      "living ink: half a second on it swims and its body bends")
+check(Double(pond.creatures[0].position.x) > Double(startPosition.x), "living ink: it swims the way it faces")
+
+// A long swim: everyone stays in the pond, turns round, and the wave's phase stays small.
+var turnedRound = Set<Int>()
+var firstFacing: [Int: Double] = [:]
+for c in pond.creatures { firstFacing[c.id] = c.facing }
+pond.wake(fishDrawing(facingRight: true, at: CGPoint(x: 250, y: 60)), ink: 4)
+var stayedIn = true
+for _ in 0..<(60 * 120) {
+    pond.advance(by: 1.0 / 60)
+    for c in pond.creatures {
+        if let f = firstFacing[c.id], c.facing != f { turnedRound.insert(c.id) }
+        let p = c.position
+        if Double(p.x) < 0 || Double(p.x) > Double(pondSize.width) || Double(p.y) < 0 || Double(p.y) > Double(pondSize.height) { stayedIn = false }
+    }
+}
+check(stayedIn, "living ink: two minutes of swimming stay inside the pond")
+check(turnedRound.count == 2, "living ink: they turn round at the walls (\(turnedRound.count) of 2)")
+check(pond.creatures.allSatisfy { $0.phase >= 0 && $0.phase < 2 * .pi }, "living ink: the wave's phase stays within a turn")
+check(pond.bubbles.count < 40, "living ink: the bubbles rise and go (\(pond.bubbles.count) now)")
+
+// Food: four crumbs sink; a creature eats them all.
+var fed = InkPond(size: pondSize, seed: 9)
+fed.wake(fishDrawing(facingRight: true, at: CGPoint(x: 100, y: 150)), ink: 1)
+fed.feed()
+check(fed.crumbs.count == 4 && fed.crumbs.allSatisfy { Double($0.position.y) < 0 }, "living ink: food starts at the top")
+var mealTime = 0.0
+while fed.meals < 4 && mealTime < 90 {
+    fed.advance(by: 1.0 / 60)
+    mealTime += 1.0 / 60
+}
+check(fed.meals == 4 && fed.crumbs.isEmpty, "living ink: the creature eats every crumb (\(fed.meals) in \(Int(mealTime)) s)")
+for _ in 0..<4 { fed.feed() }
+check(fed.crumbs.count == 12, "living ink: twelve crumbs in the water at most")
+
+// A ninth creature: the oldest fades out to make room.
+var crowdedPond = InkPond(size: pondSize, seed: 2)
+for i in 0..<9 {
+    crowdedPond.wake(fishDrawing(facingRight: i % 2 == 0, at: CGPoint(x: 60 + Double(i % 3) * 90, y: 60 + Double(i / 3) * 80)), ink: i % 5)
+}
+check(crowdedPond.creatures.count == 9 && crowdedPond.creatures[0].fade == 1 && crowdedPond.awake == 8, "living ink: a ninth sends the oldest fading")
+for _ in 0..<60 { crowdedPond.advance(by: 1.0 / 60) }
+check(crowdedPond.creatures.count == 8 && crowdedPond.creatures.allSatisfy { $0.id != 1 }, "living ink: the oldest is gone after its fade")
+
+// A poke sends a creature dashing off; a poke on open water does nothing.
+var poked = InkPond(size: pondSize, seed: 3)
+poked.wake(fishDrawing(facingRight: true, at: CGPoint(x: 150, y: 150)), ink: 0)
+for _ in 0..<60 { poked.advance(by: 1.0 / 60) }
+let calm = poked.creatures[0].speed
+check(!poked.poke(at: CGPoint(x: 10, y: 10)), "living ink: a poke on open water does nothing")
+check(poked.poke(at: poked.creatures[0].position) && poked.creatures[0].dash > 0, "living ink: a poke startles the creature")
+for _ in 0..<20 { poked.advance(by: 1.0 / 60) }
+check(poked.creatures[0].speed > calm * 1.5, "living ink: and it dashes (\(calm) → \(poked.creatures[0].speed))")
+
+// The same seed and the same drawings make the same pond; a busy drawing is thinned to 600 points.
+var twinA = InkPond(size: pondSize, seed: 11)
+var twinB = InkPond(size: pondSize, seed: 11)
+twinA.wake(rightFish, ink: 1)
+twinB.wake(rightFish, ink: 1)
+for _ in 0..<300 {
+    twinA.advance(by: 1.0 / 60)
+    twinB.advance(by: 1.0 / 60)
+}
+check(twinA == twinB, "living ink: the same seed swims the same way")
+let scribble = [(0..<2000).map { i in CGPoint(x: 50 + Double(i % 200), y: 50 + Double(i / 200) * 10) }]
+var busyPond = InkPond(size: pondSize, seed: 1)
+busyPond.wake(scribble, ink: 0)
+check(busyPond.creatures[0].strokes.reduce(0) { $0 + $1.count } <= InkPond.pointBudget, "living ink: a busy drawing is thinned to the budget")
+
 print(failures == 0 ? "all passed" : "\(failures) failed")
 exit(failures == 0 ? 0 : 1)

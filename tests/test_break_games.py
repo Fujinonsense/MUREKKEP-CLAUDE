@@ -14,8 +14,8 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent.parent / "Murekkep.swiftpm"
 TOOLS = Path(__file__).resolve().parent.parent / "tools" / "gamescheck"
 VIEWS = ("GameCorner.swift", "MandalaGame.swift", "BubblesGame.swift", "XOXGame.swift", "FlyerGame.swift", "ShooterGame.swift", "SudokuGame.swift",
-         "EbruGame.swift")
-LOGIC = ("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift", "EbruLogic.swift")
+         "EbruGame.swift", "LivingInkGame.swift")
+LOGIC = ("MiniGameLogic.swift", "FlyerLogic.swift", "ShooterLogic.swift", "SudokuLogic.swift", "EbruLogic.swift", "LivingInkLogic.swift")
 
 
 def src(name):
@@ -84,8 +84,8 @@ def test_the_tile_and_the_panel():
     assert 'label: expanded ? Loc.t("Küçült") : Loc.t("Büyüt")' in corner
     # The tiles of the layer on show, with icons and names, in a grid.
     assert "ForEach(MiniGame.allCases.filter { $0.layer == layer })" in corner and "Image(systemName: item.symbol)" in corner and "Text(item.title)" in corner
-    assert "case ebru, mandala, bubbles, xox, flyer, shooter, sudoku" in corner
-    for line in ("case .ebru: EbruGame()", "case .mandala: InkMandalaGame()", "case .bubbles: InkBubblesGame(store: store)", "case .xox: XOXGame(store: store)",
+    assert "case ebru, creatures, mandala, bubbles, xox, flyer, shooter, sudoku" in corner
+    for line in ("case .ebru: EbruGame()", "case .creatures: LivingInkGame()", "case .mandala: InkMandalaGame()", "case .bubbles: InkBubblesGame(store: store)", "case .xox: XOXGame(store: store)",
                  "case .flyer: FlyerGame(store: store)", "case .shooter: ShooterGame(store: store)", "case .sudoku: SudokuGame(store: store)"):
         assert line in corner, line
     # Not Pro-gated, no network, no assets.
@@ -123,6 +123,13 @@ def test_the_games_draw_with_the_pencil_keep_their_touches_and_pause():
     assert "model.advance(to: now)" in ebru and "if stopped { model.pause() }" in ebru
     # A touch that starts somewhere else is a new one, even after a touch cancelled without ending.
     assert "if touchStart == value.startLocation {" in ebru and "model.trayPoint(value.location, in: geo.size)" in ebru
+    living = src("LivingInkGame.swift")
+    assert "TimelineView(.animation(paused: paused))" in living and "scenePhase != .active || !model.isMoving" in living
+    assert "if touchStart == value.startLocation {" in living and "model.pondPoint(value.location, in: geo.size)" in living
+    # The drawing wakes once the pencil has stayed off the pond: every stroke begun or ended restarts the wait.
+    assert ".task(id: model.strokes)" in living and "UInt64(InkPond.wakeDelay * 1_000_000_000)" in living
+    assert re.search(r"guard !Task\.isCancelled else \{ return \}\s*model\.wake\(\)", living)
+    assert "guard !isDrawing, !drawing.isEmpty else { return }" in living
     for name in VIEWS:
         text = src(name)
         assert "DragGesture(minimumDistance: 0" in text or name == "GameCorner.swift", name
@@ -217,6 +224,7 @@ def test_the_logic_is_foundation_only_and_checked():
     assert "struct ShooterBoard" in src("ShooterLogic.swift") and "struct HexGrid" in src("ShooterLogic.swift")
     assert "enum Sudoku" in src("SudokuLogic.swift") and "struct SudokuSave: Codable" in src("SudokuLogic.swift")
     assert "struct EbruTray: Equatable" in src("EbruLogic.swift") and "enum EbruMove: Equatable" in src("EbruLogic.swift")
+    assert "struct InkPond: Equatable" in src("LivingInkLogic.swift") and "struct InkCreature: Equatable" in src("LivingInkLogic.swift")
     run = (TOOLS / "run.ps1").read_text(encoding="utf-8")
     for name in LOGIC:
         assert name in run, name
@@ -225,7 +233,9 @@ def test_the_logic_is_foundation_only_and_checked():
                    "GamePanelSize.larger", "autopilot(level:", "ShooterLevels.all.enumerated()", "Sudoku.generate(difficulty:", "SudokuSave.decode",
                    ".blot(points: 5, seconds: 3)", "combos == [1, 2, 3, 4, 4]", "ShooterBoard.deadRow == 9",
                    "EbruTray(size: traySize", "every colour keeps its area", "a held drop stops at 60 pt", "the needle leaves paint far from its path alone",
-                   "the comb pulls only along its axis", "undo stops a pattern and brings the tray back"):
+                   "the comb pulls only along its axis", "undo stops a pattern and brings the tray back",
+                   "just woken, it is exactly the drawing", "they turn round at the walls", "the creature eats every crumb",
+                   "a ninth sends the oldest fading", "a poke startles the creature"):
         assert needle in main, needle
 
 
@@ -237,7 +247,7 @@ def test_the_creative_layer():
     assert "@AppStorage(GameProgress.Keys.layer) private var layer: BreakLayer = .games" in corner
     assert 'static let layer = "break.layer"' in src("MiniGameLogic.swift")
     assert re.search(r'Picker\(Loc\.t\("Katman"\), selection: \$layer\)', corner) and ".pickerStyle(.segmented)" in corner
-    assert "case .ebru, .mandala: return .creative" in corner and "case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games" in corner
+    assert "case .ebru, .creatures, .mandala: return .creative" in corner and "case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games" in corner
     assert "var hasDifficulty: Bool { layer == .games }" in corner
     # Ebru: six traditional pigments, three tools, a sprinkle, four patterns, undo; at once with Reduce Motion.
     ebru = src("EbruGame.swift")
@@ -256,6 +266,15 @@ def test_the_creative_layer():
         assert case in logic, case
     assert "case gelgit" in logic and "case tarakli" in logic and "case sal" in logic and "case bulbul" in logic
     assert "static let budget = 60_000" in logic and "static let historyLimit = 10" in logic
+    # Living ink: five game inks, food, at most eight creatures, a tap on one pokes it instead of leaving a dot.
+    living = src("LivingInkGame.swift")
+    for name in ("Lacivert", "Turkuaz", "Macenta", "Kehribar", "Yeşil", "Yem ver"):
+        assert f'Loc.t("{name}")' in living, name
+    assert "ForEach(GameCorner.inkHues.indices, id: \\.self)" in living and "model.feed()" in living
+    assert "pond?.poke(at: first) == true" in living and "InkPond.pose(creature)" in living
+    pond = src("LivingInkLogic.swift")
+    assert "static let maxCreatures = 8" in pond and "static let wakeDelay = 0.8" in pond and "static let pointBudget = 600" in pond
+    assert "static func facesRight(_ strokes: [[CGPoint]]) -> Bool" in pond and "static func pose(_ c: InkCreature) -> [[CGPoint]]" in pond
 
 
 def test_every_text_of_the_corner_goes_through_loc():

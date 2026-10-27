@@ -2,10 +2,10 @@ import SwiftUI
 
 /// The break corner: a small tile at the bottom-left of the page opens a card with two layers:
 /// games to play (the ink bubbles, XOX against the iPad, the flying drop, the colour popper, Sudoku)
-/// and things to make (ebru, the ink mandala). Free in every edition; nothing leaves the iPad, and
-/// what is kept (levels, stars, best scores, a half-done Sudoku, the layer last open) lives in
-/// UserDefaults under `GameProgress.Keys`. The logic is in MiniGameLogic, FlyerLogic, ShooterLogic,
-/// SudokuLogic and EbruLogic.
+/// and things to make (ebru, living ink, the ink mandala). Free in every edition; nothing leaves the
+/// iPad, and what is kept (levels, stars, best scores, a half-done Sudoku, the layer last open) lives
+/// in UserDefaults under `GameProgress.Keys`. The logic is in MiniGameLogic, FlyerLogic,
+/// ShooterLogic, SudokuLogic, EbruLogic and LivingInkLogic.
 enum GameCorner {
     static let panelSize = GamePanelSize.compact
     static let radius: CGFloat = 24
@@ -71,13 +71,13 @@ enum BreakLayer: String, CaseIterable, Identifiable {
 
 /// The games and the makings of the break corner, in the order their tiles stand.
 enum MiniGame: String, CaseIterable, Identifiable {
-    case ebru, mandala, bubbles, xox, flyer, shooter, sudoku
+    case ebru, creatures, mandala, bubbles, xox, flyer, shooter, sudoku
 
     var id: String { rawValue }
 
     var layer: BreakLayer {
         switch self {
-        case .ebru, .mandala: return .creative
+        case .ebru, .creatures, .mandala: return .creative
         case .bubbles, .xox, .flyer, .shooter, .sudoku: return .games
         }
     }
@@ -85,6 +85,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .ebru: return Loc.t("Ebru")
+        case .creatures: return Loc.t("Canlı mürekkep")
         case .mandala: return Loc.t("Mürekkep mandalası")
         case .bubbles: return Loc.t("Mürekkep balonları")
         case .xox: return Loc.t("XOX")
@@ -97,6 +98,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
     var hint: String {
         switch self {
         case .ebru: return Loc.t("Suya boya damlat; bizle, tarakla desen çek.")
+        case .creatures: return Loc.t("Çiz; kalemi kaldırınca canlanıp yüzer.")
         case .mandala: return Loc.t("Çiz; her çizgi sekiz kat açılır.")
         case .bubbles: return Loc.t("Balonları patlat, lekelere dokunma. 60 saniye.")
         case .xox: return Loc.t("iPad'e karşı; sen X'sin.")
@@ -109,6 +111,7 @@ enum MiniGame: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .ebru: return "paintbrush.pointed"
+        case .creatures: return "fish"
         case .mandala: return "circle.hexagongrid"
         case .bubbles: return "drop.circle"
         case .xox: return "squareshape.split.3x3"
@@ -181,6 +184,8 @@ final class GameProgressStore: ObservableObject {
         switch game {
         case .ebru:
             return Loc.t("Battal, gelgit, bülbül yuvası.")
+        case .creatures:
+            return Loc.t("Çizdiğin canlanır.")
         case .mandala:
             return Loc.t("Puan yok, sadece akış.")
         case .flyer, .shooter:
@@ -417,6 +422,7 @@ struct GameCornerPanel: View {
     private func gameView(_ game: MiniGame) -> some View {
         switch game {
         case .ebru: EbruGame()
+        case .creatures: LivingInkGame()
         case .mandala: InkMandalaGame()
         case .bubbles: InkBubblesGame(store: store)
         case .xox: XOXGame(store: store)

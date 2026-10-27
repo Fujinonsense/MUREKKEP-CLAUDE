@@ -1419,5 +1419,15 @@ enum Translations {
         "Desen": "Pattern",
         "Ebru teknesi": "Ebru tray",
         "Dokun, boya damlasın; basılı tut, yayılsın. Ya da Serp'e bas.": "Tap to drop paint; hold to let it spread. Or press Sprinkle.",
+        "Canlı mürekkep": "Living ink",
+        "Çiz; kalemi kaldırınca canlanıp yüzer.": "Draw; lift the pencil and it comes alive and swims.",
+        "Çizdiğin canlanır.": "What you draw comes alive.",
+        "Yem ver": "Feed",
+        "Canlı mürekkep havuzu": "Living ink pond",
+        "Bir balık, bir kuş, ne istersen çiz; kalemi kaldırınca canlanır.": "Draw a fish, a bird, anything; lift the pencil and it comes alive.",
+        "Lacivert": "Navy",
+        "Turkuaz": "Turquoise",
+        "Macenta": "Magenta",
+        "Kehribar": "Amber",
     ]
 }
