@@ -1155,6 +1155,7 @@ enum Translations {
     private static let part12: [String: String] = [
         "10 adet 3D mürekkep": "10 3D inks",
         "3D mürekkepler Mürekkep Pro'da.": "The 3D inks are part of Mürekkep Pro.",
+        "Abonelik istemezsen: ömür boyu Pro, tek ödeme {0}": "Rather not subscribe? Lifetime Pro, one payment of {0}",
         "Aboneliği yönet": "Manage subscription",
         "Adaçayı": "Sage",
         "Altın varak": "Gold leaf",

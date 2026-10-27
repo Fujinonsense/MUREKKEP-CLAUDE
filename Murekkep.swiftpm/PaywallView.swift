@@ -11,6 +11,9 @@ struct PaywallView: View {
 
     /// The plans in the order shown; the first one the App Store gave is chosen when the chosen one is missing.
     private static let shown: [ProPlan.Product.Kind] = [.yearly, .monthly, .lifetime]
+    /// The plans with a card of their own: the subscriptions lead the page, and the one-time purchase is
+    /// a quiet line under them (`lifetimeLine`).
+    private static let cards: [ProPlan.Product.Kind] = [.yearly, .monthly]
 
     var body: some View {
         ScrollView {
@@ -155,9 +158,36 @@ struct PaywallView: View {
 
     private var plans: some View {
         VStack(spacing: 10) {
-            ForEach(Self.shown, id: \.self) { kind in
+            ForEach(Self.cards, id: \.self) { kind in
                 planRow(kind)
             }
+            lifetimeLine
+        }
+    }
+
+    /// The one-time purchase for those who would rather not subscribe, with its price; chosen, the
+    /// button below buys it. Left out while the App Store does not give it.
+    @ViewBuilder private var lifetimeLine: some View {
+        if let price = store.price(ProPlan.product(.lifetime)) {
+            let chosen = plan == .lifetime
+            Button {
+                plan = .lifetime
+            } label: {
+                HStack(spacing: 6) {
+                    if chosen {
+                        Image(systemName: "checkmark.circle.fill")
+                    }
+                    Text(Loc.t("Abonelik istemezsen: ömür boyu Pro, tek ödeme {0}", price))
+                        .underline(!chosen)
+                }
+                .font(.footnote.weight(chosen ? .semibold : .regular))
+                .foregroundStyle(chosen ? Theme.ink : Color.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(chosen ? .isSelected : [])
         }
     }
 

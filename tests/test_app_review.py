@@ -105,6 +105,18 @@ def test_one_missing_plan_does_not_block_the_others():
     assert re.search(r"guard store\.price\(ProPlan\.product\(plan\)\) == nil,\s*let first = Self\.shown\.first", paywall)
 
 
+def test_the_subscriptions_lead_and_the_one_time_purchase_is_a_line_under_them():
+    # Lifetime as a third card of the same size looked cheap. It stays for those who would rather not
+    # subscribe: a line with its App Store price under the two cards, gone when the store lacks it.
+    paywall = src("PaywallView.swift")
+    assert "private static let cards: [ProPlan.Product.Kind] = [.yearly, .monthly]" in paywall
+    assert "ForEach(Self.cards, id: \\.self)" in paywall and "ForEach(Self.shown" not in paywall
+    line = paywall.split("private var lifetimeLine")[1].split("\n    }\n")[0]
+    assert "if let price = store.price(ProPlan.product(.lifetime))" in line
+    assert 'Loc.t("Abonelik istemezsen: ömür boyu Pro, tek ödeme {0}", price)' in line
+    assert "minHeight: 44" in line and ".isSelected" in line
+
+
 def test_purchase_errors_are_told_in_the_apps_words():
     # StoreKit's texts are English and technical: the raw error goes to the log only, and the common
     # cases get a line of their own. Cancelling says nothing; Ask to Buy is waiting, not failing.
