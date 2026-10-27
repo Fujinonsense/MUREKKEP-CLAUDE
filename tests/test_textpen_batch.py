@@ -1,7 +1,7 @@
 """When the text pen goes on writing the line it has just turned into text, the whole line is read
 again (twin of TextPenBatch.swift). On the iPad, "Aga" written, a pause, then "naber?" read as
 "Asa" + "naber?" with no space; the same ink read at once is '"Aga naber?"'."""
-from ports.textpen_batch import REACH, WINDOW, continues
+from ports.textpen_batch import REACH, WINDOW, anchors, continues, hand_x
 
 # The last writing: "Aga" at x 100–160, letters from y 200 (top of A) to 240 (tail of g).
 AGA = (100, 200, 160, 240)
@@ -36,3 +36,37 @@ def test_only_for_a_while():
     assert continues(AGA, (180, 205, 260, 236), elapsed=WINDOW - 0.1)
     assert not continues(AGA, (180, 205, 260, 236), elapsed=WINDOW + 0.1)
     assert not continues(AGA, (180, 205, 260, 236), elapsed=-1.0)
+
+
+# "I had to the" typed narrower than it was written: typed words and the handwriting they replaced.
+TYPED = [(100, 108), (115, 145), (152, 170), (177, 205)]
+HAND = [(100, 104), (118, 160), (180, 200), (225, 262)]
+
+
+def test_the_next_word_goes_after_the_handwriting_with_the_gap_left_after_the_text():
+    a = anchors(TYPED, HAND)
+    assert hand_x(205 + 12, a) == 262 + 12          # "restaurant" 12 pt after the typed "the"
+    assert hand_x(205 + 1, a) == 262 + 1            # a word carried on: no gap opens inside it
+
+
+def test_a_dot_over_a_typed_letter_lands_over_the_same_letter_of_the_hand():
+    a = anchors(TYPED, HAND)
+    # Two thirds into the typed "had" is two thirds into the handwritten one.
+    assert abs(hand_x(115 + 20, a) - (118 + 28)) < 1e-9
+
+
+def test_the_space_between_typed_words_maps_to_the_space_between_written_ones():
+    a = anchors(TYPED, HAND)
+    assert hand_x(108, a) == 104 and hand_x(115, a) == 118
+    assert 104 < hand_x(111, a) < 118
+
+
+def test_one_box_for_the_whole_line_gives_one_anchor():
+    a = anchors([(100, 130), (137, 160)], [(90, 200), (90, 200)])
+    assert a == [(100, 160, 90, 200)]
+    assert hand_x(170, a) == 210
+
+
+def test_without_anchors_nothing_moves():
+    assert hand_x(123.5, []) == 123.5
+    assert anchors([], []) == []

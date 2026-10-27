@@ -576,6 +576,19 @@ let batchCases: [(CGRect, TimeInterval, Bool, String)] = [
 for (next, elapsed, want, name) in batchCases {
     check(TextPenBatch.continues(last: aga, next: next, elapsed: elapsed) == want, "text pen batch: \(name)")
 }
+// Writing after typed words goes back where it falls in their handwriting (tests/test_textpen_batch.py).
+let typedWords: [(minX: CGFloat, maxX: CGFloat)] = [(100, 108), (115, 145), (152, 170), (177, 205)]
+let handWords: [(minX: CGFloat, maxX: CGFloat)] = [(100, 104), (118, 160), (180, 200), (225, 262)]
+let wordAnchors = TextPenBatch.anchors(typed: typedWords, hand: handWords)
+check(TextPenBatch.handX(217, anchors: wordAnchors) == 274 && TextPenBatch.handX(206, anchors: wordAnchors) == 263,
+      "text pen batch: the next word keeps its gap after the handwriting")
+check(abs(TextPenBatch.handX(135, anchors: wordAnchors) - 146) < 1e-9, "text pen batch: a dot over a typed letter")
+check(TextPenBatch.handX(108, anchors: wordAnchors) == 104 && TextPenBatch.handX(115, anchors: wordAnchors) == 118,
+      "text pen batch: the typed space maps to the written one")
+let lineAnchor = TextPenBatch.anchors(typed: [(100, 130), (137, 160)], hand: [(90, 200), (90, 200)])
+check(lineAnchor == [TextPenBatch.Anchor(typedMin: 100, typedMax: 160, handMin: 90, handMax: 200)]
+      && TextPenBatch.handX(170, anchors: lineAnchor) == 210, "text pen batch: one box per line gives one anchor")
+check(TextPenBatch.handX(123.5, anchors: []) == 123.5, "text pen batch: no anchors, no move")
 
 // The model's background download picks up where it stopped (BrainDownloadPlan).
 let weights = BrainDownloadPlan.File(path: "model.safetensors", size: 1_000)

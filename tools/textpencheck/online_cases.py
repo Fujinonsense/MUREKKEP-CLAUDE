@@ -20,10 +20,11 @@ import infer_np  # noqa: E402
 import online  # noqa: E402
 from charset import CHARSET  # noqa: E402
 from ink_render import render_line  # noqa: E402
-from ports import ctc, deskew, inkline, reading  # noqa: E402
+from ports import ctc, deskew, inkline, reading, wordfix  # noqa: E402
 
 weights = infer_np.load(repo + "/Murekkep.swiftpm/Assets.xcassets/hwmodel.dataset/hwmodel.bin")
 _, pen = online.load(sys.argv[3])
+LEXICON = wordfix.Lexicon.load(repo + "/Murekkep.swiftpm/Assets.xcassets/wordlist.dataset/wordlist.txt")
 GRID = "--grid" in sys.argv
 OUT = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else None
 
@@ -63,6 +64,20 @@ def candidates(beam, lp, olp):
     return others, scores
 
 
+def fixed(text, lp, olp):
+    """readWithModel's word swaps on the chosen reading (WordFix)."""
+    if wordfix.is_formula(text):
+        return text
+
+    def score(t):
+        a = ctc.score(t, lp, CHARSET)
+        if a is None or olp is None:
+            return a
+        b = ctc.score(t, olp, CHARSET)
+        return None if b is None else a + b
+    return wordfix.fix(text, score, LEXICON, 1 if olp is None else 2)
+
+
 def together(beam, others, scores, weight, floor):
     old = reading.ONLINE_WEIGHT, reading.ONLINE_FLOOR
     reading.ONLINE_WEIGHT, reading.ONLINE_FLOOR = weight, floor
@@ -90,7 +105,7 @@ def main():
     if GRID:
         settings = [(w, f) for w in (0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0) for f in (-1.0, -2.0, -4.0)]
     exact = collections.Counter()
-    alone = picture = 0
+    alone = picture = swapped = 0
     kept = 0
     for n, case in enumerate(cases):
         got = lines_of(case)
@@ -99,12 +114,16 @@ def main():
         prepared = [(b, *candidates(b, lp, o)) for b, lp, o, _ in got]
         for s in settings:
             exact[s] += [together(b, others, scores, *s) for b, others, scores in prepared] == case["texts"]
+        chosen = [together(b, others, scores, reading.ONLINE_WEIGHT, reading.ONLINE_FLOOR) for b, others, scores in prepared]
+        fixes = [fixed(t, lp, o) for t, (b, lp, o, _) in zip(chosen, got)]
+        swapped += fixes == case["texts"]
         if OUT and "python" in case:
             py = case["python"]
             if len(py["lines"]) == len(got):
                 for pl, (b, lp, o, feats), (_, others, scores) in zip(py["lines"], got, prepared):
                     pl["onlineText"] = ctc.beam(o, CHARSET)[0][0] if o is not None else ""
                     pl["together"] = together(b, others, scores, reading.ONLINE_WEIGHT, reading.ONLINE_FLOOR)
+                    pl["fixed"] = fixed(pl["together"], lp, o)
                     if "image" in pl and kept < 120:
                         pl["onlineFeatures"] = [[round(float(v), 5) for v in row] for row in feats]
                         pl["onlineLogProbs"] = [[round(float(v), 4) for v in row] for row in o]
@@ -113,6 +132,7 @@ def main():
             print(f"{n}/{len(cases)}", flush=True)
     total = len(cases)
     print(f"picture reader alone: exact {picture}/{total}; pen-motion reader alone: {alone}/{total}")
+    print(f"  together with word swaps: exact {swapped}/{total}")
     for s in settings:
         print(f"  together, weight {s[0]:.2f} floor {s[1]:.1f}: exact {exact[s]}/{total}")
     if OUT:

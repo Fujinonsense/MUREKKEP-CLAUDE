@@ -1,9 +1,10 @@
 import Foundation
 
-// The text pen's reading path in the app's own Swift (InkDeskew, InkLine, HandwritingModel, CTC, and
-// the pen-motion reader OnlineReader with Reading.choose), run on the cases of gen_cases.py and
-// compared with the Python twins number by number, then scored.
-// usage: textpen.exe <cases.json> <hwmodel.bin> [limit]   (hwonline.bin from MRK_ASSET_hwonline)
+// The text pen's reading path in the app's own Swift (InkDeskew, InkLine, HandwritingModel, CTC, the
+// pen-motion reader OnlineReader with Reading.choose, and WordFix), run on the cases of gen_cases.py
+// and compared with the Python twins number by number, then scored.
+// usage: textpen.exe <cases.json> <hwmodel.bin> [limit]   (hwonline.bin from MRK_ASSET_hwonline,
+// the word list from MRK_ASSET_wordlist)
 
 let args = CommandLine.arguments
 let root = try! JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: args[1]))) as! [String: Any]
@@ -11,6 +12,7 @@ let model = HandwritingModel(data: try! Data(contentsOf: URL(fileURLWithPath: ar
 let limit = args.count > 3 ? Int(args[3])! : Int.max
 let pen = OnlineReader.shared
 print(pen == nil ? "no pen-motion reader (MRK_ASSET_hwonline)" : "pen-motion reader loaded")
+print(WordFix.shared == nil ? "no word list (MRK_ASSET_wordlist)" : "word list loaded")
 let pythonCharset = Array(root["charset"] as! String)
 var failures = 0
 
@@ -26,7 +28,7 @@ func number(_ v: Any) -> Double { (v as? NSNumber)?.doubleValue ?? .nan }
 check(model.charset == pythonCharset, "charset in hwmodel.bin matches python's")
 
 typealias LineReading = (members: [Int], base: [Int], text: String, image: InkLineImage, logProbs: [[Float]],
-                         features: [Float], online: [[Float]]?, onlineText: String, together: String)
+                         features: [Float], online: [[Float]]?, onlineText: String, together: String, fixed: String)
 
 struct PenReading {
     var degrees: Double
@@ -53,6 +55,17 @@ func together(_ beam: [(text: String, score: Float)], lp: [[Float]], online: [[F
                           length: first.text.count, isMath: isMath(first.text), dictionary: [:], online: scores)
 }
 
+/// readWithModel's word swaps on the chosen reading (WordFix).
+func fixed(_ text: String, lp: [[Float]], online: [[Float]]?) -> String {
+    guard !WordFix.isFormula(text), let lexicon = WordFix.shared else { return text }
+    return WordFix.fix(text, readers: online == nil ? 1 : 2, lexicon: lexicon) { t in
+        guard let a = CTC.score(t, lp, charset: model.charset) else { return nil }
+        guard let pen, let online else { return a }
+        guard let b = CTC.score(t, online, charset: pen.charset) else { return nil }
+        return a + b
+    }
+}
+
 /// What readWithModel does with a batch, without Vision and the dictionary.
 func read(_ strokes: [[CGPoint]], radius: Float) -> PenReading {
     let degrees = InkDeskew.angle(strokes)
@@ -72,8 +85,10 @@ func read(_ strokes: [[CGPoint]], radius: Float) -> PenReading {
         let paths = base.map { s in s.points.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) } }
         let online = pen?.logProbs(paths)
         let onlineText = online.flatMap { CTC.beam($0, charset: pen!.charset).first?.text } ?? ""
+        let both = together(beam, lp: lp, online: online)
         out.append((line.map(\.id).sorted(), base.map(\.id).sorted(), beam.first?.text ?? "", image, lp,
-                    OnlineReader.features(paths), online, onlineText, together(beam, lp: lp, online: online)))
+                    OnlineReader.features(paths), online, onlineText, both,
+                    fixed(both, lp: lp, online: online)))
     }
     return PenReading(degrees: degrees, lines: out)
 }
@@ -81,7 +96,7 @@ func read(_ strokes: [[CGPoint]], radius: Float) -> PenReading {
 var exact = 0, lineCount = 0, total = 0, parityCases = 0
 var worstImage: Float = 0, worstLogProb: Float = 0, meanImage: Double = 0, imagesCompared = 0
 var textAgree = 0, textCompared = 0
-var exactTogether = 0, exactOnline = 0
+var exactTogether = 0, exactOnline = 0, exactFixed = 0, fixedAgree = 0, fixedCompared = 0
 var onlineAgree = 0, togetherAgree = 0, onlineCompared = 0, featuresCompared = 0
 var worstFeature: Float = 0, worstOnline: Float = 0
 let started = Date()
@@ -96,6 +111,7 @@ for (n, item) in (root["cases"] as! [[String: Any]]).enumerated() {
     exact += got.lines.map(\.text) == texts ? 1 : 0
     exactTogether += got.lines.map(\.together) == texts ? 1 : 0
     exactOnline += got.lines.map(\.onlineText) == texts ? 1 : 0
+    exactFixed += got.lines.map(\.fixed) == texts ? 1 : 0
     lineCount += got.lines.count == texts.count ? 1 : 0
     // The same strokes with a thick 3D pen's radius must be read exactly the same.
     if n % 7 == 0 {
@@ -123,6 +139,12 @@ for (n, item) in (root["cases"] as! [[String: Any]]).enumerated() {
             onlineCompared += 1
             onlineAgree += line.onlineText == onlineText ? 1 : 0
             togetherAgree += line.together == both ? 1 : 0
+        }
+        if let fixedText = pl["fixed"] as? String {
+            fixedCompared += 1
+            fixedAgree += line.fixed == fixedText ? 1 : 0
+            check(line.together != pl["together"] as? String || line.fixed == fixedText,
+                  "case \(n) line \(k): word swaps \"\(line.fixed)\" vs python \"\(fixedText)\"")
         }
         if let feats = pl["onlineFeatures"] as? [[Any]], let ref = pl["onlineLogProbs"] as? [[Any]] {
             featuresCompared += 1
@@ -178,7 +200,9 @@ for (n, item) in (root["cases"] as! [[String: Any]]).enumerated() {
 }
 print("cases read: \(total); exact \(exact) (\(100 * exact / max(total, 1)) %), right line count \(lineCount)")
 if pen != nil {
-    print("pen-motion reader alone: exact \(exactOnline); both readers together: exact \(exactTogether)")
+    print("pen-motion reader alone: exact \(exactOnline); both readers together: exact \(exactTogether); "
+          + "with word swaps: exact \(exactFixed)")
+    print("word swaps parity with python: same text on \(fixedAgree)/\(fixedCompared) lines")
     print("pen-motion parity with python: same pen text on \(onlineAgree)/\(onlineCompared) lines, same choice on "
           + "\(togetherAgree)/\(onlineCompared); worst feature difference \(worstFeature), worst pen log-probability "
           + "difference \(worstOnline) over \(featuresCompared) lines")

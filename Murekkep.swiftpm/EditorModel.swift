@@ -139,8 +139,10 @@ final class EditorModel: ObservableObject {
     /// Where the text pen's last word ended: the next words on that line follow it with one space.
     private var lastTextEnd: (page: Int, end: TextEnd)?
     /// The handwriting the text pen read last and the text that replaced it: writing that goes on
-    /// along that line is read again together with it (TextPenBatch).
-    private var lastTextRead: (page: Int, strokes: [Stroke], typeset: Set<Int>, ink: CGRect, time: Date, before: TextEnd?)?
+    /// along that line is read again together with it (TextPenBatch), moved from where it was
+    /// written along the typed words to where it falls in that handwriting (`anchors`).
+    private var lastTextRead: (page: Int, strokes: [Stroke], typeset: Set<Int>, ink: CGRect, time: Date, before: TextEnd?,
+                               anchors: [TextPenBatch.Anchor])?
     /// What the canvas shows in its middle (for placing plots and calculator results).
     var viewCenter: (page: Int, point: CGPoint)?
     private var selectionSnapshot: (strokes: [Stroke], ids: Set<Int>, stickers: [Sticker])?
@@ -977,12 +979,30 @@ final class EditorModel: ObservableObject {
         var earlier: [Stroke] = []
         var replacing = Set<Int>()
         var previous = lastTextEnd?.page == batch.page ? lastTextEnd?.end : nil
-        if let last = lastTextRead, last.page == batch.page,
-           TextPenBatch.continues(last: last.ink, next: marks, elapsed: Date().timeIntervalSince(last.time)),
-           last.typeset.isSubset(of: Set(strokes(on: batch.page).map(\.id))) {
-            earlier = last.strokes
-            replacing = last.typeset
-            previous = last.before
+        // The new writing as it sits next to the old handwriting, and the page strokes it stands for.
+        var moved = source
+        var onPage: [Int: Int] = [:]
+        if let last = lastTextRead, last.page == batch.page {
+            let hand = CGRect(x: TextPenBatch.handX(marks.minX, anchors: last.anchors), y: marks.minY,
+                              width: TextPenBatch.handX(marks.maxX, anchors: last.anchors) - TextPenBatch.handX(marks.minX, anchors: last.anchors),
+                              height: marks.height)
+            if TextPenBatch.continues(last: last.ink, next: hand, elapsed: Date().timeIntervalSince(last.time)),
+               last.typeset.isSubset(of: Set(strokes(on: batch.page).map(\.id))) {
+                earlier = last.strokes
+                replacing = last.typeset
+                previous = last.before
+                if !last.anchors.isEmpty {
+                    moved = source.map { s in
+                        let copy = s.withPoints(s.points.map { p in
+                            var q = p
+                            q.x = Float(TextPenBatch.handX(CGFloat(p.x), anchors: last.anchors))
+                            return q
+                        })
+                        onPage[copy.id] = s.id
+                        return copy
+                    }
+                }
+            }
         }
         // Thick pens make bigger dots: the size of a lone mark grows with the pen.
         let penWidth = CGFloat(source.map(\.width).max() ?? 0)
@@ -1003,7 +1023,8 @@ final class EditorModel: ObservableObject {
         let flowers = settings.flowerLevel
         let access = handwritingAccess
         let start = previous
-        let read = earlier + source
+        let read = earlier + moved
+        let pageIDs = onPage
         let rereading = !earlier.isEmpty
         let replaced = replacing
         // The page's other ink, which the typed words keep clear of (not the text being read again).
@@ -1026,7 +1047,8 @@ final class EditorModel: ObservableObject {
             }
             // Strokes erased in the meantime stay erased; the text read again goes.
             let present = Set(self.strokes(on: batch.page).map(\.id))
-            let removed = result.removed.intersection(present).union(replaced.intersection(present))
+            let readIDs = Set(result.removed.map { pageIDs[$0] ?? $0 })
+            let removed = readIDs.intersection(present).union(replaced.intersection(present))
             guard !removed.isEmpty else { return }
             self.replaceStrokes(page: batch.page, removing: removed, adding: result.added)
             // The handwriting and the text that replaced it: late dots can land on either.
@@ -1041,7 +1063,7 @@ final class EditorModel: ObservableObject {
                 self.lastTextEnd = (batch.page, end)
             }
             let ink = handwriting.map { CGRect(ink: $0.bounds) }.reduce(CGRect.null) { $0.union($1) }
-            self.lastTextRead = (batch.page, handwriting, Set(result.added.map(\.id)), ink, Date(), start)
+            self.lastTextRead = (batch.page, handwriting, Set(result.added.map(\.id)), ink, Date(), start, result.anchors)
             self.onHaptic?(.completed)
         }
     }

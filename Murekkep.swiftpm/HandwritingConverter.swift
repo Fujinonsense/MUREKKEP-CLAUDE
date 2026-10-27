@@ -67,6 +67,9 @@ struct ConversionResult {
     var text: String
     /// End of the last word written, so the text pen's next words can follow it.
     var end: TextEnd? = nil
+    /// The last line's typed words and the handwriting each replaced, so writing that goes on after
+    /// them can be read again where it falls in the handwriting (TextPenBatch.handX).
+    var anchors: [TextPenBatch.Anchor] = []
 }
 
 /// Turns handwriting into neat text on the page's lines. Each word keeps the brush and color it was
@@ -139,6 +142,7 @@ enum HandwritingConverter {
         var texts: [String] = []
         var nextLine = 0
         var end: TextEnd?
+        var anchors: [TextPenBatch.Anchor] = []
         let unit = ruling.capHeight / 10
         let hairline = CGFloat(StrokeFont.tracking) * unit
         var blocking = TextPlacement.obstacles(obstacles, ruling: ruling)
@@ -185,11 +189,22 @@ enum HandwritingConverter {
                 lastLine = spots[j].line
             }
             nextLine = lastLine + 1
+            // A line that wrapped is not continued in place (the pen goes on below it). The word boxes
+            // come from the characters' places; the line's ink gives its true ends.
+            var hand = words.map { (minX: $0.box.minX, maxX: $0.box.maxX) }
+            if !hand.isEmpty {
+                hand[0].minX = line.box.minX
+                hand[hand.count - 1].maxX = line.box.maxX
+            }
+            anchors = spots.allSatisfy({ $0.line == spots.first?.line })
+                ? TextPenBatch.anchors(typed: words.indices.map { (minX: spots[$0].x, maxX: spots[$0].x + widths[$0]) }, hand: hand)
+                : []
             for s in members[i] { removed.insert(s.id) }
             texts.append(line.text)
         }
         guard !added.isEmpty else { return nil }
-        return ConversionResult(removed: removed, added: added, lineCount: texts.count, text: texts.joined(separator: "\n"), end: end)
+        return ConversionResult(removed: removed, added: added, lineCount: texts.count, text: texts.joined(separator: "\n"), end: end,
+                                anchors: anchors)
     }
 
     /// The batch read line by line with Mürekkep's own model. Vision's readings of the same line
@@ -273,6 +288,16 @@ enum HandwritingConverter {
             var text = Reading.choose(model: beam,
                                       vision: others.map { (text: $0, score: CTC.score($0, lp, charset: model.charset)) },
                                       length: first.text.count, isMath: isMath, dictionary: known, online: penScores)
+            // A word no list knows becomes the known word a letter or two away when the readers
+            // find it almost as likely ("becavse" → "because").
+            if !WordFix.isFormula(text), let lexicon = WordFix.shared {
+                text = WordFix.fix(text, readers: penLP == nil ? 1 : 2, lexicon: lexicon) { t in
+                    guard let a = CTC.score(t, lp, charset: model.charset) else { return nil }
+                    guard let pen, let penLP else { return a }
+                    guard let b = CTC.score(t, penLP, charset: pen.charset) else { return nil }
+                    return a + b
+                }
+            }
             var xs = characterPositions(text, lp: lp, image: image, charset: model.charset, box: box)
             var groups: [(text: String, x: CGFloat)] = []
             for group in raised {
