@@ -98,7 +98,7 @@ def build():
 PROBE = """\
 APP=Murekkep.swiftpm
 xcrun swiftc -O tools/pdfkit_probe/main.swift tools/pdfkit_probe/Stubs.swift \\
-  "$APP/MathEngine.swift" "$APP/ExactMath.swift" "$APP/PageMath.swift" "$APP/MathText.swift" "$APP/Questions.swift" \\
+  "$APP/MathEngine.swift" "$APP/ExactMath.swift" "$APP/PageMath.swift" "$APP/MathText.swift" "$APP/Questions.swift" "$APP/PageLayout.swift" \\
   -o "$RUNNER_TEMP/probe"
 "$RUNNER_TEMP/probe" tests/fixtures/calculus_p14.pdf pdfkit_calculus_p14.txt
 """

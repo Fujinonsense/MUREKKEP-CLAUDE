@@ -7,7 +7,7 @@ $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";
 $env:SDKROOT = [System.Environment]::GetEnvironmentVariable("SDKROOT", "User")
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $app = Join-Path $root "Murekkep.swiftpm"
-$files = @("MathEngine.swift", "ExactMath.swift", "PageMath.swift", "MathText.swift", "Questions.swift") | ForEach-Object { Join-Path $app $_ }
+$files = @("MathEngine.swift", "ExactMath.swift", "PageMath.swift", "MathText.swift", "Questions.swift", "PageLayout.swift") | ForEach-Object { Join-Path $app $_ }
 $out = Join-Path $env:TEMP "murekkep-mathcheck"
 New-Item -ItemType Directory -Force $out | Out-Null
 $exe = Join-Path $out "check.exe"

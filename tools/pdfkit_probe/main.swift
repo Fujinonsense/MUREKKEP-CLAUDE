@@ -31,28 +31,42 @@ func visible(_ s: String) -> String {
 print("===== PDFKit page.string (\(text.count) characters) =====")
 print(visible(text))
 // Every glyph's own tight box in page points (origin bottom-left), one per line: the UTF-16 code of
-// the character PDFKit finds at the box's centre (characterIndex(at:), in page.string's numbering),
-// then x, y, width, height to a tenth of a point. characterBounds(at:) is numbered in drawing
-// order, which is not page.string's, so the box is asked which character it is.
+// the character, then x, y, width, height to a tenth of a point. characterBounds(at:) and
+// characterIndex(at:) are numbered in an order of their own, so the character is read from a
+// selection of the box's middle, which PDFKit fills from the same text as page.string.
 let units = text as NSString
 var glyphs = ""
 var count = 0
-var seen = Set<Int>()
+var ambiguous = 0
 for j in 0..<page.numberOfCharacters {
     let r = page.characterBounds(at: j)
     guard r.width > 0, r.height > 0 else { continue }
-    let k = page.characterIndex(at: CGPoint(x: r.midX, y: r.midY))
-    guard k >= 0, k < units.length else { continue }
-    let unit = units.character(at: k)
-    guard unit != 0x20, unit != 0x0A else { continue }
-    seen.insert(k)
+    let middle = r.insetBy(dx: r.width * 0.3, dy: r.height * 0.3)
+    let s = (page.selection(for: middle)?.string ?? "").filter { !$0.isWhitespace }
+    guard let c = s.unicodeScalars.first else { continue }
+    if s.count > 1 { ambiguous += 1 }
     count += 1
-    glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", String(unit, radix: 16, uppercase: true), r.minX, r.minY, r.width, r.height)
+    glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", String(c.value, radix: 16, uppercase: true), r.minX, r.minY, r.width, r.height)
 }
 let printable = (0..<units.length).filter { units.character(at: $0) != 0x20 && units.character(at: $0) != 0x0A }.count
-print("===== Glyphs: \(count) boxes, \(seen.count) of \(printable) printable characters found =====")
+print("===== Glyphs: \(count) boxes for \(printable) printable characters, \(ambiguous) boxes with more than one =====")
 print(glyphs, terminator: "")
 try glyphs.write(toFile: args[2] + ".glyphs", atomically: true, encoding: .utf8)
+// The same page rebuilt from the glyph boxes (PageLayout), and the engine's answers on that text.
+var layoutGlyphs: [PageLayout.Glyph] = []
+for line in glyphs.split(separator: "\n") {
+    let f = line.split(separator: " ")
+    guard f.count == 6, let code = UInt32(f[1], radix: 16), let scalar = Unicode.Scalar(code),
+          let x = Double(f[2]), let y = Double(f[3]), let w = Double(f[4]), let h = Double(f[5]) else { continue }
+    layoutGlyphs.append(PageLayout.Glyph(char: Character(scalar), x: x, y: y, w: w, h: h))
+}
+let layout = PageLayout.text(layoutGlyphs) ?? ""
+print("===== Page rebuilt from the glyph boxes =====")
+print(layout)
+print("===== Questions on the rebuilt page and the engine's answers =====")
+for q in QuestionSplitter.split(MathText.pageForSolving(layout)) {
+    print("(\(q.number)) \(ExactMath.solve(q.stem)?.answer ?? "-")    <- \(q.stem.replacingOccurrences(of: "\n", with: "⏎"))")
+}
 print("===== Questions and the engine's answers =====")
 for q in QuestionSplitter.split(MathText.pageForSolving(text)) {
     let answer = ExactMath.solve(q.stem)?.answer ?? "-"
