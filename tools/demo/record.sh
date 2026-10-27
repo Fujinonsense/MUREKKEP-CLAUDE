@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The ad recordings (tools/demo): installs the DEMO build on a new iPad Pro simulator and films each
-# scene with the simulator's own screen recorder, at the iPad's full resolution.
+# The ad recordings (tools/demo): installs the DEMO build on a new iPad simulator and films each
+# scene with the simulator's own screen recorder (H.264), at the iPad's full resolution.
 # usage: record.sh <Murekkep.app> <out dir> <scene-lang>...   (say notes-en textpen-tr)
 # For each scene: <scene-lang>.mp4, <scene-lang>.json (the pen's track for the edit's zoom),
 # <scene-lang>.start (wall clock just before the launch) and <scene-lang>-end.png.
@@ -11,7 +11,7 @@ shift 2
 mkdir -p "$OUT"
 BUNDLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 
-# The newest iPadOS runtime and the largest iPad Pro it has.
+# The newest iPadOS runtime and an 11-inch iPad on it.
 read -r RUNTIME TYPE < <(python3 -c '
 import json, subprocess
 runtimes = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
@@ -20,12 +20,13 @@ ios.sort(key=lambda r: [int(v) for v in r["version"].split(".")])
 runtime = ios[-1]
 types = runtime.get("supportedDeviceTypes") or json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devicetypes", "-j"]))["devicetypes"]
 names = {t["name"]: t["identifier"] for t in types}
-for want in ["iPad Pro 13-inch (M5)", "iPad Pro 13-inch (M4)", "iPad Pro (12.9-inch) (6th generation)", "iPad Air 13-inch (M3)", "iPad Air 13-inch (M2)"]:
+# An 11-inch iPad: fewer pixels for the recorder to encode a second, so it keeps more frames.
+for want in ["iPad Air 11-inch (M3)", "iPad Air 11-inch (M2)", "iPad Pro 11-inch (M4)", "iPad (A16)", "iPad Pro 13-inch (M4)"]:
     if want in names:
         print(runtime["identifier"], names[want])
         break
 else:
-    ipads = sorted(n for n in names if n.startswith("iPad Pro"))
+    ipads = sorted(n for n in names if n.startswith("iPad"))
     print(runtime["identifier"], names[ipads[-1]])
 ')
 echo "Simulator: $TYPE on $RUNTIME"
@@ -48,15 +49,23 @@ run_scene() {
   xcrun simctl terminate "$UDID" "$BUNDLE" > /dev/null 2>&1 || true
   sleep 1
   if [ "$film" = "yes" ]; then
-    xcrun simctl io "$UDID" recordVideo --codec=hevc --force "$OUT/$name.mp4" 2> "$OUT/$name.rec.log" &
+    xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/$name.mp4" 2> "$OUT/$name.rec.log" &
     rec=$!
     for _ in $(seq 1 50); do
       if grep -q "Recording started" "$OUT/$name.rec.log" 2> /dev/null; then break; fi
       sleep 0.2
     done
   fi
+  # The scene's own launch arguments (its stretched timings), from its file in the app.
+  local extra=()
+  while IFS= read -r arg; do
+    if [ -n "$arg" ]; then extra+=("$arg"); fi
+  done < <(python3 -c '
+import json, sys
+print("\n".join(json.load(open(sys.argv[1])).get("launch", [])))' "$APP/DemoScene-$name.json")
   python3 -c 'import time; print(f"{time.time():.3f}")' > "$OUT/$name.start"
-  xcrun simctl launch "$UDID" "$BUNDLE" -DemoScene "$name" -AppleLanguages "($lang)" -AppleLocale "$locale" > /dev/null
+  xcrun simctl launch "$UDID" "$BUNDLE" -DemoScene "$name" -AppleLanguages "($lang)" -AppleLocale "$locale" \
+    ${extra[@]+"${extra[@]}"} > /dev/null
   for _ in $(seq 1 600); do
     if [ -f "$done" ]; then break; fi
     sleep 0.5

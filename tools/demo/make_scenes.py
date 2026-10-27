@@ -25,6 +25,11 @@ PREVIEWS = HERE / "previews"
 PAGE = (595.28, 841.89)
 RULE_TOP, RULE_STEP, MARGIN = 84.0, 28.0, 72.0
 RATE = 240.0  # Apple Pencil's samples a second
+# The simulator's recorder keeps up with only a few changes a second, so the scenes the pen carries
+# alone are filmed this much slower and sped up as much in the edit; the app's own timings (the text
+# pen's pause, ink drying, lava cooling) stretch alike through launch arguments, so the finished
+# video shows them at their real lengths. Ebru and the living ink run on their own clocks: pace 1.
+PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8}
 LANGS = ("en",)  # the app's language in the recordings
 
 
@@ -382,6 +387,7 @@ def rule(k):
 
 class Script:
     def __init__(self):
+        self.launch = []
         self.steps = []
         self.page_strokes = []  # (brush, colour, width, strokes) for the preview
         self.boards = {}        # name -> list of (colour index, strokes)
@@ -579,6 +585,19 @@ def scene_living(lang):
     return s
 
 
+def stretch(script, k):
+    """The scene k times slower: the pen's schedule and the waits; the samples keep their own
+    timestamps (`pace`), so the stroke builder sees a hand at its real speed."""
+    for st in script.steps:
+        if "seconds" in st:
+            st["seconds"] = round(st["seconds"] * k, 3)
+        if st["op"] == "write":
+            st["pace"] = k
+            st["strokes"] = [[[round(p[0] * k, 4), p[1], p[2], p[3]] for p in s] for s in st["strokes"]]
+    script.launch = ["-textPenDelay", f"{1.3 * k:.2f}", "-dryDuration", f"{4.0 * k:.2f}",
+                     "-lavaCoolDuration", f"{6.0 * k:.2f}"]
+
+
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
                 "ebru": scene_ebru, "living": scene_living}
 
@@ -634,14 +653,18 @@ def main():
     for lang in LANGS:
         for key, make in SCENE_MAKERS.items():
             script = make(lang)
+            pace = PACE.get(key, 1.0)
+            preview(f"{key}-{lang}", script)
+            if pace != 1.0:
+                stretch(script, pace)
             name = f"{key}-{lang}"
             (SCENES / f"DemoScene-{name}.json").write_text(
-                json.dumps({"steps": script.steps}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+                json.dumps({"pace": pace, "launch": script.launch, "steps": script.steps},
+                           ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             seconds = sum(st.get("seconds", 0) for st in script.steps) + sum(
                 max((s[-1][0] for s in st["strokes"]), default=0) for st in script.steps if "strokes" in st)
             total += seconds
-            preview(name, script)
-            print(f"{name}: {len(script.steps)} steps, about {seconds:.0f} s")
+            print(f"{name}: {len(script.steps)} steps, about {seconds:.0f} s filmed (pace {pace})")
     # The warm-up: every ink once, so the first recorded scene does not wait for shaders.
     warm = Script()
     warm.add("note", title="Warm-up", paper="plain", seconds=0.8)
@@ -651,7 +674,8 @@ def main():
         ts, _ = timed([[(60 + 50 * k, 100), (90 + 50 * k, 140)]], rng, xh=20, speed=3)
         warm.write(ts, brush, [0.2, 0.3, 0.6], 6)
     warm.add("wait", seconds=1.5)
-    (SCENES / "DemoScene-warmup.json").write_text(json.dumps({"steps": warm.steps}, separators=(",", ":")), encoding="utf-8")
+    (SCENES / "DemoScene-warmup.json").write_text(json.dumps({"pace": 1.0, "launch": [], "steps": warm.steps},
+                                                             separators=(",", ":")), encoding="utf-8")
     print(f"all scenes: about {total / 60:.1f} min")
 
 

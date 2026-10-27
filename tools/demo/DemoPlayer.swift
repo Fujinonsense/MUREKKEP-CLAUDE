@@ -46,6 +46,9 @@ private struct DemoStep: Decodable {
     var expanded: Bool?
     var name: String?
     var index: Int?
+    /// How much slower than a hand the strokes are played (the edit speeds them up as much); the
+    /// samples' own timestamps stay a hand's.
+    var pace: Double?
 }
 
 private struct DemoScene: Decodable {
@@ -152,9 +155,10 @@ private final class DemoPlayer {
     private func write(_ step: DemoStep) async {
         guard let canvas, let strokes = step.strokes else { return }
         let page = step.page ?? 0
+        let pace = max(step.pace ?? 1, 0.1)
         await play(strokes) { [weak self] phase, samples, start in
             let inputs = samples.map { s -> InputSample in
-                var input = InputSample(location: CGPoint(x: s.x, y: s.y), force: CGFloat(s.force), timestamp: start + s.t)
+                var input = InputSample(location: CGPoint(x: s.x, y: s.y), force: CGFloat(s.force), timestamp: start + s.t / pace)
                 input.isPencil = true
                 input.altitude = 0.95
                 input.azimuth = 0.8
@@ -257,7 +261,9 @@ private final class DemoPlayer {
     private func finish(error: String?) {
         if let error { print("Mürekkep demo: \(error)") }
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let out: [String: Any] = ["scene": name, "error": error ?? "", "track": track]
+        let screen = UIScreen.main
+        let out: [String: Any] = ["scene": name, "error": error ?? "", "track": track,
+                                  "screen": [Double(screen.bounds.width), Double(screen.bounds.height), Double(screen.scale)]]
         if let data = try? JSONSerialization.data(withJSONObject: out) {
             try? data.write(to: folder.appendingPathComponent("demo-done-\(name).json"))
         }
