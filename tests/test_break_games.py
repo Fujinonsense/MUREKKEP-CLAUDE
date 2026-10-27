@@ -110,8 +110,10 @@ def test_the_games_draw_with_the_pencil_keep_their_touches_and_pause():
     assert "context.scaleBy(x: scale, y: scale)" in flyer  # the world is drawn scaled to the field
     shooter = src("ShooterGame.swift")
     assert "TimelineView(.animation(paused: paused))" in shooter and "scenePhase != .active || !model.animating" in shooter
-    assert ".onChanged { value in model.updateAim(to: value.location) }" in shooter
-    assert ".onEnded { value in model.fire(at: value.location, now: Date()) }" in shooter
+    # A drag aims and its end shoots, unless it began on the well beside the pen: a tap there swaps the colours.
+    assert "if !model.inWell(value.startLocation) { model.updateAim(to: value.location) }" in shooter
+    assert re.search(r"if model\.inWell\(value\.startLocation\) \{\s*if model\.inWell\(value\.location\) \{ model\.swapLoaded\(\) \}\s*\} else \{\s*model\.fire\(at: value\.location, now: Date\(\)\)", shooter)
+    assert '.accessibilityAction(named: Text(Loc.t("Rengi değiştir"))) { model.swapLoaded() }' in shooter
     assert "if let guide = model.guide()" in shooter  # the dotted line
     sudoku = src("SudokuGame.swift")
     assert "TimelineView(.periodic(from: .now, by: 1))" in sudoku and "if scenePhase == .active { model.tick() }" in sudoku
@@ -236,6 +238,35 @@ def test_the_logic_is_foundation_only_and_checked():
                    "the comb pulls only along its axis", "undo stops a pattern and brings the tray back",
                    "just woken, it is exactly the drawing", "they turn round at the walls", "the creature eats every crumb",
                    "a ninth sends the oldest fading", "a poke startles the creature"):
+        assert needle in main, needle
+
+
+def test_the_levelled_games_grew():
+    # Renk patlat: the pen's colour swaps with the next, and a big pop earns an ink blot that bursts
+    # what it reaches; the blot is drawn as a splash, never as a bubble.
+    logic = src("ShooterLogic.swift")
+    assert "static let blot = -1" in logic and "static let blotPops = 6" in logic and "static let blotFalls = 4" in logic
+    assert "mutating func swapLoaded()" in logic and "(loaded, next) = (next, loaded)" in logic
+    assert "popped = grid.neighbours(of: landing).filter { cells[$0] != nil }" in logic
+    shooter = src("ShooterGame.swift")
+    assert "private func piece(_ c: inout GraphicsContext" in shooter and "private func blot(_ c: inout GraphicsContext" in shooter
+    assert "piece(&context, at: well, radius: grid.radius * 0.55, colour: model.next)" in shooter
+    assert "piece(&c, at: model.origin, radius: r, colour: model.loaded)" in shooter
+    assert ".sensoryFeedback(.impact(weight: .heavy, intensity: 0.7), trigger: model.blots)" in shooter
+    # Uçan damla: drifting gaps from level 5, the endless flight with its best, a page per stage.
+    flyer = src("FlyerLogic.swift")
+    assert "func driftedY(at time: TimeInterval) -> Double" in flyer and "let endless: Bool" in flyer
+    assert "init(size: CGSize, level: Int, difficulty: GameDifficulty, seed: UInt64, endless: Bool = false)" in flyer
+    assert "var speed: Double { endless ? settings.speed + min(70, 1.5 * Double(passed)) : settings.speed }" in flyer
+    game = src("FlyerGame.swift")
+    assert "FlyerPlay(level: 1, endless: true, difficulty: store[.flyer].difficulty, store: store)" in game
+    assert 'Loc.t("Sonsuz uçuş")' in game and 'Loc.t("Uçuş bitti")' in game and 'Loc.t("Yeni rekor!")' in game
+    assert "if phase == .failed { record = store.record(.flyer, score: model.passed, at: difficulty) }" in game
+    assert "private var page: Int { endless ? (model.passed / 15) % 3 : min(2, max(0, (level - 1) / 4)) }" in game
+    main = (TOOLS / "main.swift").read_text(encoding="utf-8")
+    for needle in ("from level 5 every third gap drifts", "drifting gaps move and stay on the page", "flyer endless: the autopilot flies on and on",
+                   "shooter: a swap trades the pen's colour for the next, free", "earns an ink blot as the next shot",
+                   "the blot bursts the bubbles round it"):
         assert needle in main, needle
 
 

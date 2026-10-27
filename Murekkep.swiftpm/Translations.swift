@@ -1429,5 +1429,9 @@ enum Translations {
         "Turkuaz": "Turquoise",
         "Macenta": "Magenta",
         "Kehribar": "Amber",
+        "Rengi değiştir": "Swap colour",
+        "Sonsuz uçuş": "Endless flight",
+        "Bayrak yok; uçtukça hızlanır.": "No flag; it speeds up as you fly.",
+        "Uçuş bitti": "Flight over",
     ]
 }

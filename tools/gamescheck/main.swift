@@ -398,13 +398,16 @@ func dropAt(_ y: Double) -> FlyerWorld {
 check(!dropAt(150).collides(pencil), "flyer: the drop in the gap is safe")
 check(dropAt(230).collides(pencil), "flyer: the drop on the pencil is hit")
 check(!dropAt(230).collides(FlyerObstacle(id: 1, x: world.dropX + 60, gapY: 150, gap: 120, kind: .pencilAbove)), "flyer: a pencil elsewhere does not touch")
-// An autopilot that taps when below the next gap's centre flies every level at every difficulty with all three drops.
+// An autopilot that taps when below the next gap's centre (where a drifting gap will be when the
+// drop gets there, as a player watching its swing would aim) flies every level at every difficulty
+// with all three drops.
 func autopilot(level: Int, difficulty: GameDifficulty) -> FlyerWorld {
     var w = FlyerWorld(size: sky, level: level, difficulty: difficulty, seed: UInt64(level * 31 + 1))
     w.flap()
     var steps = 0
     while w.phase == .flying && steps < 20_000 {
-        let target = w.obstacles.first { !$0.passed && $0.x + FlyerObstacle.width / 2 >= w.dropX - FlyerWorld.dropRadius }?.gapY ?? Double(sky.height) / 2
+        let coming = w.obstacles.first { !$0.passed && $0.x + FlyerObstacle.width / 2 >= w.dropX - FlyerWorld.dropRadius }
+        let target = coming.map { $0.drift > 0 ? $0.driftedY(at: w.elapsed + max(0, ($0.x - w.dropX) / w.speed)) : $0.gapY } ?? Double(sky.height) / 2
         if w.dropY > target + 10 && w.velocity > 0 { w.flap() }
         w.advance(by: 1.0 / 60)
         steps += 1
@@ -427,6 +430,52 @@ var late = flown
 late.flap()
 late.advance(by: 0.1)
 check(late == flown, "flyer: nothing moves after the flag")
+
+// From level 5 every third gap drifts, from level 9 every other; never off the page.
+let calmLevel = FlyerWorld(size: sky, level: 4, difficulty: .hard, seed: 3)
+let driftLevel = FlyerWorld(size: sky, level: 5, difficulty: .hard, seed: 3)
+let wildLevel = FlyerWorld(size: sky, level: 9, difficulty: .hard, seed: 3)
+check(calmLevel.obstacles.allSatisfy { $0.drift == 0 }, "flyer: up to level 4 the gaps stand still")
+check(driftLevel.obstacles.filter { $0.drift > 0 }.map(\.id).allSatisfy { $0 % 3 == 2 } && driftLevel.obstacles.filter { $0.drift > 0 }.count >= 3,
+      "flyer: from level 5 every third gap drifts")
+check(wildLevel.obstacles.filter { $0.drift > 0 }.map(\.id).allSatisfy { $0 % 2 == 1 } && wildLevel.obstacles.filter { $0.drift > 0 }.count >= 6,
+      "flyer: from level 9 every other")
+var swinging = FlyerWorld(size: sky, level: 12, difficulty: .hard, seed: 8)
+swinging.flap()
+var gapsOnPage = true
+var gapsMoved = false
+let firstGaps = swinging.obstacles.map(\.gapY)
+for _ in 0..<(60 * 6) {
+    if swinging.dropY > Double(sky.height) / 2 && swinging.velocity > 0 { swinging.flap() }
+    swinging.advance(by: 1.0 / 60)
+    if swinging.obstacles.contains(where: { $0.top < FlyerWorld.margin - 1e-9 || $0.bottom > Double(sky.height) - FlyerWorld.margin + 1e-9 }) { gapsOnPage = false }
+}
+gapsMoved = zip(firstGaps, swinging.obstacles.map(\.gapY)).contains { abs($0 - $1) > 1 }
+check(gapsOnPage && gapsMoved, "flyer: drifting gaps move and stay on the page")
+
+// The endless flight: no flag, a handful of pencils at a time, faster and narrower as it goes.
+var endlessWorld = FlyerWorld(size: sky, level: 1, difficulty: .medium, seed: 21, endless: true)
+check(endlessWorld.goal == 0 && endlessWorld.obstacles.count == 4 && endlessWorld.flagX == .infinity && endlessWorld.progress == 0,
+      "flyer endless: no flag, four pencils to begin with")
+endlessWorld.flap()
+var mostAtOnce = 0
+var endlessOnPage = true
+var endlessSteps = 0
+while endlessWorld.phase == .flying && endlessSteps < 60 * 240 {
+    let target = endlessWorld.obstacles.first { !$0.passed && $0.x + FlyerObstacle.width / 2 >= endlessWorld.dropX - FlyerWorld.dropRadius }?.gapY ?? Double(sky.height) / 2
+    if endlessWorld.dropY > target + 10 && endlessWorld.velocity > 0 { endlessWorld.flap() }
+    endlessWorld.advance(by: 1.0 / 60)
+    mostAtOnce = max(mostAtOnce, endlessWorld.obstacles.count)
+    if endlessWorld.obstacles.contains(where: { $0.top < FlyerWorld.margin - 1e-9 || $0.bottom > Double(sky.height) - FlyerWorld.margin + 1e-9 }) { endlessOnPage = false }
+    endlessSteps += 1
+}
+check(endlessWorld.passed >= 60 && endlessWorld.phase != .complete, "flyer endless: the autopilot flies on and on (\(endlessWorld.passed) pencils, \(endlessWorld.phase))")
+check(mostAtOnce <= 8 && endlessOnPage, "flyer endless: a handful of pencils at a time, every gap on the page (\(mostAtOnce) at most)")
+check(endlessWorld.speed >= endlessWorld.settings.speed + 60, "flyer endless: it speeds up (\(endlessWorld.speed))")
+check(endlessWorld.obstacles.contains { $0.drift > 0 } && (endlessWorld.obstacles.map(\.gap).min() ?? 0) < endlessWorld.settings.gap,
+      "flyer endless: later gaps drift and narrow")
+check(FlyerWorld(size: sky, level: 1, difficulty: .medium, seed: 21, endless: true) == FlyerWorld(size: sky, level: 1, difficulty: .medium, seed: 21, endless: true),
+      "flyer endless: the same seed, the same flight")
 
 // MARK: Renk patlat (HexGrid, ShooterLevels, ShooterBoard)
 
@@ -498,6 +547,33 @@ var deep = ShooterBoard(level: ShooterLevel(rows: ["R........", "R.......", "R..
 _ = deep.shoot(from: CGPoint(x: 16, y: 11 * hex.rowHeight), direction: CGPoint(x: 0, y: -1), grid: hex)
 check(deep.phase == .lost, "shooter: a bubble at the dead row loses the level")
 check(ShooterBoard(level: first, difficulty: .medium, seed: 9) == ShooterBoard(level: first, difficulty: .medium, seed: 9), "shooter: the same seed, the same board")
+
+// The colour in the pen swaps with the next one, free.
+var swapping = ShooterBoard(level: first, difficulty: .medium, seed: 4)
+let pair = (swapping.loaded, swapping.next)
+swapping.swapLoaded()
+check(swapping.loaded == pair.1 && swapping.next == pair.0 && swapping.shotsLeft == ShooterBoard.shots(first.shots, .medium),
+      "shooter: a swap trades the pen's colour for the next, free")
+// A big pop earns an ink blot as the next shot; the blot bursts the bubbles round where it lands.
+let blotLevel = ShooterLevel(rows: ["GBGBGBGBG", "BGBGBGBG", "RRRRRRRRR"], shots: 12)
+var inkBlotSeed: UInt64 = 1
+while ShooterBoard(level: blotLevel, difficulty: .easy, seed: inkBlotSeed).loaded != 0 { inkBlotSeed += 1 }
+var blasting = ShooterBoard(level: blotLevel, difficulty: .easy, seed: inkBlotSeed)
+let bigPop = blasting.shoot(from: launch, direction: CGPoint(x: 0, y: -1), grid: hex)
+check((bigPop?.popped.count ?? 0) >= ShooterBoard.blotPops && blasting.next == ShooterBoard.blot && blasting.blotsEarned == 1,
+      "shooter: popping \(bigPop?.popped.count ?? 0) earns an ink blot as the next shot")
+blasting.swapLoaded()
+check(blasting.loaded == ShooterBoard.blot, "shooter: the blot can be swapped into the pen")
+let cellsBefore = blasting.cells
+let burst = blasting.shoot(from: launch, direction: CGPoint(x: 0, y: -1), grid: hex)
+let burstCells = burst?.popped ?? []
+let burstColours = Set(burstCells.compactMap { cellsBefore[$0] })
+check(burst != nil && burstCells.count == 2 && burstColours.count == 2 && blasting.cells[burst!.landed] == nil
+      && blasting.cells.count == cellsBefore.count - burstCells.count - burst!.fell.count,
+      "shooter: the blot bursts the bubbles round it, whatever their colours, and stays nowhere (\(burstCells))")
+check(Set(burstCells).isSubset(of: Set(hex.neighbours(of: burst!.landed))) && blasting.blotsEarned == 1 && blasting.next != ShooterBoard.blot,
+      "shooter: only the cells beside it, and a blot earns no blot")
+check(!blasting.coloursOnBoard.contains(ShooterBoard.blot), "shooter: the blot is never on the board")
 
 // MARK: Sudoku (Sudoku, SudokuSave)
 

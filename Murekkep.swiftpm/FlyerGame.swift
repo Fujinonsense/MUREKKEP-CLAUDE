@@ -1,22 +1,67 @@
 import SwiftUI
 import UIKit
 
-/// Uçan damla: the level map, then a level in flight.
+/// Uçan damla: the level map with the endless flight under it, then a level or the endless flight.
 struct FlyerGame: View {
     @ObservedObject var store: GameProgressStore
     @State private var level: Int?
+    @State private var endless = false
 
     var body: some View {
         if let level {
-            FlyerPlay(level: level, difficulty: store[.flyer].difficulty, store: store) {
+            FlyerPlay(level: level, endless: false, difficulty: store[.flyer].difficulty, store: store) {
                 self.level = nil
             } onNext: {
                 self.level = min(FlyerWorld.levels, level + 1)
             }
             .id(level)
+        } else if endless {
+            FlyerPlay(level: 1, endless: true, difficulty: store[.flyer].difficulty, store: store) {
+                endless = false
+            } onNext: {}
         } else {
-            LevelMap(game: .flyer, store: store) { level = $0 }
+            VStack(spacing: 10) {
+                LevelMap(game: .flyer, store: store) { level = $0 }
+                endlessTile
+            }
         }
+    }
+
+    /// The endless flight, with its best at the chosen difficulty.
+    private var endlessTile: some View {
+        let kept = store[.flyer]
+        let best = kept.best[kept.difficulty]
+        return Button {
+            endless = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "infinity")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: 36, height: 36)
+                    .background(Theme.ink.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(Loc.t("Sonsuz uçuş"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(best.map { Loc.t("En iyi: {0}", "\($0)") } ?? Loc.t("Bayrak yok; uçtukça hızlanır."))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .glassCard(radius: 14)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(Loc.t("Sonsuz uçuş"))
     }
 }
 
@@ -29,16 +74,17 @@ final class FlyerModel: ObservableObject {
     private(set) var world: FlyerWorld?
     private var last: Date?
 
-    /// Builds the level for the first size the field has; the drawing scales to later sizes.
-    func start(size: CGSize, level: Int, difficulty: GameDifficulty) {
+    /// Builds the level (or the endless flight) for the first size the field has; the drawing scales
+    /// to later sizes.
+    func start(size: CGSize, level: Int, difficulty: GameDifficulty, endless: Bool) {
         guard world == nil, size.width > 0, size.height > 0 else { return }
-        world = FlyerWorld(size: size, level: level, difficulty: difficulty, seed: Self.seed())
+        world = FlyerWorld(size: size, level: level, difficulty: difficulty, seed: Self.seed(), endless: endless)
         sync()
     }
 
-    func restart(level: Int, difficulty: GameDifficulty) {
+    func restart(level: Int, difficulty: GameDifficulty, endless: Bool) {
         guard let size = world?.size else { return }
-        world = FlyerWorld(size: size, level: level, difficulty: difficulty, seed: Self.seed())
+        world = FlyerWorld(size: size, level: level, difficulty: difficulty, seed: Self.seed(), endless: endless)
         last = nil
         sync()
     }
@@ -129,6 +175,8 @@ final class FlapKeyController: UIViewController {
 /// rulers to the flag.
 private struct FlyerPlay: View {
     let level: Int
+    /// The endless flight instead of a level: no flag, its score the pencils passed.
+    let endless: Bool
     let difficulty: GameDifficulty
     @ObservedObject var store: GameProgressStore
     let onLevels: () -> Void
@@ -137,21 +185,38 @@ private struct FlyerPlay: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var touching = false
+    /// The endless flight just ended on a new best.
+    @State private var record = false
 
     private var over: Bool { model.phase == .complete || model.phase == .failed }
     private var paused: Bool { scenePhase != .active || over }
     private var goal: Int { FlyerWorld.goal(level: level) }
+    /// The page under the flight: ruled up to level 4, squared from level 5, a night page from
+    /// level 9; the endless flight turns the page every fifteen pencils.
+    private var page: Int { endless ? (model.passed / 15) % 3 : min(2, max(0, (level - 1) / 4)) }
+    private static let nightPaper = Color(red: 0.07, green: 0.10, blue: 0.20)
+    /// The drop's and the flag's ink on the night page.
+    private static let nightInk = Color(red: 0.55, green: 0.80, blue: 0.97)
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 10) {
-                Text(Loc.t("Seviye {0}", "\(level)"))
-                    .font(.subheadline.weight(.semibold))
-                ProgressView(value: Double(model.passed), total: Double(goal))
-                    .tint(Theme.ink)
-                Text("\(model.passed)/\(goal)")
-                    .font(.system(.caption, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                if endless {
+                    Label(Loc.t("Sonsuz uçuş"), systemImage: "infinity")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 4)
+                    Text("\(model.passed)")
+                        .font(.system(.subheadline, design: .rounded).monospacedDigit().weight(.semibold))
+                        .accessibilityLabel(Loc.t("{0} engel geçildi", "\(model.passed)"))
+                } else {
+                    Text(Loc.t("Seviye {0}", "\(level)"))
+                        .font(.subheadline.weight(.semibold))
+                    ProgressView(value: Double(model.passed), total: Double(goal))
+                        .tint(Theme.ink)
+                    Text("\(model.passed)/\(goal)")
+                        .font(.system(.caption, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
                 HStack(spacing: 2) {
                     ForEach(0..<FlyerWorld.lives, id: \.self) { i in
                         Image(systemName: i < model.lives ? "drop.fill" : "drop")
@@ -172,7 +237,7 @@ private struct FlyerPlay: View {
                         }
                     }
                     .onChange(of: geo.size, initial: true) { _, size in
-                        model.start(size: size, level: level, difficulty: difficulty)
+                        model.start(size: size, level: level, difficulty: difficulty, endless: endless)
                     }
                 }
                 .contentShape(Rectangle())
@@ -200,9 +265,19 @@ private struct FlyerPlay: View {
                         .transition(.opacity)
                 }
                 if over {
-                    LevelResultCard(won: model.phase == .complete, stars: model.world?.stars ?? 0,
-                                    detail: Loc.t("{0} engel geçildi", "\(model.passed)"), hasNext: level < FlyerWorld.levels,
-                                    onLevels: onLevels, onRetry: { model.restart(level: level, difficulty: difficulty) }, onNext: onNext)
+                    if endless {
+                        ResultCard(title: Loc.t("Uçuş bitti"), lines: [Loc.t("{0} engel geçildi", "\(model.passed)")],
+                                   highlight: record ? Loc.t("Yeni rekor!") : store[.flyer].best[difficulty].map { Loc.t("En iyi: {0}", "\($0)") },
+                                   actions: [ResultAction(Loc.t("Seviyeler"), action: onLevels),
+                                             ResultAction(Loc.t("Tekrar"), prominent: true) {
+                                                 record = false
+                                                 model.restart(level: level, difficulty: difficulty, endless: true)
+                                             }])
+                    } else {
+                        LevelResultCard(won: model.phase == .complete, stars: model.world?.stars ?? 0,
+                                        detail: Loc.t("{0} engel geçildi", "\(model.passed)"), hasNext: level < FlyerWorld.levels,
+                                        onLevels: onLevels, onRetry: { model.restart(level: level, difficulty: difficulty, endless: false) }, onNext: onNext)
+                    }
                 }
             }
             .gameBoard()
@@ -213,7 +288,10 @@ private struct FlyerPlay: View {
             if stopped { model.pause() }
         }
         .onChange(of: model.phase) { _, phase in
-            if phase == .complete {
+            if endless {
+                // The endless flight keeps its best (pencils passed) at each difficulty.
+                if phase == .failed { record = store.record(.flyer, score: model.passed, at: difficulty) }
+            } else if phase == .complete {
                 store.complete(.flyer, level: level, stars: model.world?.stars ?? 0)
             } else if phase == .failed {
                 store.complete(.flyer, level: level, stars: 0)
@@ -233,15 +311,37 @@ private struct FlyerPlay: View {
         context.scaleBy(x: scale, y: scale)
         let width = Double(w.size.width)
         let height = Double(w.size.height)
-        // Ruled paper, and a red margin line scrolling by.
+        let night = page == 2
+        if night {
+            context.fill(Path(CGRect(x: 0, y: 0, width: width, height: height)), with: .color(Self.nightPaper))
+            // A few stars, drifting by slower than anything else.
+            for i in 0..<16 {
+                let span = width + 20
+                let raw = (Double(i) * 73.7 - w.distance * 0.08).truncatingRemainder(dividingBy: span)
+                let sx = (raw < 0 ? raw + span : raw) - 10
+                let sy = (Double(i) * 41.3).truncatingRemainder(dividingBy: height * 0.7) + 6
+                let r = i % 3 == 0 ? 1.4 : 0.9
+                context.fill(Path(ellipseIn: CGRect(x: sx - r, y: sy - r, width: 2 * r, height: 2 * r)), with: .color(Color.white.opacity(0.55)))
+            }
+        }
+        // Ruled paper (squared from level 5, its columns scrolling by), and a red margin line.
+        let line = page == 0 ? 28.0 : 20.0
         var rules = Path()
-        var y = 28.0
+        var y = line
         while y < height {
             rules.move(to: CGPoint(x: 0, y: y))
             rules.addLine(to: CGPoint(x: width, y: y))
-            y += 28
+            y += line
         }
-        context.stroke(rules, with: .color(Theme.rule), lineWidth: 0.7)
+        if page > 0 {
+            var x = line - (w.distance * 0.6).truncatingRemainder(dividingBy: line)
+            while x < width {
+                rules.move(to: CGPoint(x: x, y: 0))
+                rules.addLine(to: CGPoint(x: x, y: height))
+                x += line
+            }
+        }
+        context.stroke(rules, with: .color(night ? Color.white.opacity(0.07) : Theme.rule), lineWidth: 0.7)
         let marginSpan = width + 400
         var marginX = (260 - w.distance * 0.6).truncatingRemainder(dividingBy: marginSpan)
         if marginX < 0 { marginX += marginSpan }
@@ -255,7 +355,7 @@ private struct FlyerPlay: View {
             let wrapped = (base - w.distance * (0.25 + 0.1 * Double(i))).truncatingRemainder(dividingBy: span)
             let cx = (wrapped < 0 ? wrapped + span : wrapped) - 70
             let cloud = CGRect(x: cx, y: 24 + Double(i) * 34, width: 70 + Double(i) * 12, height: 22)
-            context.fill(Path(ellipseIn: cloud), with: .color(Theme.ink.opacity(0.05)))
+            context.fill(Path(ellipseIn: cloud), with: .color(night ? Color.white.opacity(0.06) : Theme.ink.opacity(0.05)))
         }
         for obstacle in w.obstacles where obstacle.x > -40 && obstacle.x < width + 40 {
             switch obstacle.kind {
@@ -268,9 +368,9 @@ private struct FlyerPlay: View {
             }
         }
         if w.flagX < width + 20 {
-            flag(&context, x: w.flagX, height: height)
+            flag(&context, x: w.flagX, height: height, colour: night ? Self.nightInk : Theme.ink)
         }
-        drop(&context, w, time: time)
+        drop(&context, w, time: time, colour: night ? Self.nightInk : Theme.ink)
     }
 
     /// A pencil from `base` (the floor or the top edge) to its tip at `tip`.
@@ -321,7 +421,7 @@ private struct FlyerPlay: View {
         c.stroke(ticks, with: .color(.black.opacity(0.35)), lineWidth: 0.8)
     }
 
-    private func flag(_ c: inout GraphicsContext, x: Double, height: Double) {
+    private func flag(_ c: inout GraphicsContext, x: Double, height: Double, colour: Color) {
         let poleTop = height * 0.35
         var pole = Path()
         pole.move(to: CGPoint(x: x, y: height))
@@ -332,11 +432,11 @@ private struct FlyerPlay: View {
         cloth.addLine(to: CGPoint(x: x + 30, y: poleTop + 10))
         cloth.addLine(to: CGPoint(x: x, y: poleTop + 20))
         cloth.closeSubpath()
-        c.fill(cloth, with: .color(Theme.ink))
+        c.fill(cloth, with: .color(colour))
     }
 
     /// The ink drop, tilted by its speed, blinking while it is safe after a hit.
-    private func drop(_ c: inout GraphicsContext, _ w: FlyerWorld, time: Date) {
+    private func drop(_ c: inout GraphicsContext, _ w: FlyerWorld, time: Date, colour: Color) {
         let r = FlyerWorld.dropRadius
         let bob = w.phase == .ready ? sin(time.timeIntervalSinceReferenceDate * 2.2) * 5 : 0
         let tilt = max(-0.5, min(0.9, w.velocity / 420))
@@ -350,7 +450,7 @@ private struct FlyerPlay: View {
         shape.addLine(to: CGPoint(x: -r * 2.1, y: -r * 0.2))
         shape.addLine(to: CGPoint(x: -r * 0.3, y: r * 0.8))
         shape.closeSubpath()
-        ink.fill(shape, with: .color(Theme.ink))
+        ink.fill(shape, with: .color(colour))
         ink.fill(Path(ellipseIn: CGRect(x: -r * 0.55, y: -r * 0.65, width: r * 0.5, height: r * 0.32)), with: .color(.white.opacity(0.6)))
     }
 }

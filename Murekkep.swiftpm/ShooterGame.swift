@@ -61,6 +61,9 @@ final class ShooterModel: ObservableObject {
     @Published private(set) var next = 0
     @Published private(set) var phase: ShooterBoard.Phase = .playing
     @Published private(set) var animating = false
+    /// Ink blots earned and colours swapped, for the taps that answer them.
+    @Published private(set) var blots = 0
+    @Published private(set) var swaps = 0
     /// The aim while the pencil drags: a unit direction, pointing up.
     @Published private(set) var aim: CGPoint?
     private(set) var board: ShooterBoard?
@@ -111,6 +114,30 @@ final class ShooterModel: ObservableObject {
 
     func toBoard(_ point: CGPoint) -> CGPoint {
         CGPoint(x: point.x - boardOffset.x, y: point.y - boardOffset.y)
+    }
+
+    /// The small well beside the pen that holds the next colour, in the board's points.
+    var well: (centre: CGPoint, radius: Double) {
+        let radius = grid.radius * 0.85
+        return (CGPoint(x: grid.width - radius - 2, y: Double(origin.y)), radius)
+    }
+
+    /// True for a point of the field on the well (with room for a finger around it).
+    func inWell(_ point: CGPoint) -> Bool {
+        let p = toBoard(point)
+        let dx = Double(p.x) - Double(well.centre.x)
+        let dy = Double(p.y) - Double(well.centre.y)
+        let reach = well.radius + 10
+        return dx * dx + dy * dy <= reach * reach
+    }
+
+    /// The colour in the pen and the next change places.
+    func swapLoaded() {
+        guard var playing = board, playing.phase == .playing, flight == nil else { return }
+        playing.swapLoaded()
+        board = playing
+        swaps += 1
+        sync()
     }
 
     func updateAim(to point: CGPoint) {
@@ -206,6 +233,7 @@ final class ShooterModel: ObservableObject {
         loaded = board.loaded
         next = board.next
         phase = board.phase
+        blots = board.blotsEarned
     }
 
     private static func length(_ path: [CGPoint]) -> Double {
@@ -223,7 +251,8 @@ final class ShooterModel: ObservableObject {
 
 /// One level: drag the pencil to aim (a dotted line shows the way, one bounce off a wall, a ring
 /// where the bubble will rest), let go to shoot; three of a colour pop, and bubbles left hanging
-/// on nothing fall for more.
+/// on nothing fall for more. A tap on the well beside the pen swaps the colours; a big pop earns
+/// an ink blot.
 private struct ShooterPlay: View {
     let level: Int
     let difficulty: GameDifficulty
@@ -270,10 +299,19 @@ private struct ShooterPlay: View {
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                        .onChanged { value in model.updateAim(to: value.location) }
-                        .onEnded { value in model.fire(at: value.location, now: Date()) }
+                        .onChanged { value in
+                            if !model.inWell(value.startLocation) { model.updateAim(to: value.location) }
+                        }
+                        .onEnded { value in
+                            if model.inWell(value.startLocation) {
+                                if model.inWell(value.location) { model.swapLoaded() }
+                            } else {
+                                model.fire(at: value.location, now: Date())
+                            }
+                        }
                 )
                 .accessibilityLabel(Loc.t("Balon tahtası: sürükleyerek nişan al, bırakınca atar"))
+                .accessibilityAction(named: Text(Loc.t("Rengi değiştir"))) { model.swapLoaded() }
                 if over {
                     LevelResultCard(won: model.phase == .won, stars: model.stars,
                                     detail: Loc.t("Puan: {0}", "\(model.score)") + (model.phase == .won ? "" : " · " + Loc.t("Balonlar kaldı")),
@@ -290,6 +328,8 @@ private struct ShooterPlay: View {
         }
         .sensoryFeedback(.impact(weight: .light, intensity: 0.5), trigger: model.score)
         .sensoryFeedback(.success, trigger: over) { _, done in done && model.phase == .won }
+        .sensoryFeedback(.impact(weight: .heavy, intensity: 0.7), trigger: model.blots)
+        .sensoryFeedback(.selection, trigger: model.swaps)
     }
 
     private func draw(_ context: inout GraphicsContext, size: CGSize, now: Date) {
@@ -333,7 +373,7 @@ private struct ShooterPlay: View {
             }
         }
         if let flight = model.flight {
-            bubble(&context, at: model.position(of: flight, now: now), radius: grid.radius, colour: flight.colour)
+            piece(&context, at: model.position(of: flight, now: now), radius: grid.radius, colour: flight.colour)
         }
         if let guide = model.guide() {
             var dots = Path()
@@ -356,18 +396,54 @@ private struct ShooterPlay: View {
             context.fill(dots, with: .color(Theme.ink.opacity(0.45)))
             let rest = grid.centre(guide.landing)
             let ring = CGRect(x: Double(rest.x) - grid.radius + 1, y: Double(rest.y) - grid.radius + 1, width: 2 * grid.radius - 2, height: 2 * grid.radius - 2)
-            context.stroke(Path(ellipseIn: ring), with: .color(GameCorner.ink(model.loaded).opacity(0.7)), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+            let ringColour = model.loaded == ShooterBoard.blot ? Color.primary : GameCorner.ink(model.loaded)
+            context.stroke(Path(ellipseIn: ring), with: .color(ringColour.opacity(0.7)), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
         }
         pen(&context)
-        // The colour after this one, in a small well beside the pen.
-        let wellRadius = grid.radius * 0.85
-        let well = CGPoint(x: grid.width - wellRadius - 2, y: Double(model.origin.y))
+        // The colour after this one, in a small well beside the pen; a tap there swaps the two.
+        let wellRadius = model.well.radius
+        let well = model.well.centre
         context.fill(Path(ellipseIn: CGRect(x: Double(well.x) - wellRadius, y: Double(well.y) - wellRadius, width: 2 * wellRadius, height: 2 * wellRadius)),
                      with: .color(Color.primary.opacity(0.05)))
         context.stroke(Path(ellipseIn: CGRect(x: Double(well.x) - wellRadius, y: Double(well.y) - wellRadius, width: 2 * wellRadius, height: 2 * wellRadius)),
                        with: .color(Theme.hairline), lineWidth: 0.8)
-        bubble(&context, at: well, radius: grid.radius * 0.55, colour: model.next)
+        piece(&context, at: well, radius: grid.radius * 0.55, colour: model.next)
         context.draw(Text(Loc.t("Sonraki")).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: well.x, y: Double(well.y) - wellRadius - 7), anchor: .center)
+        context.draw(Text(Image(systemName: "arrow.left.arrow.right")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary),
+                     at: CGPoint(x: Double(well.x) - wellRadius - 9, y: Double(well.y)), anchor: .center)
+    }
+
+    /// A bubble, or the ink blot.
+    private func piece(_ c: inout GraphicsContext, at centre: CGPoint, radius: Double, colour: Int) {
+        if colour == ShooterBoard.blot {
+            blot(&c, at: centre, radius: radius)
+        } else {
+            bubble(&c, at: centre, radius: radius, colour: colour)
+        }
+    }
+
+    /// The ink blot: an uneven splash of near-black ink with a light rim (so it shows on night
+    /// paper too), two flecks beside it and a wet glint.
+    private func blot(_ c: inout GraphicsContext, at centre: CGPoint, radius: Double) {
+        guard radius > 0.5 else { return }
+        var splash = Path()
+        for i in 0...48 {
+            let a = Double(i) / 48 * 2 * .pi
+            let r = radius * (0.9 + 0.12 * sin(9 * a) + 0.05 * sin(3 * a + 1))
+            let p = CGPoint(x: Double(centre.x) + r * cos(a), y: Double(centre.y) + r * sin(a))
+            if i == 0 { splash.move(to: p) } else { splash.addLine(to: p) }
+        }
+        splash.closeSubpath()
+        let ink = Color(red: 0.08, green: 0.1, blue: 0.2)
+        c.fill(splash, with: .color(ink))
+        c.stroke(splash, with: .color(.white.opacity(0.5)), lineWidth: 1)
+        for (dx, dy, size) in [(1.05, -0.75, 0.22), (-1.0, 0.8, 0.16)] {
+            let fleck = CGRect(x: Double(centre.x) + dx * radius - size * radius / 2, y: Double(centre.y) + dy * radius - size * radius / 2,
+                               width: size * radius, height: size * radius)
+            c.fill(Path(ellipseIn: fleck), with: .color(ink))
+        }
+        let glint = CGRect(x: Double(centre.x) - radius * 0.5, y: Double(centre.y) - radius * 0.55, width: radius * 0.38, height: radius * 0.22)
+        c.fill(Path(ellipseIn: glint), with: .color(.white.opacity(0.5)))
     }
 
     /// A glossy ink bubble: a gradient lit from the top left, a darker rim, a glint.
@@ -404,7 +480,7 @@ private struct ShooterPlay: View {
         turned.fill(nib, with: .color(Theme.ink.opacity(0.55)))
         turned.fill(Path(CGRect(x: -r * 0.75, y: r * 1.2, width: r * 1.5, height: r * 0.25)), with: .color(Theme.ink.opacity(0.35)))
         if model.flight == nil, model.phase == .playing {
-            bubble(&c, at: model.origin, radius: r, colour: model.loaded)
+            piece(&c, at: model.origin, radius: r, colour: model.loaded)
         }
     }
 }

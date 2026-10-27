@@ -2,8 +2,9 @@ import Foundation
 
 // Renk patlat, without its screen (checked in tools/gamescheck): ink bubbles hang from the top of
 // the page in a honeycomb; one is shot from the pen at the bottom, three of a colour together pop,
-// and whatever is left hanging on nothing falls. Hand-made levels, a limited number of shots.
-// Foundation only.
+// and whatever is left hanging on nothing falls. Hand-made levels, a limited number of shots; the
+// colour in the pen can be swapped with the next, and a big pop earns an ink blot that bursts
+// whatever it reaches. Foundation only.
 
 /// A place in the honeycomb: `row` from the top, `col` from the left. Odd rows stand half a cell
 /// to the right and hold one cell fewer.
@@ -124,14 +125,21 @@ struct ShooterBoard: Equatable {
     static let fallPoints = 20
     /// Steps of the flight, points.
     static let flightStep = 3.0
+    /// The ink blot: not a colour but a shot of its own. A shot that pops `blotPops` bubbles or
+    /// drops `blotFalls` earns one as the next shot; where it lands it bursts every bubble around it.
+    static let blot = -1
+    static let blotPops = 6
+    static let blotFalls = 4
 
     private(set) var cells: [ShooterCell: Int]
     private(set) var shotsLeft: Int
     private(set) var score = 0
     private(set) var phase: Phase = .playing
-    /// The colour in the pen and the one after it.
+    /// The colour in the pen and the one after it (either may be the blot).
     private(set) var loaded: Int
     private(set) var next: Int
+    /// Blots earned in the level.
+    private(set) var blotsEarned = 0
     /// How many colours the level uses at this difficulty.
     let colours: Int
     /// The points the level's bubbles are worth popped: the measure of the stars.
@@ -233,24 +241,40 @@ struct ShooterBoard: Equatable {
         return (path, grid.nearestFreeCell(to: stop, taken: Set(cells.keys)))
     }
 
-    /// Shoots the loaded colour; nil when the level is over or the aim points down.
+    /// Swaps the colour in the pen with the next one, as often as liked.
+    mutating func swapLoaded() {
+        guard phase == .playing else { return }
+        (loaded, next) = (next, loaded)
+    }
+
+    /// Shoots the loaded colour; nil when the level is over or the aim points down. A blot bursts
+    /// the bubbles around the cell it reaches and stays nowhere.
     mutating func shoot(from origin: CGPoint, direction: CGPoint, grid: HexGrid) -> ShotResult? {
         guard phase == .playing, direction.y < 0 else { return nil }
         let colour = loaded
         let (path, landing) = flight(from: origin, direction: direction, grid: grid)
-        cells[landing] = colour
         shotsLeft -= 1
         var popped: [ShooterCell] = []
-        let cluster = sameColour(from: landing, grid: grid)
-        if cluster.count >= Self.popSize {
-            popped = cluster.sorted { ($0.row, $0.col) < ($1.row, $1.col) }
+        if colour == Self.blot {
+            popped = grid.neighbours(of: landing).filter { cells[$0] != nil }.sorted { ($0.row, $0.col) < ($1.row, $1.col) }
             for cell in popped { cells[cell] = nil }
+        } else {
+            cells[landing] = colour
+            let cluster = sameColour(from: landing, grid: grid)
+            if cluster.count >= Self.popSize {
+                popped = cluster.sorted { ($0.row, $0.col) < ($1.row, $1.col) }
+                for cell in popped { cells[cell] = nil }
+            }
         }
         let fell = popped.isEmpty ? [] : fallOrphans(grid: grid)
         let scored = popped.count * Self.popPoints + fell.count * Self.fallPoints
         score += scored
         loaded = next
         next = pick()
+        if colour != Self.blot, popped.count >= Self.blotPops || fell.count >= Self.blotFalls, loaded != Self.blot {
+            next = Self.blot
+            blotsEarned += 1
+        }
         if cells.isEmpty {
             phase = .won
         } else if cells.keys.contains(where: { $0.row >= Self.deadRow }) || shotsLeft <= 0 {
