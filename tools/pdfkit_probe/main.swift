@@ -30,21 +30,30 @@ func visible(_ s: String) -> String {
 
 print("===== PDFKit page.string (\(text.count) characters) =====")
 print(visible(text))
-// Every character of page.string with its box in page points (origin bottom-left), one per line: the
-// UTF-16 code in hex, then x, y, width, height to a tenth of a point. Read through a one-character
-// selection, which keeps text and box together (characterBounds(at:) runs out of step with string).
+// Every character of page.string with its own tight box in page points (origin bottom-left), one per
+// line: the UTF-16 code in hex, then x, y, width, height to a tenth of a point; "-" for a line break.
+// characterBounds(at:) counts no line breaks, so its index runs behind string's by the breaks before
+// it; a one-character selection (whose box is the whole line's) checks that every x agrees.
 let units = text as NSString
 print("===== Glyphs (\(units.length)) =====")
 var glyphs = ""
+var breaks = 0
+var outOfStep = 0
 for i in 0..<units.length {
-    let code = String(units.character(at: i), radix: 16, uppercase: true)
-    guard let sel = page.selection(for: NSRange(location: i, length: 1)), let s = sel.string, !s.isEmpty else {
-        glyphs += "G \(code) - - - -\n"
+    let unit = units.character(at: i)
+    let code = String(unit, radix: 16, uppercase: true)
+    if unit == 0x0A {
+        breaks += 1
+        glyphs += "G A - - - -\n"
         continue
     }
-    let r = sel.bounds(for: page)
+    let r = page.characterBounds(at: i - breaks)
+    if let sel = page.selection(for: NSRange(location: i, length: 1)), abs(sel.bounds(for: page).minX - r.minX) > 2 {
+        outOfStep += 1
+    }
     glyphs += String(format: "G %@ %.1f %.1f %.1f %.1f\n", code, r.minX, r.minY, r.width, r.height)
 }
+print("===== Boxes out of step with the text: \(outOfStep) =====")
 print(glyphs, terminator: "")
 try glyphs.write(toFile: args[2] + ".glyphs", atomically: true, encoding: .utf8)
 print("===== Questions and the engine's answers =====")
