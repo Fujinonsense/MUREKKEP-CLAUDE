@@ -372,7 +372,15 @@ final class InkRenderer {
             return RenderResult(animationFPS: 0, visiblePages: visible)
         }
         let semaphore = inflight
+        #if DEMO
+        // The simulator's check of scrolling (tools/demo) notes each frame's GPU time.
+        cb.addCompletedHandler { done in
+            DemoFrames.shared.gpu((done.gpuEndTime - done.gpuStartTime) * 1000)
+            semaphore.signal()
+        }
+        #else
         cb.addCompletedHandler { _ in semaphore.signal() }
+        #endif
 
         let texW = drawable.texture.width
         let texH = drawable.texture.height

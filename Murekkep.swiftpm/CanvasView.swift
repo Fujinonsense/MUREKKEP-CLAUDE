@@ -76,6 +76,8 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     private var rotationStartAngle: CGFloat = 0
     private var lastRotationSnap: Int?
     private var lastViewportChange: CFTimeInterval = 0
+    /// The last scroll or zoom event of any kind, a page jump by code included (see `viewportMoving`).
+    private var lastScrollEvent: CFTimeInterval = 0
 
     /// The tool the current touch started with. A squeeze in the middle of a stroke changes
     /// `model.tool`, but the stroke under the pencil still finishes as it began.
@@ -684,15 +686,28 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         if scrollView.isTracking || scrollView.isDecelerating || scrollView.isZooming {
             lastViewportChange = CACurrentMediaTime()
         }
+        lastScrollEvent = CACurrentMediaTime()
         setNeedsRender()
         scheduleDetail()
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         lastViewportChange = CACurrentMediaTime()
+        lastScrollEvent = CACurrentMediaTime()
         centerContent()
         setNeedsRender()
         scheduleDetail()
+    }
+
+    /// True while the page moves: under a finger, settling after a flick, zooming, or scrolled by code
+    /// (a page jump) a moment ago.
+    private var viewportMoving: Bool {
+        #if DEMO
+        // The simulator's check of scrolling (tools/demo, scene scroll3dold): build 235's loop.
+        if DemoStage.oldScrollLoop { return false }
+        #endif
+        return scrollView.isTracking || scrollView.isDecelerating || scrollView.isZooming
+            || CACurrentMediaTime() - lastScrollEvent < 0.12
     }
 
     // MARK: - Rendering
@@ -700,6 +715,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
     func setNeedsRender() {
         if metalView.isPaused {
             metalView.setNeedsDisplay()
+        } else if viewportMoving {
+            // The loop that keeps moving ink alive runs at the ink's rate (30 fps for galaxy, gold,
+            // ice…) and does not hear these requests: while the page moves it takes the display's rate.
+            refreshLoop()
         }
         zoomPanel?.requestRender()
     }
@@ -724,6 +743,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
             renderer.cancelReservation()
             return
         }
+        #if DEMO
+        let frameStart = CACurrentMediaTime()
+        defer { DemoFrames.shared.frame(cpu: (CACurrentMediaTime() - frameStart) * 1000) }
+        #endif
         let (origin, zoom) = docTransform
         let input = RenderInput(docOriginInView: origin,
                                 zoom: zoom,
@@ -743,10 +766,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         zoomPanel?.requestRender()
     }
 
-    /// Runs the display loop while ink on screen moves (sea, lava, grass, drying ink); otherwise the
-    /// view redraws only when something changes. While the pencil writes on an animated page, the
-    /// loop runs at the display's full rate (120 Hz on ProMotion) so the line keeps up with the tip.
-    /// Low Power Mode, the battery saver setting and a hot device cap the rate.
+    /// Runs the display loop while ink on screen moves (sea, lava, grass, galaxy, drying ink);
+    /// otherwise the view redraws only when something changes. The loop runs at the display's full
+    /// rate (120 Hz on ProMotion): the moving ink, the line under the tip, a page that scrolls. Low
+    /// Power Mode, the battery saver setting and a hot device bring it down.
     private func refreshLoop() {
         guard requestedFPS > 0, isOnScreen else {
             stopLoop()
@@ -756,10 +779,15 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         let info = ProcessInfo.processInfo
         let hot = info.thermalState == .serious || info.thermalState == .critical
         let saver = model.settings.batterySaver || info.isLowPowerModeEnabled || hot
-        let inking = activeStroke != nil || eraserPage != nil
-        var fps = inking ? maxFPS : requestedFPS
+        let fast = activeStroke != nil || eraserPage != nil || viewportMoving
+        // At the ink's own 30 fps (galaxy, gold, ice…) the whole canvas trailed a scroll in steps.
+        var fps = maxFPS
+        #if DEMO
+        // The simulator's check of scrolling (tools/demo, scene scroll3dold): build 235's rates.
+        if DemoStage.oldScrollLoop { fps = fast ? maxFPS : requestedFPS }
+        #endif
         if saver {
-            fps = min(fps, inking ? 60 : 30)
+            fps = min(fps, fast ? 60 : 30)
         }
         fps = min(fps, maxFPS)
         if metalView.isPaused || metalView.preferredFramesPerSecond != fps {
@@ -2559,6 +2587,21 @@ extension CanvasView {
 /// Recording builds only (the DEMO flag; never the App Store edition): a scripted pencil goes the way
 /// a real one does, through the stroke builder, the live stroke and the page (see DemoPlayer).
 extension CanvasView {
+    /// The check of scrolling: moves the page down by `points` over `seconds`, a screen frame at a
+    /// time, the way a finger's scroll reaches the scroll view.
+    func demoScroll(by points: CGFloat, over seconds: Double) {
+        let from = scrollView.contentOffset
+        let start = CACurrentMediaTime()
+        DemoTicker { [weak self] in
+            guard let self else { return false }
+            let f = min(1, (CACurrentMediaTime() - start) / max(seconds, 0.01))
+            var offset = CGPoint(x: from.x, y: from.y + points * CGFloat(f))
+            self.clamp(&offset)
+            self.scrollView.contentOffset = offset
+            return f < 1
+        }.start()
+    }
+
     func demoPenDown(page: Int, _ sample: InputSample) {
         guard model.layout.pageRects.indices.contains(page) else { return }
         gestureTool = model.tool
