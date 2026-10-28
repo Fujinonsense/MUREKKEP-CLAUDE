@@ -138,6 +138,10 @@ final class PageGPU {
     var flowers: MTLBuffer?
     var highlighterIndexCount = 0
     var inkIndexCount = 0
+    /// The raised inks' triangles once more (indices into `vertices`, `shadowIndexCount` in use): only
+    /// they cast shadows, so the shadow passes skip every other stroke.
+    var shadowIndices: MTLBuffer?
+    var shadowIndexCount = 0
     var inkRuns: [InkRun] = []
     var highlighterStrokes = 0
     var inkStrokes = 0
@@ -185,8 +189,6 @@ final class InkRenderer {
     private var activeBuffers: [MTLBuffer?] = [nil, nil, nil]
     private var activeDecorBuffers: [MTLBuffer?] = [nil, nil, nil]
     private var frameIndex = 0
-    /// A page's meshes were rebuilt during this frame (then no extra prewarming).
-    private var rebuiltThisFrame = false
     /// Counts `render` calls; the live stroke's mesh is built once per call.
     private var renderCount = 0
     private var preparedActive: (frame: Int, buffer: MTLBuffer, first: Int, count: Int)?
@@ -200,6 +202,13 @@ final class InkRenderer {
     private var pageCache: [Int: PageGPU] = [:]
     /// Grass geometry per stroke id (strokes never change in place).
     private var grassCache: [Int: GrassField] = [:]
+    /// Neighbouring pages' meshes are made here, off the main thread (see `prewarm`).
+    private let meshQueue = DispatchQueue(label: "murekkep.ink.meshes", qos: .userInitiated)
+    /// Pages whose meshes `meshQueue` is making, with their cache entry's version when it started
+    /// (-1: none).
+    private var building: [Int: Int] = [:]
+    /// Bumped when the cache is thrown away, so meshes made for the old one are not kept.
+    private var cacheGeneration = 0
     /// Asks the view for a new frame (a sharper sticker texture is ready).
     var onStickerUpdate: (() -> Void)?
     /// Pictures on pages; built on first use.
@@ -490,10 +499,7 @@ final class InkRenderer {
         cb.commit()
         frameIndex = (frameIndex + 1) % 3
         trimCache(visible: visible)
-        if !rebuiltThisFrame {
-            prewarm(around: visible, pages: pages)
-        }
-        rebuiltThisFrame = false
+        prewarm(around: visible, pages: pages)
         return RenderResult(animationFPS: animationFPS, visiblePages: visible)
     }
 
@@ -568,20 +574,45 @@ final class InkRenderer {
         return try? device.makeRenderPipelineState(descriptor: d)
     }
 
-    /// Builds the ink of the page just above or below the screen during a quiet frame, so scrolling
-    /// onto it does not stall while its strokes are turned into meshes.
+    /// Turns the ink of the pages just above and below the screen into meshes off the main thread,
+    /// so scrolling onto them does not stall: a dense page takes 5-15 ms, two frames at 120 Hz. A page
+    /// that reaches the screen first is built there and then (`cached`); the late meshes are dropped.
     private func prewarm(around visible: [Int], pages: [PageInk]) {
         guard let first = visible.first, let last = visible.last else { return }
         for index in [last + 1, first - 1, last + 2] where pages.indices.contains(index) {
             let page = pages[index]
-            guard !page.strokes.isEmpty, pageCache[index]?.version != page.version else { continue }
-            _ = cached(index: index, page: page)
-            return
+            let current = pageCache[index]
+            guard !page.strokes.isEmpty, current?.version != page.version, building[index] == nil else { continue }
+            #if DEMO
+            // The check of dense pages (tools/demo, scene scrolldenseold): build 235 made them here, one a frame.
+            if DemoStage.oldInkMesh {
+                _ = cached(index: index, page: page)
+                return
+            }
+            #endif
+            let started = current?.version ?? -1
+            building[index] = started
+            let generation = cacheGeneration
+            let previous = current?.ribbons ?? [:]
+            let grass = grassCache
+            meshQueue.async { [weak self, device, epoch] in
+                let gpu = PageGPU()
+                let used = Self.fill(gpu, from: page, previous: previous, grass: grass, epoch: epoch, device: device)
+                DispatchQueue.main.async {
+                    guard let self, generation == self.cacheGeneration else { return }
+                    self.building[index] = nil
+                    guard (self.pageCache[index]?.version ?? -1) == started else { return }
+                    self.pageCache[index] = gpu
+                    self.keepGrass(used)
+                }
+            }
         }
     }
 
     func invalidateAll() {
         pageCache.removeAll()
+        building.removeAll()
+        cacheGeneration += 1
         layerKey = nil
     }
 
@@ -688,9 +719,9 @@ final class InkRenderer {
             }
             if gpu.inkIndexCount > 0, part != .underInk {
                 var su = SegUniforms(pageOrigin: origin, pointOffset: 0, orderOffset: UInt32(h + 1), depthStep: step)
-                if gpu.has3D {
+                if gpu.has3D, let shadows = shadowTriangles(gpu, ink: indices) {
                     drawOnce(enc, pipeline: shadowPipeline, frame: &frame, seg: &su,
-                             indices: indices, first: gpu.highlighterIndexCount, count: gpu.inkIndexCount)
+                             indices: shadows.buffer, first: shadows.first, count: shadows.count)
                 }
                 su.orderOffset = UInt32(i + 2)
                 for run in gpu.inkRuns {
@@ -739,6 +770,18 @@ final class InkRenderer {
         if a.brush.growsFlowers {
             drawActiveGrass(enc, frame: &frame, seg: &su, stroke: a)
         }
+    }
+
+    /// The triangles the shadow passes draw: the raised inks' own list. The shader drops every other
+    /// stroke's shadow anyway, so this draws the same pixels with far fewer vertices on a page of
+    /// ordinary writing with a few 3D words.
+    private func shadowTriangles(_ gpu: PageGPU, ink indices: MTLBuffer) -> (buffer: MTLBuffer, first: Int, count: Int)? {
+        #if DEMO
+        // The check of dense pages (tools/demo, scene scrolldenseold): build 235 shaded all ink.
+        if DemoStage.oldInkMesh { return (indices, gpu.highlighterIndexCount, gpu.inkIndexCount) }
+        #endif
+        guard let shadows = gpu.shadowIndices else { return nil }
+        return (shadows, 0, gpu.shadowIndexCount)
     }
 
     /// The live stroke's mesh in this frame's buffer, built once per frame (the layered path draws
@@ -913,10 +956,8 @@ final class InkRenderer {
                 if !append(added, to: gpu, version: page.version) {
                     rebuild(gpu, from: page)
                 }
-                rebuiltThisFrame = true
             case .rebuild:
                 rebuild(gpu, from: page)
-                rebuiltThisFrame = true
             }
         }
         return gpu
@@ -928,6 +969,7 @@ final class InkRenderer {
         guard !added.isEmpty, let vb = gpu.vertices, let ib = gpu.indices, let sb = gpu.strokes else { return false }
         var verts: [RibbonVertexGPU] = []
         var idxs: [UInt32] = []
+        var shadowIdxs: [UInt32] = []
         var infos: [StrokeGPU] = []
         var runs = gpu.inkRuns
         let firstInfo = gpu.highlighterStrokes + gpu.inkStrokes
@@ -951,6 +993,9 @@ final class InkRenderer {
             for index in mesh.indices {
                 idxs.append(index + base)
             }
+            if s.brush.castsShadow {
+                shadowIdxs.append(contentsOf: idxs[(start - firstIndex)...])
+            }
             let count = mesh.indices.count
             if count > 0 {
                 if !s.brush.blendsOnce, let last = runs.last, !last.blendsOnce, last.first + last.count == start {
@@ -966,6 +1011,16 @@ final class InkRenderer {
         guard vb.length >= (gpu.vertexCount + verts.count) * vStride,
               ib.length >= (firstIndex + idxs.count) * iStride,
               sb.length >= (firstInfo + infos.count) * sStride else { return false }
+        // The page's first raised ink gets a shadow list of its own.
+        var newShadows: MTLBuffer?
+        if !shadowIdxs.isEmpty {
+            if let shb = gpu.shadowIndices {
+                guard shb.length >= (gpu.shadowIndexCount + shadowIdxs.count) * iStride else { return false }
+            } else {
+                guard gpu.shadowIndexCount == 0, let fresh = Self.roomyBuffer(shadowIdxs, device: device) else { return false }
+                newShadows = fresh
+            }
+        }
         verts.withUnsafeBytes { raw in
             if let base = raw.baseAddress {
                 vb.contents().advanced(by: gpu.vertexCount * vStride).copyMemory(from: base, byteCount: raw.count)
@@ -981,6 +1036,16 @@ final class InkRenderer {
                 sb.contents().advanced(by: firstInfo * sStride).copyMemory(from: base, byteCount: raw.count)
             }
         }
+        if let fresh = newShadows {
+            gpu.shadowIndices = fresh
+        } else if let shb = gpu.shadowIndices {
+            shadowIdxs.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    shb.contents().advanced(by: gpu.shadowIndexCount * iStride).copyMemory(from: base, byteCount: raw.count)
+                }
+            }
+        }
+        gpu.shadowIndexCount += shadowIdxs.count
         for (id, mesh) in meshes {
             gpu.ribbons[id] = mesh
             gpu.order.append(id)
@@ -1011,7 +1076,7 @@ final class InkRenderer {
     }
 
     /// A shared buffer with half as much room again, so the next strokes can be appended in place.
-    private func roomyBuffer<T>(_ items: [T]) -> MTLBuffer? {
+    private static func roomyBuffer<T>(_ items: [T], device: MTLDevice) -> MTLBuffer? {
         guard !items.isEmpty else { return nil }
         return items.withUnsafeBytes { raw -> MTLBuffer? in
             guard let base = raw.baseAddress,
@@ -1022,8 +1087,25 @@ final class InkRenderer {
     }
 
     private func rebuild(_ gpu: PageGPU, from page: PageInk) {
+        keepGrass(Self.fill(gpu, from: page, previous: gpu.ribbons, grass: grassCache, epoch: epoch, device: device))
+    }
+
+    /// Keeps the grass of a page's strokes for its next rebuild; past 600 strokes only that page's.
+    private func keepGrass(_ used: [Int: GrassField]) {
+        grassCache.merge(used) { kept, _ in kept }
+        if grassCache.count > 600 {
+            grassCache = grassCache.filter { used[$0.key] != nil }
+        }
+    }
+
+    /// Makes `gpu` draw `page`: every stroke's mesh (reusing `previous` ones), the shared buffers and
+    /// what the frame rate depends on. Touches nothing but its arguments, so it runs on any thread;
+    /// returns the grass of the page's strokes (from `grass`, or grown now).
+    private static func fill(_ gpu: PageGPU, from page: PageInk, previous: [Int: RibbonMesh],
+                             grass: [Int: GrassField], epoch: Double, device: MTLDevice) -> [Int: GrassField] {
         var verts: [RibbonVertexGPU] = []
         var idxs: [UInt32] = []
+        var shadowIdxs: [UInt32] = []
         var infos: [StrokeGPU] = []
         let pointTotal = page.strokes.reduce(0) { $0 + $1.points.count }
         verts.reserveCapacity(pointTotal * 6 + page.strokes.count * 24)
@@ -1036,7 +1118,6 @@ final class InkRenderer {
         var latestLava = -Double.infinity
         var bladeRecords: [BladeGPU] = []
         var flowerRecords: [FlowerGPU] = []
-        let previous = gpu.ribbons
         var ribbons: [Int: RibbonMesh] = [:]
         ribbons.reserveCapacity(page.strokes.count)
 
@@ -1070,7 +1151,7 @@ final class InkRenderer {
         }
         let hlIndices = idxs.count
         let hlStrokes = infos.count
-        var usedGrass = Set<Int>()
+        var usedGrass: [Int: GrassField] = [:]
         var runs: [InkRun] = []
         for s in page.strokes where !s.brush.isHighlighter {
             let start = idxs.count
@@ -1084,7 +1165,10 @@ final class InkRenderer {
                     runs.append(InkRun(first: start, count: count, blendsOnce: s.brush.blendsOnce))
                 }
             }
-            if s.brush.castsShadow { has3D = true }
+            if s.brush.castsShadow {
+                has3D = true
+                shadowIdxs.append(contentsOf: idxs[start...])
+            }
             if s.brush.isAnimated { hasAnimated = true }
             if s.brush.isFastAnimated { hasWave = true }
             switch s.brush {
@@ -1094,14 +1178,9 @@ final class InkRenderer {
                 latestWet = max(latestWet, s.birth)
             case .grass, .bloom:
                 latestGrass = max(latestGrass, s.birth)
-                usedGrass.insert(s.id)
-                let field: GrassField
-                if let cached = grassCache[s.id] {
-                    field = cached
-                } else {
-                    field = GrassGenerator.field(for: s.brush, points: s.points, width: s.width, color: s.color, seed: s.seed)
-                    grassCache[s.id] = field
-                }
+                let field = grass[s.id]
+                    ?? GrassGenerator.field(for: s.brush, points: s.points, width: s.width, color: s.color, seed: s.seed)
+                usedGrass[s.id] = field
                 let end = Float(s.birth - epoch)
                 let duration = Float(max(0, min(s.duration, 60)))
                 Self.appendGPU(field, stroke: idx, color: s.color, birthStart: end - duration, duration: duration,
@@ -1110,13 +1189,12 @@ final class InkRenderer {
                 break
             }
         }
-        if grassCache.count > 600 {
-            grassCache = grassCache.filter { usedGrass.contains($0.key) }
-        }
 
-        gpu.vertices = roomyBuffer(verts)
-        gpu.indices = roomyBuffer(idxs)
-        gpu.strokes = roomyBuffer(infos)
+        gpu.vertices = roomyBuffer(verts, device: device)
+        gpu.indices = roomyBuffer(idxs, device: device)
+        gpu.strokes = roomyBuffer(infos, device: device)
+        gpu.shadowIndices = roomyBuffer(shadowIdxs, device: device)
+        gpu.shadowIndexCount = shadowIdxs.count
         gpu.vertexCount = verts.count
         gpu.order = page.strokes.filter(\.brush.isHighlighter).map(\.id) + page.strokes.filter { !$0.brush.isHighlighter }.map(\.id)
         gpu.blades = bladeRecords.isEmpty ? nil : bladeRecords.withUnsafeBytes { raw in
@@ -1140,6 +1218,7 @@ final class InkRenderer {
         gpu.latestLavaBirth = latestLava
         gpu.ribbons = ribbons
         gpu.version = page.version
+        return usedGrass
     }
 
     private func trimCache(visible: [Int]) {
