@@ -90,6 +90,23 @@ struct DotsGame: View {
         .sensoryFeedback(.success, trigger: wonRounds)
         .sensoryFeedback(.selection, trigger: board.lines.count) { old, new in new > old }
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.6), trigger: board.owners.count) { old, new in new > old }
+        #if DEMO
+        // The ad recordings (tools/demo): the player's line, as a careful player chooses it (a box to
+        // take, else a line that gives no box away); the iPad answers as it always does.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.dotsMove)) { _ in
+            guard !board.isOver, board.turn == .you else { return }
+            let free = board.freeEdges
+            let safe = free.filter { !board.opens($0) }
+            if let edge = free.first(where: { board.closes($0) > 0 }) ?? safe.randomElement() ?? free.randomElement() {
+                play(edge)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.gameLevel)) { note in
+            if let raw = note.object as? String, let level = GameDifficulty(rawValue: raw) {
+                store.setDifficulty(level, for: .dots)
+            }
+        }
+        #endif
     }
 
     private var status: String {

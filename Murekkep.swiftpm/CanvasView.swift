@@ -2587,10 +2587,14 @@ extension CanvasView {
         builder = b
         active.points = b.preview(predicted: [])
         activeStroke = active
+        if DemoStage.shared.holds, let last = samples.last {
+            demoTrackHold(demoWindowPoint(page: active.page, last.location))
+        }
         setNeedsRender()
     }
 
     func demoPenUp(_ samples: [InputSample]) {
+        cancelHold()
         guard var b = builder, let active = activeStroke else { return }
         for s in samples {
             b.add(s)
@@ -2604,11 +2608,65 @@ extension CanvasView {
                                 birth: now, seed: active.seed, points: points,
                                 duration: max(0, now - active.startTime))
             model.addStroke(stroke, toPage: active.page)
-            if gestureTool == .textPen {
+            // As a lifted pencil does (touchEnded): a held text-pen drawing stays a drawing, a snapped
+            // shape keeps its handles, and a recognized drawing offers its pictures.
+            let isSymbol = b.editable != nil || pendingSketch != nil || snappedTitle != nil
+            if gestureTool == .textPen && !isSymbol {
                 model.queueTextStroke(stroke.id, page: active.page)
+            } else if let shape = b.editable {
+                model.startShapeEdit(page: active.page, strokeID: stroke.id, shape: shape)
+            }
+            if let sketch = pendingSketch, let tip = points.last {
+                let ids = sketch.others.union([stroke.id])
+                var box = CGRect.null
+                for s in model.strokes(on: active.page) where ids.contains(s.id) {
+                    box = box.union(CGRect(ink: s.bounds))
+                }
+                let o = pageOrigin(active.page)
+                let location = zoomContainer.convert(CGPoint(x: o.x + CGFloat(tip.x), y: o.y + CGFloat(tip.y)), to: self)
+                if !box.isNull {
+                    model.suggestion = SketchSuggestion(kind: sketch.kind, alternate: sketch.alternate, page: active.page,
+                                                        strokeIDs: ids, bounds: box, location: location)
+                }
             }
         }
+        pendingSketch = nil
         endGestureState()
+    }
+
+    /// The pencil resting in a recording: the same wait as a resting pencil (trackHold), with the
+    /// window point of the scripted pencil instead of a touch.
+    private func demoTrackHold(_ point: CGPoint) {
+        guard model.settings.straightLine, let b = builder, !b.isStraight, pendingSketch == nil else { return }
+        if let anchor = holdAnchor, hypot(point.x - anchor.x, point.y - anchor.y) < 4 {
+            return
+        }
+        holdAnchor = point
+        holdWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.demoHoldFired()
+        }
+        holdWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: work)
+    }
+
+    /// holdFired without its touch: a recognized drawing waits for the lift with its pictures,
+    /// anything else that looks like a shape becomes one.
+    private func demoHoldFired() {
+        guard var b = builder, var active = activeStroke else { return }
+        let path = b.drawnPath
+        if model.settings.sketchSuggestions, let sketch = recognizeSketch(path, page: active.page) {
+            pendingSketch = sketch
+            showHint(Loc.t("{0} · kaldırınca seçenekler", "\(sketch.kind.title)"), near: path.last, page: active.page)
+            return
+        }
+        guard let title = b.snapToShape() else { return }
+        builder = b
+        active.points = b.preview(predicted: [])
+        activeStroke = active
+        snappedTitle = title
+        showHint(b.shapeAdjustment == nil ? title : Loc.t("{0} · kalemi kaydır: boyut ve yön", "\(title)"), near: path.last, page: active.page)
+        setNeedsRender()
     }
 
     /// Where a page point is in the window, for the recording's pen track.

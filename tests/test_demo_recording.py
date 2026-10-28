@@ -72,7 +72,7 @@ def test_scenes_use_only_steps_the_player_knows():
     games = {g.strip() for g in re.search(r"case ([\w, ]+)\n", enum).group(1).split(",")}
     for path in SCENES:
         steps = json.loads(path.read_text(encoding="utf-8"))["steps"]
-        assert steps[0]["op"] == "note", path.name
+        assert steps[0]["op"] in ("note", "photos"), path.name
         for step in steps:
             assert step["op"] in known, f"{path.name}: {step['op']}"
             if step["op"] == "game":
@@ -167,6 +167,48 @@ def test_the_solution_check_counts_its_mistakes_in_both_languages():
     assert "mistake(s)" not in source
     assert '"Bir yerde hata var."' in source and '"There is 1 mistake."' in source
     assert '"There are \\(wrong) mistakes."' in source and '"\\(wrong) yerde hata var."' in source
+
+
+def test_the_smart_pen_search_and_game_scenes_use_the_apps_own_paths():
+    """Second phase: a held drawing goes through the canvas's own hold (the same 0.55 s wait and the
+    same recognizers), the photo through the app's photo import, the games' moves through their own
+    boards (the iPad's replies are its own), and the hooks stay in the DEMO build."""
+    player = (DEMO / "DemoPlayer.swift").read_text(encoding="utf-8")
+    known = set(re.findall(r'case "([a-z.]+)":', player))
+    assert {"suggest.pick", "angle", "photos", "library", "search", "open.hit", "game.level", "dots.move",
+            "xox.move"} <= known
+    assert "store.importPhotos(" in player and "applySuggestion(sticker:" in player
+    canvas = (APP / "CanvasView.swift").read_text(encoding="utf-8")
+    demo = canvas.split("#if DEMO")[-1]
+    assert "0.55" in demo and "recognizeSketch(" in demo and "snapToShape()" in demo
+    assert "model.suggestion = SketchSuggestion(" in demo
+    for name, hook in (("DotsGame.swift", "DemoStage.dotsMove"), ("XOXGame.swift", "DemoStage.xoxMove"),
+                       ("LibraryPanes.swift", "DemoStage.openHit"), ("LibraryView.swift", "DemoStage.search")):
+        assert hook in (APP / name).read_text(encoding="utf-8"), name
+    for path in SCENES:
+        steps = json.loads(path.read_text(encoding="utf-8"))["steps"]
+        for i, step in enumerate(steps):
+            if step.get("hold"):
+                assert step["op"] == "write"
+                for stroke in step["strokes"]:
+                    # The rest at the end: the last sample comes well after the 0.55 s the canvas waits.
+                    assert stroke[-1][0] - stroke[-2][0] >= 0.8 and stroke[-1][1:3] == stroke[-2][1:3], path.name
+            if step["op"] == "photos":
+                import base64
+                assert base64.b64decode(step["image"])[:2] == b"\xff\xd8", "a JPEG"
+            if step["op"] == "game.level":
+                assert step["name"] in {"easy", "medium", "hard"}
+
+
+def test_the_photographed_worksheet_is_checked_by_the_math_engine():
+    """The worksheet photo holds labels and calculations only, one of them wrong."""
+    scenes = _make_scenes()
+    lines = ["Worksheet 4"] + [f"{q} {a}" for q, a in scenes.WORKSHEET] + ["3x + 4 = 25", "x = 7", "Ödev"]
+    for line in lines:
+        assert not _is_prose(line), line
+    wrong = [f"{q} {a}" for q, a in scenes.WORKSHEET if eval(q.rstrip("= ")) != int(a)]
+    assert wrong == ["7 + 8 = 16"]
+    assert "1" not in "".join(q for q, _ in scenes.WORKSHEET) + "3x + 4 = 25", "EMS Tech's 1 reads as an l"
 
 
 def test_the_fonts_come_with_their_licence():

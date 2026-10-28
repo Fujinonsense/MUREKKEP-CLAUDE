@@ -1,6 +1,11 @@
 # The scenes the next demo-kayit run films (tools/demo/record.sh). Filmed 2026-10-28 at pace 1.8:
-# notes-en textpen-en inks-en, then ebru-en living-en; textpen-en again with the galaxy ink.
-# Next: the assistant's math engine (Check my solution, Solve) and Convert to text in 3D inks.
-check-en
-solve-en
-convert-en
+# notes-en textpen-en inks-en, then ebru-en living-en; textpen-en again with the galaxy ink;
+# check-en solve-en convert-en (runs 6ae21232 and 6ae218e0, the second one right).
+# Next, the second phase (not filmed yet): the smart pen, a photographed worksheet, the handwriting
+# search, kare kapmaca and XOX against the iPad, the text pen on a turned page.
+shapes-en
+photo-en
+search-en
+dots-en
+tilt-en
+xox-en

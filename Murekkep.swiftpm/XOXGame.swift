@@ -93,6 +93,22 @@ struct XOXGame: View {
         }
         .sensoryFeedback(.success, trigger: wins)
         .sensoryFeedback(.selection, trigger: game.cells.compactMap { $0 }.count)
+        #if DEMO
+        // The ad recordings (tools/demo): the player's X where a careful player puts it (Orta's rule: a
+        // win, a block, else a good cell); the iPad answers as it always does.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.xoxMove)) { _ in
+            guard !game.isOver, game.turn == Self.human else { return }
+            var random = GameRandom()
+            guard let cell = game.move(for: Self.human, difficulty: .medium, rng: &random) else { return }
+            place(cell)
+            if !game.isOver { pendingReply += 1 }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.gameLevel)) { note in
+            if let raw = note.object as? String, let level = GameDifficulty(rawValue: raw) {
+                store.setDifficulty(level, for: .xox)
+            }
+        }
+        #endif
     }
 
     private var status: String {

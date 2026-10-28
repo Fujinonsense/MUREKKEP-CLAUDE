@@ -167,6 +167,13 @@ struct LibraryView: View {
             .onReceive(NotificationCenter.default.publisher(for: DemoStage.openNote)) { note in
                 if let id = note.object as? UUID { path = [id] }
             }
+            // They go back to the library and type into its search field.
+            .onReceive(NotificationCenter.default.publisher(for: DemoStage.library)) { _ in
+                path = []
+            }
+            .onReceive(NotificationCenter.default.publisher(for: DemoStage.search)) { note in
+                query = note.object as? String ?? ""
+            }
             .task { await DemoStage.shared.begin(store: store, settings: settings) }
             #endif
             .confirmationDialog(Loc.t("PDF ya da fotoğraf ekle"), isPresented: $askImportSource, titleVisibility: .visible) {

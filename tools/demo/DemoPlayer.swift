@@ -17,16 +17,26 @@ final class DemoStage {
     static let pickLayer = Notification.Name("DemoStage.pickLayer")
     static let pickGame = Notification.Name("DemoStage.pickGame")
     static let assistantPanel = Notification.Name("DemoStage.assistantPanel")
+    static let library = Notification.Name("DemoStage.library")
+    static let search = Notification.Name("DemoStage.search")
+    static let openHit = Notification.Name("DemoStage.openHit")
+    static let gameLevel = Notification.Name("DemoStage.gameLevel")
+    static let dotsMove = Notification.Name("DemoStage.dotsMove")
+    static let xoxMove = Notification.Name("DemoStage.xoxMove")
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
     weak var pond: LivingInkModel?
     /// The open note's assistant, registered when its panel opens.
     weak var assistant: AssistantModel?
+    weak var settings: AppSettings?
+    /// True while the scene's pencil rests at the ends of its strokes (CanvasView's hold, without a touch).
+    var holds = false
     private var player: DemoPlayer?
 
     func begin(store: LibraryStore, settings: AppSettings) {
         guard player == nil, let name = UserDefaults.standard.string(forKey: "DemoScene") else { return }
+        self.settings = settings
         let player = DemoPlayer(name: name, store: store)
         self.player = player
         Task { await player.run() }
@@ -57,8 +67,14 @@ private struct DemoStep: Decodable {
     var expanded: Bool?
     var name: String?
     var index: Int?
-    /// What is typed into the assistant's box.
+    /// What is typed into the assistant's box or the library's search.
     var text: String?
+    /// The page's angle (Settings' page turn), in degrees.
+    var degrees: Double?
+    /// A photo as base64 JPEG, imported the way the Photos picker hands one over.
+    var image: String?
+    /// The pencil rests at the end of each stroke before it lifts.
+    var hold: Bool?
     /// How much slower than a hand the strokes are played (the edit speeds them up as much); the
     /// samples' own timestamps stay a hand's.
     var pace: Double?
@@ -147,8 +163,59 @@ private final class DemoPlayer {
             await waitForAnswer(then: step.seconds ?? 1)
         case "convert":
             await canvas?.model.convertHandwriting(page: step.page ?? 0)
+        case "suggest.pick":
+            // A tap on one of the pictures the menu around a held drawing offers.
+            if let editor = canvas?.model, let suggestion = editor.suggestion, !suggestion.stickers.isEmpty {
+                let stickers = suggestion.stickers
+                editor.applySuggestion(sticker: stickers[min(max(step.index ?? 0, 0), stickers.count - 1)])
+            }
+        case "angle":
+            stage.settings?.pageAngle = step.degrees ?? 0
+        case "photos":
+            await importPhoto(step)
+        case "library":
+            NotificationCenter.default.post(name: DemoStage.library, object: nil)
+        case "search":
+            await typeSearch(step.text ?? "", seconds: step.seconds ?? 1.5)
+        case "open.hit":
+            NotificationCenter.default.post(name: DemoStage.openHit, object: nil)
+        case "game.level":
+            NotificationCenter.default.post(name: DemoStage.gameLevel, object: step.name)
+        case "dots.move":
+            NotificationCenter.default.post(name: DemoStage.dotsMove, object: nil)
+        case "xox.move":
+            NotificationCenter.default.post(name: DemoStage.xoxMove, object: nil)
         default:
             print("Mürekkep demo: unknown step \(step.op)")
+        }
+    }
+
+    // MARK: The library
+
+    /// A photographed page, the way the Photos picker hands one over: the app's own import makes it a
+    /// PDF (PhotoPDF), and it opens like any note.
+    private func importPhoto(_ step: DemoStep) async {
+        guard let data = Data(base64Encoded: step.image ?? ""),
+              let note = try? await store.importPhotos([data], title: step.title ?? "Photo") else {
+            print("Mürekkep demo: the photo did not import")
+            return
+        }
+        NotificationCenter.default.post(name: DemoStage.openNote, object: note.id)
+        for _ in 0..<80 where canvas == nil {
+            await pause(0.1)
+        }
+        await pause(step.seconds ?? 1)
+    }
+
+    /// Types into the library's search field, a letter at a time.
+    private func typeSearch(_ text: String, seconds: Double) async {
+        guard !text.isEmpty else { return }
+        let each = max(seconds, 0.1) / Double(text.count)
+        var typed = ""
+        for character in text {
+            typed.append(character)
+            NotificationCenter.default.post(name: DemoStage.search, object: typed)
+            await pause(each)
         }
     }
 
@@ -205,6 +272,7 @@ private final class DemoPlayer {
         guard let canvas, let strokes = step.strokes else { return }
         let page = step.page ?? 0
         let pace = max(step.pace ?? 1, 0.1)
+        DemoStage.shared.holds = step.hold ?? false
         await play(strokes) { [weak self] phase, samples, start in
             let inputs = samples.map { s -> InputSample in
                 var input = InputSample(location: CGPoint(x: s.x, y: s.y), force: CGFloat(s.force), timestamp: start + s.t / pace)

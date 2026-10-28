@@ -662,6 +662,12 @@ struct SearchPane: View {
             hits = found
             searching = false
         }
+        #if DEMO
+        // The ad recordings (tools/demo) open the first hit, as a tap on it does.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.openHit)) { _ in
+            if let h = hits.first { actions.openAt(h.note, h.page) }
+        }
+        #endif
     }
 
     private func hitRow(_ h: ContentHit) -> some View {

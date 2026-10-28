@@ -10,6 +10,7 @@ Only the hand is staged. The app draws the ink, and the text pen reads what is w
 
     python tools/demo/make_scenes.py
 """
+import base64
 import json
 import math
 import re
@@ -30,7 +31,8 @@ RATE = 240.0  # Apple Pencil's samples a second
 # pen's pause, ink drying, lava cooling) stretch alike through launch arguments, so the finished
 # video shows them at their real lengths. Ebru and the living ink run on their own clocks: pace 1.
 PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8, "ebru": 2.5, "living": 2.5,
-        "check": 1.8, "solve": 1.8, "convert": 1.8}
+        "check": 1.8, "solve": 1.8, "convert": 1.8,
+        "shapes": 1.8, "tilt": 1.8, "dots": 1.8, "xox": 1.8}
 # The games run on the app's DEMO clock at the same slower rate (their moves and time per frame).
 CLOCKED = {"ebru", "living"}
 LANGS = ("en",)  # the app's language in the recordings
@@ -138,13 +140,17 @@ class Hand:
         self.slant = slant
         self.jitter = jitter
 
-    def text(self, text, x, base, xh):
+    def text(self, text, x, base, xh, digit_gap=0.0):
+        """`digit_gap` (in x-heights) opens figures that follow each other ("33", "17"), which the
+        lining figures of math_font otherwise let touch."""
         f, rng, j = self.font, self.rng, self.jitter
         s = xh / f.xheight
         phase = rng.uniform(0, 2 * math.pi)
         wave = rng.uniform(200, 340)
         out, starts = [], []
-        for ch in text:
+        for i, ch in enumerate(text):
+            if digit_gap and ch.isdigit() and i > 0 and text[i - 1].isdigit():
+                x += digit_gap * xh
             starts.append(x)
             adv, glyph = f.glyphs.get(ch) or f.glyphs["?"]
             if ch == " ":
@@ -393,6 +399,14 @@ TEXT = {
         "solve.chat": "Is 7+8=16?",
         "convert.title": "Biology",
         "convert.lines": ["Biology", "Exam on Tuesday", "Sınav salı günü"],
+        "shapes.title": "Biyoloji",
+        "tilt.title": "Notes",
+        "tilt.lines": ["Turn the page like paper.", "Sayfayı kağıt gibi çevir."],
+        "search.notes": [("Biology", ["Mitochondria make energy.", "Mitokondri enerji üretir."]),
+                         ("Chemistry", ["Water boils at 100 degrees.", "Su 100 derecede kaynar."]),
+                         ("Tarih", ["Istanbul was taken in 1453.", "İstanbul 1453'te alındı."])],
+        "search.query": "mitochondria",
+        "photo.title": "Worksheet",
     },
 }
 
@@ -411,8 +425,12 @@ class Script:
     def add(self, op, **kw):
         self.steps.append({"op": op, **kw})
 
-    def write(self, strokes, brush, colour, width, page=0):
-        self.add("write", page=page, strokes=strokes)
+    def write(self, strokes, brush, colour, width, page=0, hold=False):
+        if hold:
+            # The pencil rests at the end of each stroke: the canvas's own wait turns it into a shape.
+            self.add("write", page=page, strokes=strokes, hold=True)
+        else:
+            self.add("write", page=page, strokes=strokes)
         self.page_strokes.append((brush, colour, width, [[(p[1], p[2]) for p in s] for s in strokes]))
 
 
@@ -700,6 +718,224 @@ def scene_convert(lang):
     return s
 
 
+# MARK: - Second phase: the smart pen, the search, the games and a photographed worksheet
+
+# The kidney of the app's own sticker (StickerArtData.swift, as tests/ports/organs.py has it): the
+# hand traces the outline the recognizer compares drawings with.
+KIDNEY_PATH = ("M56 10 C76 10 84 30 80 50 C78 72 72 90 54 90 C36 90 26 76 30 64 C36 58 42 56 40 50 "
+               "C40 44 34 42 30 36 C24 22 38 10 56 10 Z")
+
+
+def _cubic_path(path):
+    """M/C/Z path data as one polyline, 12 samples a curve (StickerArt.flatten)."""
+    tok = re.findall(r"[MCZ]|-?\d+(?:\.\d+)?", path)
+    out, cur, start, i = [], (0.0, 0.0), (0.0, 0.0), 0
+    while i < len(tok):
+        if tok[i] == "M":
+            cur = start = (float(tok[i + 1]), float(tok[i + 2]))
+            out.append(cur)
+            i += 3
+        elif tok[i] == "C":
+            a, b, p = ((float(tok[i + k]), float(tok[i + k + 1])) for k in (1, 3, 5))
+            for k in range(1, 13):
+                u = k / 12
+                w = ((1 - u) ** 3, 3 * u * (1 - u) ** 2, 3 * u * u * (1 - u), u ** 3)
+                out.append((w[0] * cur[0] + w[1] * a[0] + w[2] * b[0] + w[3] * p[0],
+                            w[0] * cur[1] + w[1] * a[1] + w[2] * b[1] + w[3] * p[1]))
+            cur = p
+            i += 7
+        else:
+            out.append(start)
+            cur = start
+            i += 1
+    return out
+
+
+def with_hold(stroke, seconds):
+    """The stroke with the pencil resting at its end for `seconds` before it lifts."""
+    t, x, y, f = stroke[-1]
+    return stroke + [[round(t + seconds, 4), x, y, f]]
+
+
+def scene_shapes(lang):
+    """Draw, rest the pencil, and the drawing becomes what it is: a rough kidney is offered as the
+    picture (a biology class), then a circle and a triangle snap clean. The rest is the canvas's own
+    (Settings: "Fix the shape when you hold"; the recognizers are rule-based, not a language model)."""
+    rng = np.random.default_rng(65)
+    s = Script()
+    t = TEXT[lang]
+    s.add("note", title=t["shapes.title"], paper="plain", seconds=1.2)
+    s.add("pen", brush="pen", color=NAVY, width=2.8)
+    kidney = [(330 + 2.1 * x, 120 + 2.1 * y) for x, y in _cubic_path(KIDNEY_PATH)]
+    triangle = [(330, 640), (420, 480), (520, 640), (330, 640)]
+    drawings = [("kidney", [_wobble(kidney, 22, rng, 1.0)]),
+                ("circle", loop(190, 470, 82, 78, rng, turns=1.03)),
+                ("triangle", [_wobble(_densify(triangle, 1.0).tolist(), 16, rng, 1.0)])]
+    for name, strokes in drawings:
+        ts, _ = timed(strokes, rng, xh=26)
+        s.write([with_hold(st, 1.0) for st in ts], "pen", NAVY, 2.8, hold=True)
+        s.add("wait", seconds=1.4)
+        if name == "kidney":
+            # The menu around the drawing offers its pictures; the first is the kidney.
+            s.add("suggest.pick", index=0)
+            s.add("wait", seconds=1.6)
+    s.add("wait", seconds=2.0)
+    return s
+
+
+def rotated(strokes, degrees, pivot):
+    """Strokes turned by `degrees` around `pivot` (y down: a positive angle turns clockwise)."""
+    a = math.radians(degrees)
+    c, sn = math.cos(a), math.sin(a)
+    px, py = pivot
+    return [[(px + (x - px) * c - (y - py) * sn, py + (x - px) * sn + (y - py) * c) for x, y in st] for st in strokes]
+
+
+def scene_tilt(lang):
+    """The page turned 15 degrees like paper on a desk. The text pen writes level on the screen, so the
+    ink lies 15 degrees off the page's lines; the app finds the angle and levels it before reading."""
+    rng = np.random.default_rng(64)
+    hand = Hand(Font("EMSNeato"), seed=16, slant=0.04, jitter=0.9)
+    s = Script()
+    t = TEXT[lang]
+    s.add("note", title=t["tilt.title"], paper="lined", seconds=1.2)
+    s.add("angle", degrees=15)
+    s.add("wait", seconds=1.5)
+    s.add("textpen", brush="galaxy", color=GALAXY, width=3.6)
+    for k, line in enumerate(t["tilt.lines"]):
+        x0, base = MARGIN + 30, rule(5 + 3 * k)
+        strokes, end = hand.text(line, x0, base, 14)
+        assert end < PAGE[0] - 40, f"{line!r} runs off the page"
+        # Level on the screen is turned back by the page's angle on the page.
+        ts, _ = timed(rotated(strokes, -15, (x0, base)), rng, xh=14)
+        s.write(ts, "galaxy", GALAXY, 3.6)
+        s.add("wait", seconds=5.0 if k == 0 else 7.0)
+    # The angle is a setting the next scenes would inherit (they run in the same app).
+    s.add("angle", degrees=0)
+    return s
+
+
+def scene_search(lang):
+    """Three notebooks with two lines each (each one's ink is read when it closes), then in the
+    library a word typed into the search finds the page it was handwritten on, and the hit opens."""
+    rng = np.random.default_rng(66)
+    hand = Hand(Font("EMSNeato"), seed=17, slant=0.04, jitter=0.9)
+    s = Script()
+    t = TEXT[lang]
+    for title, lines in t["search.notes"]:
+        s.add("note", title=title, paper="lined", seconds=1.0)
+        s.add("pen", brush="pen", color=INK, width=2.2)
+        all_strokes, breaks = [], []
+        for j, line in enumerate(lines):
+            strokes, _ = hand.text(line, MARGIN + 12, rule(3 + 2 * j) - 1.5, 13)
+            breaks.append(len(all_strokes))
+            all_strokes += strokes
+        ts, _ = timed(all_strokes, rng, xh=13, speed=2.0, line_breaks=breaks[1:])
+        s.write(ts, "pen", INK, 2.2)
+        s.add("wait", seconds=0.8)
+    s.add("library")
+    s.add("wait", seconds=3.0)
+    s.add("search", text=t["search.query"], seconds=1.6)
+    s.add("wait", seconds=3.5)
+    s.add("open.hit")
+    s.add("wait", seconds=3.0)
+    return s
+
+
+def scene_dots(lang):
+    """Kare kapmaca against the iPad (Orta, 4x4). The hand's line is chosen as a careful player would
+    (a box to take, else a line that gives none away); the iPad's lines are its own."""
+    rng = np.random.default_rng(67)
+    s = Script()
+    break_intro(s, lang, rng)
+    s.add("game", name="dots")
+    s.add("wait", seconds=1.0)
+    s.add("game.level", name="medium")
+    s.add("games", open=True, expanded=True)
+    s.add("wait", seconds=1.5)
+    for _ in range(24):
+        s.add("dots.move")
+        s.add("wait", seconds=1.7)
+    s.add("wait", seconds=3.0)
+    return s
+
+
+def scene_xox(lang):
+    """XOX against the iPad on Zor ("the iPad makes no mistakes"). The hand plays as a careful player
+    would (a win, a block, the centre, a corner); the iPad's moves are its own."""
+    rng = np.random.default_rng(68)
+    s = Script()
+    break_intro(s, lang, rng)
+    s.add("game", name="xox")
+    s.add("wait", seconds=1.0)
+    s.add("game.level", name="hard")
+    s.add("games", open=True, expanded=True)
+    s.add("wait", seconds=1.5)
+    for _ in range(6):
+        s.add("xox.move")
+        s.add("wait", seconds=1.8)
+    s.add("wait", seconds=3.0)
+    return s
+
+
+WORKSHEET = [("23 + 9 =", "32"), ("7 + 8 =", "16"), ("45 - 28 =", "17")]
+
+
+def worksheet_jpeg():
+    """The photographed worksheet of ad V10, made here (no one's files): a printed sheet in EMS Tech with
+    the answers handwritten in blue, one of them wrong (7 + 8 = 16). Labels and calculations only, so the
+    math engine checks it by itself; no printed 1 (EMS Tech's 1 reads as an l)."""
+    import io
+    from PIL import Image, ImageDraw, ImageFilter
+    W, H = 1500, 2000
+    rng = np.random.default_rng(71)
+    y, x = np.mgrid[0:H, 0:W]
+    light = 1.0 - 0.10 * ((x - 0.35 * W) ** 2 + (y - 0.25 * H) ** 2) / (W ** 2 + H ** 2)
+    paper = np.stack([246 * light, 243 * light, 234 * light], axis=-1) + rng.normal(0, 1.6, (H, W, 3))
+    im = Image.fromarray(np.clip(paper, 0, 255).astype("uint8"), "RGB")
+    d = ImageDraw.Draw(im)
+    printed = Hand(Font("EMSTech"), seed=3, slant=0.0, jitter=0.15)
+    hand = Hand(math_font(lining=True), seed=21, slant=0.05, jitter=0.9)
+
+    def draw(strokes, colour, width):
+        for st in strokes:
+            if len(st) > 1:
+                d.line([(px, py) for px, py in st], fill=colour, width=width, joint="curve")
+
+    gray, blue = (52, 54, 60), (28, 52, 140)
+    draw(printed.text("Worksheet 4", 150, 230, 48)[0], gray, 5)
+    d.line([(150, 280), (1350, 280)], fill=(120, 122, 128), width=3)
+    yy = 470
+    for problem, answer in WORKSHEET:
+        strokes, end = printed.text(problem, 170, yy, 44)
+        draw(strokes, gray, 5)
+        draw(hand.text(answer, end + 40, yy + 4, 52, digit_gap=0.22)[0], blue, 6)
+        yy += 190
+    draw(printed.text("3x + 4 = 25", 170, yy, 44)[0], gray, 5)
+    draw(hand.text("x = 7", 200, yy + 170, 52)[0], blue, 6)
+    draw(hand.text("Ödev", 1080, 1820, 40)[0], blue, 5)
+    im = im.filter(ImageFilter.GaussianBlur(0.6)).rotate(1.2, resample=Image.BICUBIC, fillcolor=(214, 206, 190))
+    PREVIEWS.mkdir(exist_ok=True)
+    im.save(PREVIEWS / "photo-en-worksheet.png")
+    out = io.BytesIO()
+    im.save(out, format="JPEG", quality=86)
+    return out.getvalue()
+
+
+def scene_photo(lang):
+    """A photographed worksheet becomes a PDF through the app's own photo import (PhotoPDF); the
+    assistant's "Check my solution" reads the photo and the math engine marks the wrong answer."""
+    s = Script()
+    t = TEXT[lang]
+    s.add("photos", title=t["photo.title"], image=base64.b64encode(worksheet_jpeg()).decode("ascii"), seconds=1.5)
+    s.add("wait", seconds=1.0)
+    s.add("assistant", open=True)
+    s.add("wait", seconds=1.2)
+    s.add("assistant.ask", name="check")
+    s.add("assistant.wait", seconds=4.0)
+    return s
+
+
 def stretch(script, k):
     """The scene k times slower: the pen's schedule and the waits; the samples keep their own
     timestamps (`pace`), so the stroke builder sees a hand at its real speed."""
@@ -715,7 +951,9 @@ def stretch(script, k):
 
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
                 "ebru": scene_ebru, "living": scene_living,
-                "check": scene_check, "solve": scene_solve, "convert": scene_convert}
+                "check": scene_check, "solve": scene_solve, "convert": scene_convert,
+                "shapes": scene_shapes, "photo": scene_photo, "search": scene_search, "dots": scene_dots,
+                "tilt": scene_tilt, "xox": scene_xox}
 
 
 # MARK: - Previews
