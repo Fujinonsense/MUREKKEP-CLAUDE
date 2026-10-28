@@ -149,10 +149,19 @@ enum Spelling {
         return core
     }
 
+    /// Answers of the dictionary: a line's readings share most words, and each look-up runs on the
+    /// main thread while the text pen turns the line.
+    private static var knownMemo: [String: Bool] = [:]
+
     private static func isKnown(_ word: String, _ language: String?) -> Bool {
         guard let language else { return false }
+        let key = language + "|" + word
+        if let known = knownMemo[key] { return known }
         let range = NSRange(location: 0, length: (word as NSString).length)
-        return checker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0, wrap: false, language: language).location == NSNotFound
+        let known = checker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0, wrap: false, language: language).location == NSNotFound
+        if knownMemo.count > 8000 { knownMemo.removeAll() }
+        knownMemo[key] = known
+        return known
     }
 
     private static func letterWords(_ text: String) -> [String] {

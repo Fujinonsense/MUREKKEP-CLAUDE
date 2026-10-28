@@ -149,8 +149,9 @@ final class EditorModel: ObservableObject {
     /// Picture versions of a held drawing (a heart, a face), shown as a radial menu.
     @Published var suggestion: SketchSuggestion?
     /// A shape just recognized from a held stroke: its corners have handles until the next touch
-    /// somewhere else.
-    @Published private(set) var shapeEdit: ShapeEditState? {
+    /// somewhere else. Not published: only the canvas draws it, and a handle's drag sets it on every
+    /// move, which redrew the whole editor each time.
+    private(set) var shapeEdit: ShapeEditState? {
         didSet { if oldValue != shapeEdit { onInkChange?() } }
     }
     private var shapeEditSnapshot: [Stroke]?
@@ -1172,27 +1173,35 @@ final class EditorModel: ObservableObject {
         guard pages.indices.contains(page), !inkReadOnly else { return }
         let radius = eraserSize / 2
         var changed = false
-        var result: [Stroke] = []
-        result.reserveCapacity(pages[page].strokes.count)
-        for s in pages[page].strokes {
-            switch eraserMode {
-            case .stroke:
-                if InkEraser.hits(s, from: a, to: b, radius: radius) {
-                    changed = true
-                } else {
-                    result.append(s)
-                }
-            case .partial:
-                if let pieces = InkEraser.erase(s, from: a, to: b, radius: radius) {
-                    changed = true
-                    result.append(contentsOf: pieces)
-                } else {
-                    result.append(s)
+        let strokes = pages[page].strokes
+        // Most samples touch no ink: find the first stroke touched before copying the page's list.
+        // `hits` is looser than the cut of `erase` (r·0.8 per segment against r·0.5 per point on it),
+        // so a stroke it misses would keep every point anyway.
+        if let first = strokes.firstIndex(where: { InkEraser.hits($0, from: a, to: b, radius: radius) }) {
+            var result: [Stroke] = []
+            result.reserveCapacity(strokes.count)
+            result.append(contentsOf: strokes[..<first])
+            for s in strokes[first...] {
+                switch eraserMode {
+                case .stroke:
+                    if InkEraser.hits(s, from: a, to: b, radius: radius) {
+                        changed = true
+                    } else {
+                        result.append(s)
+                    }
+                case .partial:
+                    if InkEraser.hits(s, from: a, to: b, radius: radius),
+                       let pieces = InkEraser.erase(s, from: a, to: b, radius: radius) {
+                        changed = true
+                        result.append(contentsOf: pieces)
+                    } else {
+                        result.append(s)
+                    }
                 }
             }
-        }
-        if changed {
-            pages[page].strokes = result
+            if changed {
+                pages[page].strokes = result
+            }
         }
         if !pages[page].stickers.isEmpty {
             let before = pages[page].stickers.count

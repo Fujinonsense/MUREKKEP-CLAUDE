@@ -65,6 +65,9 @@ final class LibraryStore: ObservableObject {
 
     let root: URL
     private let thumbQueue = DispatchQueue(label: "murekkep.thumbnails", qos: .utility)
+    /// The index and the sections are written here, in order: a pause in writing saves the note,
+    /// and encoding the whole library on the main thread then made the pen stutter.
+    private let saveQueue = DispatchQueue(label: "murekkep.library.save", qos: .utility)
 
     init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -134,17 +137,23 @@ final class LibraryStore: ObservableObject {
     }
 
     private func persist() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? LenientList.encode(notes, unreadable: unreadableNotes, encoder: encoder) else { return }
-        try? data.write(to: indexURL, options: .atomic)
+        let (snapshot, unreadable, url) = (notes, unreadableNotes, indexURL)
+        saveQueue.async {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            guard let data = try? LenientList.encode(snapshot, unreadable: unreadable, encoder: encoder) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     private func persistSections() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? LenientList.encode(sections, unreadable: unreadableSections, encoder: encoder) else { return }
-        try? data.write(to: sectionsURL, options: .atomic)
+        let (snapshot, unreadable, url) = (sections, unreadableSections, sectionsURL)
+        saveQueue.async {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            guard let data = try? LenientList.encode(snapshot, unreadable: unreadable, encoder: encoder) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     // MARK: Sections

@@ -266,7 +266,9 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         cursorView.backgroundColor = .clear
         toolShadow.fillColor = UIColor.black.withAlphaComponent(0.10).cgColor
         toolShadow.shadowColor = UIColor.black.cgColor
-        toolShadow.shadowOpacity = 0.35
+        // The shadow follows its path (set with it on every hover), so Core Animation no longer renders
+        // the layer off screen to find its shape; 0.035 is the old 0.35 times the fill's 0.10 alpha.
+        toolShadow.shadowOpacity = 0.035
         toolShadow.shadowRadius = 6
         toolShadow.shadowOffset = .zero
         hoverCursor.lineWidth = 1.2
@@ -2347,6 +2349,7 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         shadow.addLine(to: CGPoint(x: tip.x + dir.x * 14 - normal.x * 4.5, y: tip.y + dir.y * 14 - normal.y * 4.5))
         shadow.close()
         toolShadow.path = shadow.cgPath
+        toolShadow.shadowPath = shadow.cgPath
         toolShadow.opacity = fade * 0.9
         CATransaction.commit()
         cursorView.isHidden = false

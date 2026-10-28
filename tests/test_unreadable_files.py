@@ -84,8 +84,13 @@ def test_the_index_is_read_entry_by_entry():
     assert "unreadableNotes = read.unreadable" in load and "unreadableSections = read.unreadable" in load
     # A file that is not a list at all is copied aside before a save replaces it.
     assert "FileBackup.keep(indexURL)" in load and "FileBackup.keep(sectionsURL)" in load
-    assert "LenientList.encode(notes, unreadable: unreadableNotes, encoder: encoder)" in body(store, "private func persist() {", "private func persistSections() {")
-    assert "LenientList.encode(sections, unreadable: unreadableSections, encoder: encoder)" in body(store, "private func persistSections() {", "// MARK: Sections")
+    # Saved with the unreadable entries put back, encoded and written off the main thread, in order.
+    persist = body(store, "private func persist() {", "private func persistSections() {")
+    assert "(notes, unreadableNotes, indexURL)" in persist and "saveQueue.async" in persist
+    assert "LenientList.encode(snapshot, unreadable: unreadable, encoder: encoder)" in persist
+    sections = body(store, "private func persistSections() {", "// MARK: Sections")
+    assert "(sections, unreadableSections, sectionsURL)" in sections and "saveQueue.async" in sections
+    assert "LenientList.encode(snapshot, unreadable: unreadable, encoder: encoder)" in sections
     safe = src("SafeFiles.swift")
     # The whole list first (the common case), then entry by entry.
     decode = body(safe, "static func decode<T: Decodable>", "static func encode<T: Encodable>")

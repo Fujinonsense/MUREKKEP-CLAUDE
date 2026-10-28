@@ -342,7 +342,12 @@ final class AppSettings: ObservableObject {
     }
 
     func rememberBrush(_ brush: Brush) {
-        var list = recentBrushes.filter { $0 != brush }
+        // Every return to a pen (after each squeeze or erase) lands here: unchanged, nothing is
+        // written and nothing is redrawn (a change here redraws every screen, the library under the
+        // editor too).
+        let recent = recentBrushes
+        guard recent.first != brush else { return }
+        var list = recent.filter { $0 != brush }
         list.insert(brush, at: 0)
         UserDefaults.standard.set(list.prefix(6).map { Int($0.rawValue) }, forKey: "recentBrushes")
         objectWillChange.send()
@@ -357,7 +362,9 @@ final class AppSettings: ObservableObject {
     }
 
     func rememberColor(_ c: InkColor) {
-        var list = recentColors.filter { $0 != c }
+        let recent = recentColors
+        guard recent.first != c else { return }
+        var list = recent.filter { $0 != c }
         list.insert(c, at: 0)
         let stored = list.prefix(8).map { [Double($0.r), Double($0.g), Double($0.b), Double($0.a)] }
         UserDefaults.standard.set(Array(stored), forKey: "recentColors")
