@@ -265,7 +265,11 @@ enum OfflineBrain {
         }
         var out = L("## Çözüm kontrolü", "## Solution check") + "\n"
         if checked > 0 {
-            out += wrong == 0 ? L("Kontrol ettiğim adımların hepsi doğru. 👏", "Every step I checked is correct. 👏") + "\n\n" : L("\(wrong) yerde hata var.", "There are \(wrong) mistake(s).") + "\n\n"
+            switch wrong {
+            case 0: out += L("Kontrol ettiğim adımların hepsi doğru. 👏", "Every step I checked is correct. 👏") + "\n\n"
+            case 1: out += L("Bir yerde hata var.", "There is 1 mistake.") + "\n\n"
+            default: out += L("\(wrong) yerde hata var.", "There are \(wrong) mistakes.") + "\n\n"
+            }
         }
         out += report.joined(separator: "\n")
         return out

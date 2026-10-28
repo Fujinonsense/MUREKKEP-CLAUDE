@@ -29,7 +29,8 @@ RATE = 240.0  # Apple Pencil's samples a second
 # alone are filmed this much slower and sped up as much in the edit; the app's own timings (the text
 # pen's pause, ink drying, lava cooling) stretch alike through launch arguments, so the finished
 # video shows them at their real lengths. Ebru and the living ink run on their own clocks: pace 1.
-PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8, "ebru": 2.5, "living": 2.5}
+PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8, "ebru": 2.5, "living": 2.5,
+        "check": 1.8, "solve": 1.8, "convert": 1.8}
 # The games run on the app's DEMO clock at the same slower rate (their moves and time per frame).
 CLOCKED = {"ebru", "living"}
 LANGS = ("en",)  # the app's language in the recordings
@@ -380,6 +381,18 @@ TEXT = {
         "inks.title": "Inks",
         "inks.lava": "Sınav!", "inks.gold": "A+", "inks.galaxy": "Dream big",
         "break.title": "Study",
+        # The math pages hold a one-word label and calculations only: a sentence on the page sends it
+        # to the language model (PageMath.engineSettles), which the recording build does not have.
+        # Each scene has an English and a Turkish word: one is the notebook's title, one on the page.
+        "check.title": "Matematik",
+        "check.label": "Homework",
+        "check.lines": ["5x - 3 = 2x + 9", "3x = 12", "x = 5"],
+        "solve.title": "Algebra",
+        "solve.label": "Ödev",
+        "solve.lines": ["3 + 3 = 33", "15 - 7 = 8", "2x + 3 = 11", "x + y = 10", "x - y = 2"],
+        "solve.chat": "Is 7+8=16?",
+        "convert.title": "Biology",
+        "convert.lines": ["Biology", "Exam on Friday", "Sınav cuma günü"],
     },
 }
 
@@ -591,6 +604,92 @@ def scene_living(lang):
     return s
 
 
+def math_font():
+    """EMS Neato with a straight minus: its hyphen is a wavy dash that a reader could take for "~",
+    which no calculation has."""
+    font = Font("EMSNeato")
+    adv, _ = font.glyphs["-"]
+    font.glyphs["-"] = (adv, [[(70.0, 270.0), (350.0, 280.0)]])
+    return font
+
+
+def math_page(s, hand, rng, label, lines, xh=19.0, gap_before=()):
+    """A page of handwritten math in a blue pen: a one-word label, then one calculation a line, large
+    enough to read when the assistant's panel opens beside the page and the page shrinks to fit."""
+    s.add("pen", brush="pen", color=NAVY, width=2.4)
+    strokes, _ = hand.text(label, MARGIN + 12, 128, 0.8 * xh)
+    all_strokes, breaks = list(strokes), []
+    y = 200.0
+    for k, line in enumerate(lines):
+        if k in gap_before:
+            y += 18
+        line_strokes, end = hand.text(line, MARGIN + 12, y, xh)
+        assert end < PAGE[0] - 40, f"{line!r} runs off the page"
+        breaks.append(len(all_strokes))
+        all_strokes += line_strokes
+        y += 62
+    timed_strokes, _ = timed(all_strokes, rng, xh=xh, line_breaks=breaks)
+    s.write(timed_strokes, "pen", NAVY, 2.4)
+
+
+def scene_check(lang):
+    """A solution whose last step is wrong; the assistant's "Check my solution" names the line."""
+    rng = np.random.default_rng(61)
+    hand = Hand(math_font(), seed=13, slant=0.04, jitter=0.9)
+    s = Script()
+    t = TEXT[lang]
+    s.add("note", title=t["check.title"], paper="grid", seconds=1.2)
+    math_page(s, hand, rng, t["check.label"], t["check.lines"])
+    s.add("wait", seconds=1.0)
+    s.add("assistant", open=True)
+    s.add("wait", seconds=1.2)
+    s.add("assistant.ask", name="check")
+    s.add("assistant.wait", seconds=4.0)
+    return s
+
+
+def scene_solve(lang):
+    """Sums, an equation and a pair of equations; the toolbar's Solve (the panel opens and the page
+    is solved), then a sum typed into the chat, which the engine answers without reading the page."""
+    rng = np.random.default_rng(62)
+    hand = Hand(math_font(), seed=14, slant=0.04, jitter=0.9)
+    s = Script()
+    t = TEXT[lang]
+    s.add("note", title=t["solve.title"], paper="grid", seconds=1.2)
+    math_page(s, hand, rng, t["solve.label"], t["solve.lines"], gap_before=(3,))
+    s.add("wait", seconds=1.0)
+    s.add("assistant", open=True)
+    s.add("wait", seconds=1.0)
+    s.add("assistant.ask", name="solve")
+    s.add("assistant.wait", seconds=3.5)
+    s.add("assistant.type", text=t["solve.chat"], seconds=1.6)
+    s.add("assistant.wait", seconds=4.0)
+    return s
+
+
+def scene_convert(lang):
+    """Three lines in three 3D inks, then Convert to text (the drafting rail's button): the page is
+    written again as neat text on the template's lines, every word in its own ink."""
+    rng = np.random.default_rng(63)
+    hand = Hand(Font("EMSNeato"), seed=15, slant=0.08, jitter=1.0)
+    s = Script()
+    t = TEXT[lang]
+    s.add("note", title=t["convert.title"], paper="lined", seconds=1.2)
+    inks = [("gold", [0.93, 0.72, 0.25], 6, 30), ("lava", [0.95, 0.35, 0.08], 6, 26),
+            ("galaxy", [0.35, 0.25, 0.85], 6, 26)]
+    for k, ((brush, colour, width, xh), line) in enumerate(zip(inks, t["convert.lines"])):
+        s.add("pen", brush=brush, color=colour, width=width)
+        strokes, end = hand.text(line, MARGIN + 14, rule(3 + 3 * k) - 2, xh)
+        assert end < PAGE[0] - 40, f"{line!r} runs off the page"
+        ts, _ = timed(strokes, rng, xh=xh)
+        s.write(ts, brush, colour, width)
+        s.add("wait", seconds=0.6)
+    s.add("wait", seconds=2.4)
+    s.add("convert", page=0)
+    s.add("wait", seconds=6.0)
+    return s
+
+
 def stretch(script, k):
     """The scene k times slower: the pen's schedule and the waits; the samples keep their own
     timestamps (`pace`), so the stroke builder sees a hand at its real speed."""
@@ -605,7 +704,8 @@ def stretch(script, k):
 
 
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
-                "ebru": scene_ebru, "living": scene_living}
+                "ebru": scene_ebru, "living": scene_living,
+                "check": scene_check, "solve": scene_solve, "convert": scene_convert}
 
 
 # MARK: - Previews

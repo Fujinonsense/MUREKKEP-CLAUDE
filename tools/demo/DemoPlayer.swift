@@ -5,9 +5,10 @@ import UIKit
 /// The ad recordings (tools/demo). Only the recording build has this file and the DEMO flag; the
 /// App Store edition never does. The simulator launches the app with `-DemoScene <name>`, and the
 /// scene's steps (DemoScene-<name>.json, written by tools/demo/make_scenes.py) open a notebook,
-/// pick pens, write strokes at the times a hand writes them, and play the break corner's Ebru and
-/// living ink. The pen goes through the canvas's own stroke path, so the recording shows what the
-/// app itself draws.
+/// pick pens, write strokes at the times a hand writes them, play the break corner's Ebru and
+/// living ink, ask the assistant what a student would tap, and turn a page into text. The pen goes
+/// through the canvas's own stroke path and the assistant answers on its own, so the recording
+/// shows what the app itself draws and says.
 @MainActor
 final class DemoStage {
     static let shared = DemoStage()
@@ -15,10 +16,13 @@ final class DemoStage {
     static let games = Notification.Name("DemoStage.games")
     static let pickLayer = Notification.Name("DemoStage.pickLayer")
     static let pickGame = Notification.Name("DemoStage.pickGame")
+    static let assistantPanel = Notification.Name("DemoStage.assistantPanel")
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
     weak var pond: LivingInkModel?
+    /// The open note's assistant, registered when its panel opens.
+    weak var assistant: AssistantModel?
     private var player: DemoPlayer?
 
     func begin(store: LibraryStore, settings: AppSettings) {
@@ -53,6 +57,8 @@ private struct DemoStep: Decodable {
     var expanded: Bool?
     var name: String?
     var index: Int?
+    /// What is typed into the assistant's box.
+    var text: String?
     /// How much slower than a hand the strokes are played (the edit speeds them up as much); the
     /// samples' own timestamps stay a hand's.
     var pace: Double?
@@ -131,9 +137,43 @@ private final class DemoPlayer {
             await touchPond(step)
         case "pond.feed":
             stage.pond?.feed()
+        case "assistant":
+            NotificationCenter.default.post(name: DemoStage.assistantPanel, object: step.open ?? true)
+        case "assistant.ask":
+            if let action = QuickAction(rawValue: step.name ?? "") { stage.assistant?.run(action) }
+        case "assistant.type":
+            await typeQuestion(step.text ?? "", seconds: step.seconds ?? 1.5)
+        case "assistant.wait":
+            await waitForAnswer(then: step.seconds ?? 1)
+        case "convert":
+            await canvas?.model.convertHandwriting(page: step.page ?? 0)
         default:
             print("Mürekkep demo: unknown step \(step.op)")
         }
+    }
+
+    // MARK: The assistant
+
+    /// Types a question into the assistant's box the way a person does, then sends it.
+    private func typeQuestion(_ text: String, seconds: Double) async {
+        guard let assistant = DemoStage.shared.assistant, !text.isEmpty else { return }
+        assistant.draft = ""
+        let each = max(seconds, 0.1) / Double(text.count)
+        for character in text {
+            assistant.draft.append(character)
+            await pause(each)
+        }
+        await pause(0.35)
+        assistant.send()
+    }
+
+    /// Waits while the assistant reads the page and answers (at the app's own speed), then a while more.
+    private func waitForAnswer(then seconds: Double) async {
+        await pause(0.3)
+        for _ in 0..<1200 where DemoStage.shared.assistant?.isBusy == true {
+            await pause(0.1)
+        }
+        await pause(seconds)
     }
 
     // MARK: The notebook

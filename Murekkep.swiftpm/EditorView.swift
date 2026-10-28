@@ -257,6 +257,14 @@ struct EditorContent: View {
                 gamesExpanded = note.userInfo?["expanded"] as? Bool ?? false
             }
         }
+        // They open the assistant as its toolbar button does. The one question the panel asks on its
+        // first opening (web search) is answered "keep it off": the recordings show the iPad alone.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.assistantPanel)) { note in
+            settings.askedWebSearch = true
+            settings.webSearch = false
+            DemoStage.shared.assistant = assistant
+            withAnimation(.easeInOut(duration: 0.22)) { showAssistant = note.object as? Bool ?? true }
+        }
         #endif
         .navigationTitle(editor.title)
         .navigationBarTitleDisplayMode(.inline)
