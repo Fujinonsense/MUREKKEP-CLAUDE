@@ -24,6 +24,9 @@ final class DemoStage {
     static let dotsMove = Notification.Name("DemoStage.dotsMove")
     static let xoxMove = Notification.Name("DemoStage.xoxMove")
     static let sudokuNew = Notification.Name("DemoStage.sudokuNew")
+    /// The check of scrolling (scene scroll3dold): build 235's display loop, which kept a page with
+    /// moving ink at the ink's 30 fps while it scrolled.
+    static var oldScrollLoop: Bool { UserDefaults.standard.bool(forKey: "DemoOldScrollLoop") }
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
@@ -76,6 +79,8 @@ private struct DemoStep: Decodable {
     var image: String?
     /// The pencil rests at the end of each stroke before it lifts.
     var hold: Bool?
+    /// How far a scroll moves the page down (points; negative goes up).
+    var by: Double?
     /// How much slower than a hand the strokes are played (the edit speeds them up as much); the
     /// samples' own timestamps stay a hand's.
     var pace: Double?
@@ -94,6 +99,8 @@ private final class DemoPlayer {
     private var track: [[Double]] = []
     /// The notebooks the scene opened, in order.
     private var opened: [UUID] = []
+    /// What each scroll of the scene measured: frames a second, and the CPU and GPU time of a frame.
+    private var frameReports: [[String: Double]] = []
 
     init(name: String, store: LibraryStore) {
         self.name = name
@@ -192,6 +199,12 @@ private final class DemoPlayer {
             NotificationCenter.default.post(name: DemoStage.xoxMove, object: nil)
         case "sudoku.new":
             NotificationCenter.default.post(name: DemoStage.sudokuNew, object: nil)
+        case "scroll":
+            let seconds = step.seconds ?? 2
+            DemoFrames.shared.begin()
+            canvas?.demoScroll(by: CGFloat(step.by ?? 300), over: seconds)
+            await pause(seconds)
+            frameReports.append(DemoFrames.shared.end())
         default:
             print("Mürekkep demo: unknown step \(step.op)")
         }
@@ -407,7 +420,8 @@ private final class DemoPlayer {
         let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let screen = UIScreen.main
         let out: [String: Any] = ["scene": name, "error": error ?? "", "track": track,
-                                  "screen": [Double(screen.bounds.width), Double(screen.bounds.height), Double(screen.scale)]]
+                                  "screen": [Double(screen.bounds.width), Double(screen.bounds.height), Double(screen.scale)],
+                                  "frames": frameReports]
         if let data = try? JSONSerialization.data(withJSONObject: out) {
             try? data.write(to: folder.appendingPathComponent("demo-done-\(name).json"))
         }
@@ -485,6 +499,78 @@ private final class DemoPen: NSObject {
             link?.invalidate()
             link = nil
             finished()
+        }
+    }
+}
+/// Frames drawn while a scene's scroll runs, with each frame's CPU time (the canvas's drawFrame, main
+/// thread) and GPU time (its command buffer). The GPU times come in on Metal's own thread.
+final class DemoFrames: @unchecked Sendable {
+    static let shared = DemoFrames()
+    private let lock = NSLock()
+    private var counting = false
+    private var start: CFTimeInterval = 0
+    private var cpu: [Double] = []
+    private var gpu: [Double] = []
+
+    func begin() {
+        lock.lock()
+        counting = true
+        start = CACurrentMediaTime()
+        cpu = []
+        gpu = []
+        lock.unlock()
+    }
+
+    func frame(cpu ms: Double) {
+        lock.lock()
+        if counting { cpu.append(ms) }
+        lock.unlock()
+    }
+
+    func gpu(_ ms: Double) {
+        lock.lock()
+        if counting { gpu.append(ms) }
+        lock.unlock()
+    }
+
+    /// Frames a second, and the mean, 95th percentile and worst of each time (ms).
+    func end() -> [String: Double] {
+        lock.lock()
+        defer { lock.unlock() }
+        counting = false
+        let seconds = max(CACurrentMediaTime() - start, 0.001)
+        func stats(_ values: [Double], _ key: String) -> [String: Double] {
+            guard !values.isEmpty else { return [:] }
+            let sorted = values.sorted()
+            let p95 = sorted[min(sorted.count - 1, Int(Double(sorted.count) * 0.95))]
+            return [key + "Mean": values.reduce(0, +) / Double(values.count), key + "P95": p95, key + "Max": sorted.last ?? 0]
+        }
+        var out: [String: Double] = ["seconds": seconds, "frames": Double(cpu.count), "fps": Double(cpu.count) / seconds]
+        out.merge(stats(cpu, "cpu")) { a, _ in a }
+        out.merge(stats(gpu, "gpu")) { a, _ in a }
+        return out
+    }
+}
+
+/// Runs `tick` on every screen frame until it returns false.
+final class DemoTicker: NSObject {
+    private let tick: () -> Bool
+    private var link: CADisplayLink?
+
+    init(_ tick: @escaping () -> Bool) {
+        self.tick = tick
+    }
+
+    func start() {
+        let link = CADisplayLink(target: self, selector: #selector(step))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    @objc private func step() {
+        if !tick() {
+            link?.invalidate()
+            link = nil
         }
     }
 }

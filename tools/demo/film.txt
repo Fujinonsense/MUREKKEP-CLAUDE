@@ -5,6 +5,8 @@
 # 2026-10-29: not an ads run. Run 6ae26088 showed build 225's Sudoku clock running away (CPU flat out,
 # memory +4.7 MB/s); the clock is now a one-second task: check it counts (end frame about 0:20) with
 # the app's CPU sampled once a second (sudoku-en.cpu.txt).
-# Then the games' grey lines: Sudoku's clock and hint, XOX's turn and wins (Theme.muted).
-sudoku-en
-xox-en
+# Then the games' grey lines (run 6ae26fb3, right).
+# 2026-10-29: scrolling a page of moving 3D ink, build 235's display loop against the new one; frames a
+# second and CPU/GPU ms per frame in scroll3d*-en.json ("frames").
+scroll3dold-en
+scroll3d-en

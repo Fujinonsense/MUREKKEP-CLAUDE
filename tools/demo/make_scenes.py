@@ -30,7 +30,7 @@ RATE = 240.0  # Apple Pencil's samples a second
 # alone are filmed this much slower and sped up as much in the edit; the app's own timings (the text
 # pen's pause, ink drying, lava cooling) stretch alike through launch arguments, so the finished
 # video shows them at their real lengths. Ebru and the living ink run on their own clocks: pace 1.
-PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8, "ebru": 2.5, "living": 2.5,
+PACE = {"notes": 1.8, "textpen": 1.8, "inks": 1.8, "scroll3d": 1.8, "scroll3dold": 1.8, "ebru": 2.5, "living": 2.5,
         "check": 1.8, "solve": 1.8, "convert": 1.8,
         "shapes": 1.8, "tilt": 1.8, "dots": 1.8, "xox": 1.8}
 # The games run on the app's DEMO clock at the same slower rate (their moves and time per frame).
@@ -950,7 +950,7 @@ def stretch(script, k):
             st["pace"] = k
             st["strokes"] = [[[round(p[0] * k, 4), p[1], p[2], p[3]] for p in s] for s in st["strokes"]]
     script.launch = ["-textPenDelay", f"{1.3 * k:.2f}", "-dryDuration", f"{4.0 * k:.2f}",
-                     "-lavaCoolDuration", f"{6.0 * k:.2f}"]
+                     "-lavaCoolDuration", f"{6.0 * k:.2f}"] + script.launch
 
 
 def scene_sudoku(lang):
@@ -973,11 +973,47 @@ def scene_sudoku(lang):
     return s
 
 
+def scroll_check(lang, old):
+    """Not an ad: a page of moving 3D ink (galaxy, gold, ice, jelly: 30 fps in build 235) measured while
+    it sits still, scrolls down and scrolls back up. Each step's frames a second and the CPU and GPU
+    time of a frame go into the scene's done file. `old` asks for build 235's display loop."""
+    rng = np.random.default_rng(37)
+    hand = Hand(Font("EMSNeato"), seed=9, slant=0.05, jitter=0.9)
+    s = Script()
+    if old:
+        s.launch = ["-DemoOldScrollLoop", "YES"]
+    s.add("note", title="Scroll", paper="lined", seconds=1.2)
+    for word, brush, colour, width, x, base in [("Galaxy", "galaxy", [0.35, 0.25, 0.85], 10, 90, 200),
+                                                ("Gold", "gold", [0.93, 0.72, 0.25], 8, 330, 200),
+                                                ("Ice", "ice", [0.45, 0.70, 0.90], 9, 90, 380),
+                                                ("Jelly", "jelly", [0.85, 0.30, 0.50], 9, 300, 380)]:
+        s.add("pen", brush=brush, color=colour, width=width)
+        strokes, _ = hand.text(word, x, base, 44)
+        ts, _ = timed(strokes, rng, xh=44)
+        s.write(ts, brush, colour, width)
+        s.add("wait", seconds=0.6)
+    s.add("wait", seconds=1.0)
+    s.add("scroll", by=0, seconds=2.0)
+    s.add("scroll", by=320, seconds=2.5)
+    s.add("scroll", by=-320, seconds=2.5)
+    s.add("wait", seconds=0.5)
+    return s
+
+
+def scene_scroll3d(lang):
+    return scroll_check(lang, old=False)
+
+
+def scene_scroll3dold(lang):
+    return scroll_check(lang, old=True)
+
+
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
                 "ebru": scene_ebru, "living": scene_living,
                 "check": scene_check, "solve": scene_solve, "convert": scene_convert,
                 "shapes": scene_shapes, "photo": scene_photo, "search": scene_search, "dots": scene_dots,
-                "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku}
+                "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku,
+                "scroll3d": scene_scroll3d, "scroll3dold": scene_scroll3dold}
 
 
 # MARK: - Previews
