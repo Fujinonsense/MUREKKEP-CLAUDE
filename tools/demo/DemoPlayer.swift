@@ -28,8 +28,9 @@ final class DemoStage {
     /// moving ink at the ink's 30 fps while it scrolled.
     static var oldScrollLoop: Bool { UserDefaults.standard.bool(forKey: "DemoOldScrollLoop") }
     /// The check of dense pages (scene scrolldenseold): build 235's page meshes, made on the main
-    /// thread as a page came near the screen, and shadow passes over every stroke.
-    static var oldInkMesh: Bool { UserDefaults.standard.bool(forKey: "DemoOldInkMesh") }
+    /// thread as a page came near the screen, and shadow passes over every stroke. Read by the
+    /// renderer, which is not tied to the main actor.
+    nonisolated static var oldInkMesh: Bool { UserDefaults.standard.bool(forKey: "DemoOldInkMesh") }
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
