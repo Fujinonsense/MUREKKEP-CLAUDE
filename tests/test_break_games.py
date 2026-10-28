@@ -365,3 +365,18 @@ def test_every_text_of_the_corner_goes_through_loc():
     xox = src("XOXGame.swift")
     for key in ("Kazandın!", "iPad kazandı.", "Berabere.", "Sıra sende: X çiz.", "iPad düşünüyor…"):
         assert f'Loc.t("{key}")' in xox, key
+
+
+def test_the_games_grey_text_is_drawn_plain():
+    # `.secondary` over a material is drawn vibrant against it; the game area is clipped on top of the
+    # panel's material, so the games' grey lines (Sudoku's clock, XOX's turn and wins, every hint) were
+    # not drawn at all (Codemagic run 6ae26643). They use the secondary label's grey as a plain colour.
+    theme = (APP / "Theme.swift").read_text(encoding="utf-8")
+    assert "static let muted = Color(uiColor: .secondaryLabel)" in theme
+    for name in ("SudokuGame.swift", "XOXGame.swift", "DotsGame.swift", "MandalaGame.swift", "BubblesGame.swift",
+                 "FlyerGame.swift", "ShooterGame.swift", "EbruGame.swift", "LivingInkGame.swift"):
+        text = src(name)
+        assert ".foregroundStyle(.secondary)" not in text and "Color.secondary" not in text, name
+    corner = src("GameCorner.swift")
+    level_map = corner[corner.index("struct LevelMap: View {"):corner.index("struct LevelResultCard: View {")]
+    assert ".foregroundStyle(.secondary)" not in level_map and "Theme.muted" in level_map

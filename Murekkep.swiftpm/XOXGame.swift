@@ -43,13 +43,13 @@ struct XOXGame: View {
             HStack {
                 Text(status)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(game.isOver ? Theme.ink : Color.secondary)
+                    .foregroundStyle(game.isOver ? Theme.ink : Theme.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer()
                 Text(Loc.t("Galibiyet: {0}", "\(wins)"))
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
             .frame(height: 22)
             GeometryReader { geo in
@@ -61,7 +61,7 @@ struct XOXGame: View {
             HStack {
                 Text(difficulty == .hard ? Loc.t("Zor: iPad hata yapmaz; berabere kalmak başarıdır.") : difficulty == .easy ? Loc.t("Kolay: iPad çoğu zaman rastgele oynar.") : Loc.t("Orta: iPad kazanmayı ve engellemeyi bilir."))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer()

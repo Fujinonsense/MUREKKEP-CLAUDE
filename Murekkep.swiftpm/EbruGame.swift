@@ -174,7 +174,7 @@ struct EbruGame: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(model.canUndo ? Theme.ink : Color.secondary.opacity(0.4))
+                .foregroundStyle(model.canUndo ? Theme.ink : Theme.muted.opacity(0.4))
                 .disabled(!model.canUndo)
                 .accessibilityLabel(Loc.t("Geri al"))
             }

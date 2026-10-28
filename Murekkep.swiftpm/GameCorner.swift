@@ -584,7 +584,7 @@ struct LevelMap: View {
                 Text(Loc.t("Seviye {0} açık", "\(kept.unlockedLevel)"))
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.muted)
             ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                     ForEach(1...(game.levels ?? 1), id: \.self) { level in

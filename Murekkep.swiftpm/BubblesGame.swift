@@ -139,7 +139,7 @@ struct InkBubblesGame: View {
                     HStack {
                         Label(Loc.t("Lekelere dokunma"), systemImage: "hand.raised")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.muted)
                         Spacer()
                         if model.combo > 1 {
                             Text("×\(model.combo)")
@@ -190,7 +190,7 @@ struct InkBubblesGame: View {
                 .font(.system(.headline, design: .rounded).monospacedDigit())
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.muted)
         }
         .frame(minWidth: 56)
     }

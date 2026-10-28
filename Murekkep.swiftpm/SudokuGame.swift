@@ -123,12 +123,12 @@ struct SudokuGame: View {
                 .foregroundStyle(Theme.ink)
             Text(Loc.t("Her satır, sütun ve kutuda 1–9."))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.muted)
             DifficultyPicker(difficulty: Binding(get: { store[.sudoku].difficulty }, set: { store.setDifficulty($0, for: .sudoku) }))
             if let best = store[.sudoku].best[store[.sudoku].difficulty] {
                 Text(Loc.t("En iyi süre: {0}", GameCorner.clock(best)))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
             Button {
                 recorded = false
@@ -159,7 +159,7 @@ struct SudokuGame: View {
                 Spacer()
                 Text(GameCorner.clock(model.elapsed))
                     .font(.system(.subheadline, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .accessibilityLabel(Loc.t("Süre: {0}", GameCorner.clock(model.elapsed)))
                 Spacer()
                 Button {
@@ -243,7 +243,7 @@ struct SudokuGame: View {
                     for mark in marks {
                         let x = rect.minX + cell * (CGFloat((mark - 1) % 3) + 0.5) / 3
                         let y = rect.minY + cell * (CGFloat((mark - 1) / 3) + 0.5) / 3
-                        context.draw(Text("\(mark)").font(.system(size: cell * 0.26)).foregroundStyle(.secondary),
+                        context.draw(Text("\(mark)").font(.system(size: cell * 0.26)).foregroundStyle(Theme.muted),
                                      at: CGPoint(x: x, y: y), anchor: .center)
                     }
                 }
@@ -296,7 +296,7 @@ struct SudokuGame: View {
                         Text("\(digit)")
                             .font(.system(size: 17, weight: .semibold, design: .rounded))
                             .monospacedDigit()
-                            .foregroundStyle(placed >= 9 ? Color.secondary : Theme.ink)
+                            .foregroundStyle(placed >= 9 ? Theme.muted : Theme.ink)
                             .frame(maxWidth: .infinity)
                             .frame(height: 32)
                             .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.ink.opacity(placed >= 9 ? 0.04 : 0.1)))
@@ -325,7 +325,7 @@ struct SudokuGame: View {
                 Spacer()
                 Text(model.notesMode ? Loc.t("Not modu: küçük rakamlar") : Loc.t("Hücreye dokun, rakamı seç"))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }

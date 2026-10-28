@@ -46,7 +46,7 @@ struct FlyerGame: View {
                         .foregroundStyle(.primary)
                     Text(best.map { Loc.t("En iyi: {0}", "\($0)") } ?? Loc.t("Bayrak yok; uçtukça hızlanır."))
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -215,13 +215,13 @@ private struct FlyerPlay: View {
                         .tint(Theme.ink)
                     Text("\(model.passed)/\(goal)")
                         .font(.system(.caption, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                 }
                 HStack(spacing: 2) {
                     ForEach(0..<FlyerWorld.lives, id: \.self) { i in
                         Image(systemName: i < model.lives ? "drop.fill" : "drop")
                             .font(.system(size: 11))
-                            .foregroundStyle(i < model.lives ? Theme.ink : Color.secondary.opacity(0.4))
+                            .foregroundStyle(i < model.lives ? Theme.ink : Theme.muted.opacity(0.4))
                     }
                 }
                 .accessibilityLabel(Loc.t("{0} damla kaldı", "\(model.lives)"))

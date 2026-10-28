@@ -78,7 +78,7 @@ struct InkMandalaGame: View {
             HStack {
                 Text(Loc.t("Çiz; her çizgi sekiz kat açılır."))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                 Spacer(minLength: 8)
                 Button(Loc.t("Temizle")) {
                     petals = []

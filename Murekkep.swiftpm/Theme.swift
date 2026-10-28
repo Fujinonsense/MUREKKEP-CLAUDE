@@ -27,6 +27,10 @@ enum Theme {
                                   dark: UIColor(white: 1, alpha: 0.10))
     /// Shadows are blue-black ink, not grey.
     static let shadow = Color(red: 0.086, green: 0.13, blue: 0.24)
+    /// The secondary label's grey as a plain colour. `.secondary` over a material is drawn vibrant,
+    /// against the material behind it; inside the break panel's clipped game area there is none, so
+    /// the games' grey lines (Sudoku's clock, XOX's turn and wins, every hint) were not drawn at all.
+    static let muted = Color(uiColor: .secondaryLabel)
 
     /// The ruled paper behind the library.
     static var libraryBackground: some View { RuledPaper() }

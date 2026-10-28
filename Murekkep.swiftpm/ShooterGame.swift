@@ -279,7 +279,7 @@ private struct ShooterPlay: View {
                 Spacer()
                 Text(Loc.t("Puan: {0}", "\(model.score)"))
                     .font(.system(.subheadline, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
             ZStack {
                 GeometryReader { geo in
@@ -408,8 +408,8 @@ private struct ShooterPlay: View {
         context.stroke(Path(ellipseIn: CGRect(x: Double(well.x) - wellRadius, y: Double(well.y) - wellRadius, width: 2 * wellRadius, height: 2 * wellRadius)),
                        with: .color(Theme.hairline), lineWidth: 0.8)
         piece(&context, at: well, radius: grid.radius * 0.55, colour: model.next)
-        context.draw(Text(Loc.t("Sonraki")).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: well.x, y: Double(well.y) - wellRadius - 7), anchor: .center)
-        context.draw(Text(Image(systemName: "arrow.left.arrow.right")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary),
+        context.draw(Text(Loc.t("Sonraki")).font(.caption2).foregroundStyle(Theme.muted), at: CGPoint(x: well.x, y: Double(well.y) - wellRadius - 7), anchor: .center)
+        context.draw(Text(Image(systemName: "arrow.left.arrow.right")).font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.muted),
                      at: CGPoint(x: Double(well.x) - wellRadius - 9, y: Double(well.y)), anchor: .center)
     }
 
