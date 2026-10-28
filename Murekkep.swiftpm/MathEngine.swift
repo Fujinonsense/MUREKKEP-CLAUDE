@@ -860,6 +860,12 @@ enum MathFormat {
             return "`\(line)` → **\(number(v))**"
         case let .claim(line, holds, left, right, rightText):
             if holds { return "✓ `\(line)` " + L("doğru", "is correct") }
+            // A plain number on the right is named once: "…is 15, not 16", not "the written 16 = 16".
+            let written = rightText.trimmingCharacters(in: .whitespaces)
+            if !written.isEmpty, written.allSatisfy({ "0123456789.,-−".contains($0) }) {
+                return "✗ `\(line)` " + L("yanlış: sol taraf **\(number(left))** eder, \(written) değil",
+                                          "is wrong: the left side is **\(number(left))**, not \(written)")
+            }
             return "✗ `\(line)` " + L("yanlış: sol taraf **\(number(left))** eder, yazılan `\(rightText)` = \(number(right))", "is wrong: the left side is **\(number(left))**, the written `\(rightText)` = \(number(right))")
         case let .solved(line, variable, roots, periodic, trig):
             var s = "`\(line)` → **\(MathFormat.roots(roots, variable: variable, trig: trig))**"

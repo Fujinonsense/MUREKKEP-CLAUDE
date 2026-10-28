@@ -756,6 +756,13 @@ if case let .claim(_, holds, left, _, _)? = PageMath.question("3+3=33 doğru mu?
 } else {
     check(false, "page math: the engine finds 3+3=33 wrong (left side 6)")
 }
+// A wrong sum names the written number once ("…15 eder, 16 değil", not "yazılan `16` = 16"); a written
+// expression on the right keeps its value.
+check(MathFormat.describe(.claim("7 + 8 = 16", holds: false, left: 15, right: 16, rightText: "16"))
+      == "✗ `7 + 8 = 16` yanlış: sol taraf **15** eder, 16 değil",
+      "math format: a wrong sum names the written number once")
+check(MathFormat.describe(.claim("2·3 = 3+4", holds: false, left: 6, right: 7, rightText: "3+4")).hasSuffix("yazılan `3+4` = 7"),
+      "math format: a written expression on the right keeps its value")
 
 // The flowering water pen (as in the ad's hook): a glossy turquoise line that grows glass flowers on
 // thin turquoise stems once the pen lifts; no grass. Some stems stand in pairs or threes, some carry

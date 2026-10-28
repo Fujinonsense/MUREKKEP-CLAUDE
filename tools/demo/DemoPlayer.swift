@@ -91,6 +91,8 @@ private final class DemoPlayer {
     private let store: LibraryStore
     /// Where the pen was, for the edit's zoom: [wall-clock seconds, window x, window y, 1 while down].
     private var track: [[Double]] = []
+    /// The notebooks the scene opened, in order.
+    private var opened: [UUID] = []
 
     init(name: String, store: LibraryStore) {
         self.name = name
@@ -175,6 +177,8 @@ private final class DemoPlayer {
             await importPhoto(step)
         case "library":
             NotificationCenter.default.post(name: DemoStage.library, object: nil)
+        case "ink.read":
+            await waitForInkText(limit: step.seconds ?? 90)
         case "search":
             await typeSearch(step.text ?? "", seconds: step.seconds ?? 1.5)
         case "open.hit":
@@ -205,6 +209,16 @@ private final class DemoPlayer {
             await pause(0.1)
         }
         await pause(step.seconds ?? 1)
+    }
+
+    /// Waits until the app has read the handwriting of every notebook the scene wrote (InkTextCache,
+    /// filled off the main thread once a note closes), so the search sees what is on their pages.
+    private func waitForInkText(limit: Double) async {
+        let start = Date()
+        while Date().timeIntervalSince(start) < limit,
+              opened.contains(where: { InkTextCache.pages(note: $0).isEmpty }) {
+            await pause(0.25)
+        }
     }
 
     /// Types into the library's search field, a letter at a time.
@@ -246,9 +260,19 @@ private final class DemoPlayer {
     // MARK: The notebook
 
     private func openNote(_ step: DemoStep) async {
+        // A note already open: back to the library first, as a hand does. Swapping the path's note
+        // would keep the open editor (and its note); going back closes it, and its ink is read.
+        if canvas != nil {
+            NotificationCenter.default.post(name: DemoStage.library, object: nil)
+            for _ in 0..<50 where canvas != nil {
+                await pause(0.1)
+            }
+            await pause(0.6)
+        }
         let paper = PaperStyle(rawValue: step.paper ?? "") ?? .lined
         let note = store.createNotebook(paper: paper)
         if let title = step.title { store.rename(note.id, to: title) }
+        opened.append(note.id)
         NotificationCenter.default.post(name: DemoStage.openNote, object: note.id)
         // The editor builds its canvas after the push.
         for _ in 0..<80 where canvas == nil {

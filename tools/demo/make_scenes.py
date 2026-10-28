@@ -816,8 +816,9 @@ def scene_tilt(lang):
 
 
 def scene_search(lang):
-    """Three notebooks with two lines each (each one's ink is read when it closes), then in the
-    library a word typed into the search finds the page it was handwritten on, and the hit opens."""
+    """Three notebooks with two lines each, each opened from the library (the one before closes and its
+    ink is read), then in the library, once the app has read them all, a word typed into the search
+    finds the page it was handwritten on, and the hit opens."""
     rng = np.random.default_rng(66)
     hand = Hand(Font("EMSNeato"), seed=17, slant=0.04, jitter=0.9)
     s = Script()
@@ -834,7 +835,8 @@ def scene_search(lang):
         s.write(ts, "pen", INK, 2.2)
         s.add("wait", seconds=0.8)
     s.add("library")
-    s.add("wait", seconds=3.0)
+    s.add("ink.read", seconds=90)
+    s.add("wait", seconds=1.5)
     s.add("search", text=t["search.query"], seconds=1.6)
     s.add("wait", seconds=3.5)
     s.add("open.hit")

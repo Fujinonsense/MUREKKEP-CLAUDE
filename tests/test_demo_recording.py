@@ -169,6 +169,28 @@ def test_the_solution_check_counts_its_mistakes_in_both_languages():
     assert '"There are \\(wrong) mistakes."' in source and '"\\(wrong) yerde hata var."' in source
 
 
+def test_a_wrong_sum_names_the_written_number_once():
+    """Run 6ae21e63's worksheet check read "the left side is 15, the written 16 = 16"."""
+    describe = (APP / "MathEngine.swift").read_text(encoding="utf-8").split("static func describe(")[1]
+    assert '"is wrong: the left side is **\\(number(left))**, not \\(written)"' in describe
+    assert '"yanlış: sol taraf **\\(number(left))** eder, \\(written) değil"' in describe
+
+
+def test_the_search_scene_opens_each_notebook_from_the_library_and_waits_for_its_reading():
+    """Run 6ae21e63: the notebooks were opened over each other (the path [A] became [B], which kept A's
+    editor), so all the lines landed on one page and the search found nothing. A notebook now opens
+    from the library, as a hand does (the one before closes and its ink is read), and the query is
+    typed once the app has read every notebook's handwriting."""
+    player = (DEMO / "DemoPlayer.swift").read_text(encoding="utf-8")
+    open_note = player.split("private func openNote(")[1].split("\n    }\n")[0]
+    assert "DemoStage.library" in open_note
+    assert open_note.index("DemoStage.library") < open_note.index("DemoStage.openNote")
+    assert 'case "ink.read":' in player and "InkTextCache.pages(note:" in player
+    steps = json.loads((DEMO / "scenes" / "DemoScene-search-en.json").read_text(encoding="utf-8"))["steps"]
+    ops = [s["op"] for s in steps]
+    assert ops.count("note") == 3 and ops.index("library") < ops.index("ink.read") < ops.index("search")
+
+
 def test_the_smart_pen_search_and_game_scenes_use_the_apps_own_paths():
     """Second phase: a held drawing goes through the canvas's own hold (the same 0.55 s wait and the
     same recognizers), the photo through the app's photo import, the games' moves through their own
