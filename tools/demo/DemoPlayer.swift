@@ -27,6 +27,9 @@ final class DemoStage {
     /// The check of scrolling (scene scroll3dold): build 235's display loop, which kept a page with
     /// moving ink at the ink's 30 fps while it scrolled.
     static var oldScrollLoop: Bool { UserDefaults.standard.bool(forKey: "DemoOldScrollLoop") }
+    /// The check of dense pages (scene scrolldenseold): build 235's page meshes, made on the main
+    /// thread as a page came near the screen, and shadow passes over every stroke.
+    static var oldInkMesh: Bool { UserDefaults.standard.bool(forKey: "DemoOldInkMesh") }
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
@@ -81,6 +84,8 @@ private struct DemoStep: Decodable {
     var hold: Bool?
     /// How far a scroll moves the page down (points; negative goes up).
     var by: Double?
+    /// How many scribbled strokes a fill puts on the page.
+    var count: Int?
     /// How much slower than a hand the strokes are played (the edit speeds them up as much); the
     /// samples' own timestamps stay a hand's.
     var pace: Double?
@@ -205,9 +210,55 @@ private final class DemoPlayer {
             canvas?.demoScroll(by: CGFloat(step.by ?? 300), over: seconds)
             await pause(seconds)
             frameReports.append(DemoFrames.shared.end())
+        case "fill":
+            fillPage(step)
         default:
             print("Mürekkep demo: unknown step \(step.op)")
         }
+    }
+
+    // MARK: Dense pages
+
+    /// Covers a page with rows of scribbled strokes in one go, like a page of quick notes: the scroll
+    /// checks need full pages, and writing them at a hand's pace would take minutes.
+    private func fillPage(_ step: DemoStep) {
+        guard let editor = canvas?.model,
+              let brush = Brush.allCases.first(where: { "\($0)" == step.brush }) else { return }
+        let page = step.page ?? 0
+        for _ in 0..<max(0, page + 1 - editor.pages.count) {
+            editor.addPage()
+        }
+        guard editor.pages.indices.contains(page), editor.layout.pageSizes.indices.contains(page) else { return }
+        let c = step.color ?? [0.12, 0.13, 0.18]
+        let color = InkColor(c[0], c[1], c[2], c.count > 3 ? c[3] : 1)
+        let radius = (step.width ?? brush.defaultWidth) / 2
+        let spacing = max(0.6, radius * 0.4)
+        let cell = max(10, radius * 7)
+        let size = editor.layout.pageSizes[page]
+        let columns = max(1, Int((Float(size.width) - 100) / cell))
+        let rows = max(1, Int((Float(size.height) - 160) / (cell * 1.5)))
+        var seed = UInt64(truncatingIfNeeded: (step.index ?? 1) * 7919 + page * 104_729)
+        func random() -> Float {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Float(seed >> 40) / Float(1 << 24)
+        }
+        let birth = Date().timeIntervalSinceReferenceDate
+        var strokes: [Stroke] = []
+        for k in 0..<min(step.count ?? 600, columns * rows) {
+            let x0 = 50 + Float(k % columns) * cell
+            let y0 = 100 + Float(k / columns) * cell * 1.5
+            var p = SIMD2<Float>(x0 + random() * cell * 0.3, y0 + random() * cell)
+            var angle = random() * 6.283
+            var points: [InkPoint] = []
+            for _ in 0..<Int(cell * 2.2 / spacing) {
+                angle += (random() - 0.5) * 0.9
+                p += SIMD2<Float>(cos(angle), sin(angle)) * spacing
+                p = SIMD2<Float>(min(max(p.x, x0), x0 + cell), min(max(p.y, y0), y0 + cell))
+                points.append(InkPoint(x: p.x, y: p.y, r: radius * (0.85 + 0.3 * random()), ink: random()))
+            }
+            strokes.append(Stroke(brush: brush, color: color, width: radius * 2, birth: birth, seed: random(), points: points))
+        }
+        editor.addStrokes(strokes, toPage: page)
     }
 
     // MARK: The library

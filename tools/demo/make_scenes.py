@@ -1008,12 +1008,42 @@ def scene_scroll3dold(lang):
     return scroll_check(lang, old=True)
 
 
+def dense_check(lang, old):
+    """Not an ad: six full pages (1200 scribbled pen strokes each, plus 150 of a 3D ink) measured while
+    the first one sits still, the view scrolls down to the last and back up. `old` asks for build 235's
+    page meshes: made on the main thread as a page came near, shadow passes over every stroke."""
+    s = Script()
+    if old:
+        s.launch = ["-DemoOldInkMesh", "YES"]
+    s.add("note", title="Dense", paper="lined", seconds=1.2)
+    raised = [("galaxy", [0.35, 0.25, 0.85], 8), ("gold", [0.93, 0.72, 0.25], 5), ("ice", [0.45, 0.70, 0.90], 7),
+              ("jelly", [0.85, 0.30, 0.50], 8), ("galaxy", [0.20, 0.45, 0.80], 8), ("gold", [0.80, 0.55, 0.20], 5)]
+    for page, (brush, colour, width) in enumerate(raised):
+        s.add("fill", page=page, brush="pen", color=[0.12, 0.13, 0.18], width=2.2, count=1200, index=2 * page + 1)
+        s.add("fill", page=page, brush=brush, color=colour, width=width, count=150, index=2 * page + 2)
+    s.add("wait", seconds=3.0)
+    s.add("scroll", by=0, seconds=3.0)
+    s.add("scroll", by=5600, seconds=10.0)
+    s.add("scroll", by=-5600, seconds=10.0)
+    s.add("wait", seconds=0.5)
+    return s
+
+
+def scene_scrolldense(lang):
+    return dense_check(lang, old=False)
+
+
+def scene_scrolldenseold(lang):
+    return dense_check(lang, old=True)
+
+
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
                 "ebru": scene_ebru, "living": scene_living,
                 "check": scene_check, "solve": scene_solve, "convert": scene_convert,
                 "shapes": scene_shapes, "photo": scene_photo, "search": scene_search, "dots": scene_dots,
                 "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku,
-                "scroll3d": scene_scroll3d, "scroll3dold": scene_scroll3dold}
+                "scroll3d": scene_scroll3d, "scroll3dold": scene_scroll3dold,
+                "scrolldense": scene_scrolldense, "scrolldenseold": scene_scrolldenseold}
 
 
 # MARK: - Previews
