@@ -117,11 +117,11 @@ def test_the_games_draw_with_the_pencil_keep_their_touches_and_pause():
     assert '.accessibilityAction(named: Text(Loc.t("Rengi değiştir"))) { model.swapLoaded() }' in shooter
     assert "if let guide = model.guide()" in shooter  # the dotted line
     sudoku = src("SudokuGame.swift")
-    assert "TimelineView(clock)" in sudoku and "if scenePhase == .active { model.tick() }" in sudoku
-    # A schedule from `.now` restarts on every redraw: the tick's own redraw ticks again, and the clock
-    # runs away. Only the simulator's check of it (inside #if DEMO) may still ask for one.
-    assert "@State private var clockStart = Date()" in sudoku and "return .periodic(from: clockStart, by: 1)" in sudoku
-    assert "periodic(from: .now" not in re.sub(r"#if DEMO.*?#endif", "", sudoku, flags=re.S)
+    # The clock is a one-second task while the app is in front: build 225's TimelineView clock
+    # ticked again from its own redraws and froze the iPad (Codemagic run 6ae26088).
+    assert ".task(id: scenePhase)" in sudoku and "guard scenePhase == .active else { return }" in sudoku
+    assert "try? await Task.sleep(for: .seconds(1))" in sudoku and "model.tick()" in sudoku
+    assert "TimelineView(" not in sudoku
     assert "Task.detached(priority: .userInitiated)" in sudoku and "Sudoku.generate(difficulty: difficulty, seed: seed)" in sudoku
     assert "ForEach(1...9, id: \\.self)" in sudoku and 'Loc.t("Notlar")' in sudoku and 'Loc.t("Sil")' in sudoku
     assert "conflicts.contains(i) { tint = Color.red.opacity(0.16) }" in sudoku

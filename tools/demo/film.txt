@@ -2,7 +2,7 @@
 # notes-en textpen-en inks-en, then ebru-en living-en; textpen-en again with the galaxy ink;
 # check-en solve-en convert-en (runs 6ae21232 and 6ae218e0, the second one right);
 # the second phase in runs 6ae21e63 (shapes dots tilt xox) and 6ae226b3 (photo search), search-en again in 6ae22f30.
-# 2026-10-29: not an ad. Sudoku's clock, build 225's schedule from .now against the fixed one, with the
-# app's CPU sampled once a second (sudoku*.cpu.txt) and any crash report kept.
-sudokuold-en
+# 2026-10-29: not an ads run. Run 6ae26088 showed build 225's Sudoku clock running away (CPU flat out,
+# memory +4.7 MB/s); the clock is now a one-second task: check it counts (end frame about 0:20) with
+# the app's CPU sampled once a second (sudoku-en.cpu.txt).
 sudoku-en

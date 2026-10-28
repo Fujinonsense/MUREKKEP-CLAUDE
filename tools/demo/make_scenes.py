@@ -953,13 +953,11 @@ def stretch(script, k):
                      "-lavaCoolDuration", f"{6.0 * k:.2f}"]
 
 
-def sudoku_clock(lang, old):
+def scene_sudoku(lang):
     """Not an ad: Sudoku's clock. A fresh puzzle with 12 seconds on the clock, then the game closed and
-    opened again on the saved puzzle for 8 more, so the end frame should read about 0:20. `old` asks
-    for build 225's schedule from `.now` (scene sudokuold), which the iPad froze and closed on."""
+    opened again on the saved puzzle for 8 more, so the end frame should read about 0:20 (build 225's
+    TimelineView clock ticked from its own redraws and froze the app; run 6ae26088 showed it)."""
     s = Script()
-    if old:
-        s.launch = ["-DemoOldSudokuClock", "YES"]
     # No writing: the page only holds the break corner.
     s.add("note", title=TEXT[lang]["break.title"], paper="lined", seconds=1.0)
     s.add("games", open=True, expanded=True)
@@ -975,19 +973,11 @@ def sudoku_clock(lang, old):
     return s
 
 
-def scene_sudoku(lang):
-    return sudoku_clock(lang, old=False)
-
-
-def scene_sudokuold(lang):
-    return sudoku_clock(lang, old=True)
-
-
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
                 "ebru": scene_ebru, "living": scene_living,
                 "check": scene_check, "solve": scene_solve, "convert": scene_convert,
                 "shapes": scene_shapes, "photo": scene_photo, "search": scene_search, "dots": scene_dots,
-                "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku, "sudokuold": scene_sudokuold}
+                "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku}
 
 
 # MARK: - Previews

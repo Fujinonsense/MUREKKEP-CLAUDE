@@ -98,9 +98,6 @@ struct SudokuGame: View {
     @State private var recorded = false
     @State private var newBest = false
     @State private var confirmNew = false
-    /// Where the clock's seconds count from. A schedule starting at `.now` started afresh on every
-    /// redraw, so each tick's redraw brought another tick at once and the clock ran away.
-    @State private var clockStart = Date()
 
     var body: some View {
         Group {
@@ -116,15 +113,6 @@ struct SudokuGame: View {
             model.newPuzzle(difficulty: store[.sudoku].difficulty)
         }
         #endif
-    }
-
-    /// The clock's seconds, counted from when the puzzle came on screen.
-    private var clock: PeriodicTimelineSchedule {
-        #if DEMO
-        // Build 225's schedule, for the simulator's check that it ran away (scene sudokuold).
-        if DemoStage.oldSudokuClock { return .periodic(from: .now, by: 1) }
-        #endif
-        return .periodic(from: clockStart, by: 1)
     }
 
     private var start: some View {
@@ -169,15 +157,10 @@ struct SudokuGame: View {
                 Text(kept.difficulty.title)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                TimelineView(clock) { timeline in
-                    Text(GameCorner.clock(model.elapsed))
-                        .font(.system(.subheadline, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .onChange(of: timeline.date) { _, _ in
-                            if scenePhase == .active { model.tick() }
-                        }
-                }
-                .accessibilityLabel(Loc.t("Süre: {0}", GameCorner.clock(model.elapsed)))
+                Text(GameCorner.clock(model.elapsed))
+                    .font(.system(.subheadline, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(Loc.t("Süre: {0}", GameCorner.clock(model.elapsed)))
                 Spacer()
                 Button {
                     if model.inProgress { confirmNew = true } else { model.abandon() }
@@ -213,6 +196,18 @@ struct SudokuGame: View {
             newBest = store.record(.sudoku, score: kept.elapsed, at: kept.difficulty, lowerIsBetter: true)
         }
         .sensoryFeedback(.success, trigger: model.solved) { _, done in done }
+        // The clock: a second at a time while the app is in front and the puzzle on screen (the task
+        // ends with the view and starts again when the app comes back). The TimelineView clock it
+        // replaces ticked again from its own redraws: the CPU ran flat out, memory grew by megabytes
+        // a second, and the iPad froze and closed the app.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                model.tick()
+            }
+        }
     }
 
     private func board(_ kept: SudokuSave, side: CGFloat) -> some View {

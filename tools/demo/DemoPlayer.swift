@@ -24,8 +24,6 @@ final class DemoStage {
     static let dotsMove = Notification.Name("DemoStage.dotsMove")
     static let xoxMove = Notification.Name("DemoStage.xoxMove")
     static let sudokuNew = Notification.Name("DemoStage.sudokuNew")
-    /// The check of Sudoku's clock (scene sudokuold): the schedule from `.now` that build 225 had.
-    static var oldSudokuClock: Bool { UserDefaults.standard.bool(forKey: "DemoOldSudokuClock") }
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
