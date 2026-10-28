@@ -364,6 +364,7 @@ NAVY = [0.10, 0.17, 0.42]
 INK = [0.11, 0.12, 0.20]
 RED = [0.80, 0.16, 0.16]
 YELLOW = [1.0, 0.86, 0.25]
+GALAXY = [0.35, 0.25, 0.85]
 
 TEXT = {
     "en": {
@@ -453,18 +454,21 @@ def scene_notes(lang):
 
 
 def scene_textpen(lang):
+    # The text pen writes with the last pen picked; a galaxy ink in a round hand makes the change
+    # to typed text plain to see (EMS Tech looked typed already). Each line waits long enough for
+    # its conversion and a still moment after it (the user, 2026-10-28: the Turkish line ended
+    # the old recording while it was still converting).
     rng = np.random.default_rng(21 if lang == "en" else 22)
-    hand = Hand(Font("EMSTech"), seed=7 if lang == "en" else 8, slant=0.0, jitter=0.8)
+    hand = Hand(Font("EMSNeato"), seed=7 if lang == "en" else 8, slant=0.04, jitter=0.9)
     s = Script()
     t = TEXT[lang]
     s.add("note", title=t["textpen.title"], paper="lined", seconds=1.2)
-    s.add("textpen", brush="pen", color=NAVY, width=2.2)
+    s.add("textpen", brush="galaxy", color=GALAXY, width=3.6)
     for k, line in enumerate(t["textpen.lines"]):
-        strokes, _ = hand.text(line, MARGIN + 12, rule(2 + 2 * k) - 1.5, 12.5)
-        timed_strokes, _ = timed(strokes, rng, xh=12.5)
-        s.write(timed_strokes, "pen", NAVY, 2.2)
-        s.add("wait", seconds=3.2)
-    s.add("wait", seconds=1.0)
+        strokes, _ = hand.text(line, MARGIN + 12, rule(2 + 2 * k) - 1.5, 14)
+        timed_strokes, _ = timed(strokes, rng, xh=14)
+        s.write(timed_strokes, "galaxy", GALAXY, 3.6)
+        s.add("wait", seconds=5.0 if k == 0 else 7.0)
     return s
 
 
