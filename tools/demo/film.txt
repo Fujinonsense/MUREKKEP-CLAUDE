@@ -1,7 +1,7 @@
 # The scenes the next demo-kayit run films (tools/demo/record.sh). Filmed 2026-10-28 at pace 1.8:
 # notes-en textpen-en inks-en, then ebru-en living-en; textpen-en again with the galaxy ink;
-# check-en solve-en convert-en (runs 6ae21232 and 6ae218e0, the second one right).
-# The second phase (run 6ae21e63): shapes-en dots-en tilt-en xox-en right; photo-en and search-en
-# again: the check's wording of a wrong sum, and the search's notebooks opened from the library.
-photo-en
+# check-en solve-en convert-en (runs 6ae21232 and 6ae218e0, the second one right);
+# the second phase in runs 6ae21e63 (shapes dots tilt xox) and 6ae226b3 (photo search).
+# search-en again: the count now includes the hits inside the notes, and the Turkish line is
+# one Vision reads cleanly.
 search-en

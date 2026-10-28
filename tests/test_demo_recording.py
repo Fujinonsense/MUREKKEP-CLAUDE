@@ -191,6 +191,15 @@ def test_the_search_scene_opens_each_notebook_from_the_library_and_waits_for_its
     assert ops.count("note") == 3 and ops.index("library") < ops.index("ink.read") < ops.index("search")
 
 
+def test_the_searched_page_holds_only_words_vision_has_read_cleanly():
+    """Run 6ae226b3's hit read "Mitochondria make energy. Mitokonari enerji üretir.": Vision got
+    "Mitokondri" wrong and "enerji üretir" right in this hand, so the Turkish line keeps to those."""
+    scenes = _make_scenes()
+    english, turkish = dict(scenes.TEXT["en"]["search.notes"])["Biology"]
+    assert english == "Mitochondria make energy."
+    assert turkish.lower().rstrip(".").split() == ["enerji", "üretir"]
+
+
 def test_the_smart_pen_search_and_game_scenes_use_the_apps_own_paths():
     """Second phase: a held drawing goes through the canvas's own hold (the same 0.55 s wait and the
     same recognizers), the photo through the app's photo import, the games' moves through their own

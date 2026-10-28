@@ -402,7 +402,9 @@ TEXT = {
         "shapes.title": "Biyoloji",
         "tilt.title": "Notes",
         "tilt.lines": ["Turn the page like paper.", "Sayfayı kağıt gibi çevir."],
-        "search.notes": [("Biology", ["Mitochondria make energy.", "Mitokondri enerji üretir."]),
+        # The searched page shows in the hit as Vision read it. Run 6ae226b3 read "Mitokondri" as
+        # "Mitokonari" but "enerji üretir" right, so the Turkish line keeps to those two words.
+        "search.notes": [("Biology", ["Mitochondria make energy.", "Enerji üretir."]),
                          ("Chemistry", ["Water boils at 100 degrees.", "Su 100 derecede kaynar."]),
                          ("Tarih", ["Istanbul was taken in 1453.", "İstanbul 1453'te alındı."])],
         "search.query": "mitochondria",

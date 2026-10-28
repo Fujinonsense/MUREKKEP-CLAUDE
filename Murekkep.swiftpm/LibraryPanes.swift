@@ -593,7 +593,8 @@ struct SearchPane: View {
         let courses = store.sections.filter { $0.name.localizedCaseInsensitiveContains(query) }
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                PaneHeader(title: "“\(query)”", subtitle: Loc.t("{0} sonuç", "\(notes.count + overviews.count + courses.count)"),
+                // Every row below counts, the places found inside the notes too.
+                PaneHeader(title: "“\(query)”", subtitle: Loc.t("{0} sonuç", "\(notes.count + overviews.count + courses.count + hits.count)"),
                            showToggle: showToggle, actions: actions) {
                     EmptyView()
                 }
