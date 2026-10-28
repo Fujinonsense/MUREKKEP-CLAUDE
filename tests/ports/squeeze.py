@@ -58,9 +58,9 @@ class Pencil:
     def squeeze_is_held(self):
         return self.squeeze_held and self.now - self.squeeze_start < 20
 
-    def start_squeeze(self):
+    def start_squeeze(self, at):
         self.squeeze_held = True
-        self.squeeze_start = self.now
+        self.squeeze_start = at
         self.erased_during_squeeze = False
         if self.tool == "eraser":
             self.squeeze_took_eraser = False
@@ -69,28 +69,30 @@ class Pencil:
             self.squeeze_took_eraser = True
             self.begin_temporary_eraser()
 
-    def end_squeeze(self):
-        held_long = self.now - self.squeeze_start >= HOLD
+    def end_squeeze(self, at):
+        held_long = at - self.squeeze_start >= HOLD
         self.squeeze_held = False
-        self.last_squeeze_end = self.now
+        self.last_squeeze_end = at
         if (self.squeeze_took_eraser and (self.erased_during_squeeze or held_long) and not self.erasing
                 and self.is_temporary_eraser):
             self.end_temporary_eraser()
         self.squeeze_took_eraser = False
 
-    def squeeze(self, phase, at):
-        self.now = at
+    def squeeze(self, phase, at, handled=None):
+        """`at` is the squeeze's own time (UIPencilInteraction.Squeeze.timestamp), which decides a
+        click from a hold; `handled` is when the main thread got to it (later while it is busy)."""
+        self.now = at if handled is None else handled
         if phase == "began":
-            self.start_squeeze()
+            self.start_squeeze(at)
         elif phase == "changed":
-            if not self.squeeze_is_held and self.now - self.last_squeeze_end > 0.3:
-                self.start_squeeze()
+            if not self.squeeze_is_held and at - self.last_squeeze_end > 0.3:
+                self.start_squeeze(at)
         elif phase == "ended":
             if not self.squeeze_is_held:
-                if not self.now - self.last_squeeze_end > 0.3:
+                if not at - self.last_squeeze_end > 0.3:
                     return
-                self.start_squeeze()
-            self.end_squeeze()
+                self.start_squeeze(at)
+            self.end_squeeze(at)
 
     def erase_begin(self, at):
         self.now = at

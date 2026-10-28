@@ -55,3 +55,12 @@ def test_second_short_squeeze_without_erasing_gives_the_pen_back():
     p.squeeze("began", 2.0)
     p.squeeze("ended", 2.1)
     assert p.tool == "pen"
+
+
+def test_a_quick_squeeze_handled_late_still_lends_the_eraser():
+    # A busy main thread handles the end of a 0.15 s squeeze 0.8 s after it began: the squeeze's
+    # own times decide that it was a click, so the eraser stays in the hand.
+    p = Pencil("pen")
+    p.squeeze("began", 0.0)
+    p.squeeze("ended", 0.15, handled=0.8)
+    assert p.tool == "eraser"

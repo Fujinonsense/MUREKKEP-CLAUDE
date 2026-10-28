@@ -2116,25 +2116,28 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         if let pose = squeeze.hoverPose {
             lastHover = pose.location
         }
-        model.pencilProDetected = true
+        // A held squeeze sends a stream of changes; publishing on each one redrew the whole editor.
+        if !model.pencilProDetected { model.pencilProDetected = true }
         let configured = model.settings.squeezeAction
         let action = configured == .system ? Self.mapPreferred(UIPencilInteraction.preferredSqueezeAction) : configured
         if action == .holdToErase {
-            let now = CACurrentMediaTime()
+            // The squeeze's own time, not the moment it is handled: a late end on a busy main thread
+            // made a quick squeeze look held, and letting go took the eraser straight back.
+            let now = squeeze.timestamp > 0 ? squeeze.timestamp : CACurrentMediaTime()
             switch squeeze.phase {
             case .began:
-                startSqueeze()
+                startSqueeze(at: now)
             case .changed:
                 // The start of this squeeze went missing.
-                if !squeezeIsHeld && now - lastSqueezeEnd > 0.3 { startSqueeze() }
+                if !squeezeIsHeld && now - lastSqueezeEnd > 0.3 { startSqueeze(at: now) }
             case .ended, .cancelled:
                 if !squeezeIsHeld {
                     // A quick squeeze can arrive as its end alone: it still switches. An end right
                     // after one already handled belongs to that same squeeze.
                     guard now - lastSqueezeEnd > 0.3 else { return }
-                    startSqueeze()
+                    startSqueeze(at: now)
                 }
-                endSqueeze()
+                endSqueeze(at: now)
             default:
                 break
             }
@@ -2152,10 +2155,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     /// Squeezing switches between the eraser and the tool before it, wherever the eraser came
     /// from (a squeeze, a double tap, the toolbar).
-    private func startSqueeze() {
-        model.palette = nil
+    private func startSqueeze(at time: CFTimeInterval) {
+        if model.palette != nil { model.palette = nil }
         squeezeHeld = true
-        squeezeStart = CACurrentMediaTime()
+        squeezeStart = time
         erasedDuringSqueeze = false
         if model.tool == .eraser {
             squeezeTookEraser = false
@@ -2171,11 +2174,10 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
 
     /// Letting go of a held squeeze gives the previous tool back (erased or not); a short squeeze
     /// leaves the eraser in the hand until the next erase is done (or the next squeeze).
-    private func endSqueeze() {
-        let now = CACurrentMediaTime()
-        let heldLong = now - squeezeStart >= Self.squeezeHold
+    private func endSqueeze(at time: CFTimeInterval) {
+        let heldLong = time - squeezeStart >= Self.squeezeHold
         squeezeHeld = false
-        lastSqueezeEnd = now
+        lastSqueezeEnd = time
         if squeezeTookEraser && (erasedDuringSqueeze || heldLong) && eraserPage == nil && model.isTemporaryEraser {
             model.endTemporaryEraser()
         }
