@@ -1003,4 +1003,7 @@ workflows:
     - demo-out/*.png
     - demo-out/*.start
     - demo-out/*.log
+    - demo-out/*.txt
+    - demo-out/*.ips
+    - demo-out/*.crash
     - '*.log'

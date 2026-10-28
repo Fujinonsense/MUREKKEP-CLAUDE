@@ -953,11 +953,41 @@ def stretch(script, k):
                      "-lavaCoolDuration", f"{6.0 * k:.2f}"]
 
 
+def sudoku_clock(lang, old):
+    """Not an ad: Sudoku's clock. A fresh puzzle with 12 seconds on the clock, then the game closed and
+    opened again on the saved puzzle for 8 more, so the end frame should read about 0:20. `old` asks
+    for build 225's schedule from `.now` (scene sudokuold), which the iPad froze and closed on."""
+    s = Script()
+    if old:
+        s.launch = ["-DemoOldSudokuClock", "YES"]
+    # No writing: the page only holds the break corner.
+    s.add("note", title=TEXT[lang]["break.title"], paper="lined", seconds=1.0)
+    s.add("games", open=True, expanded=True)
+    s.add("wait", seconds=1.0)
+    s.add("game", name="sudoku")
+    s.add("wait", seconds=1.5)
+    s.add("sudoku.new")
+    s.add("wait", seconds=12.0)
+    s.add("game", name=None)
+    s.add("wait", seconds=1.0)
+    s.add("game", name="sudoku")
+    s.add("wait", seconds=8.0)
+    return s
+
+
+def scene_sudoku(lang):
+    return sudoku_clock(lang, old=False)
+
+
+def scene_sudokuold(lang):
+    return sudoku_clock(lang, old=True)
+
+
 SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_inks,
                 "ebru": scene_ebru, "living": scene_living,
                 "check": scene_check, "solve": scene_solve, "convert": scene_convert,
                 "shapes": scene_shapes, "photo": scene_photo, "search": scene_search, "dots": scene_dots,
-                "tilt": scene_tilt, "xox": scene_xox}
+                "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku, "sudokuold": scene_sudokuold}
 
 
 # MARK: - Previews

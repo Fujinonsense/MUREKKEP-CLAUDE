@@ -65,13 +65,22 @@ run_scene() {
 import json, sys
 print("\n".join(json.load(open(sys.argv[1])).get("launch", [])))' "$APP/DemoScene-$name.json")
   python3 -c 'import time; print(f"{time.time():.3f}")' > "$OUT/$name.start"
-  xcrun simctl launch "$UDID" "$BUNDLE" -DemoScene "$name" -AppleLanguages "($lang)" -AppleLocale "$locale" \
-    ${extra[@]+"${extra[@]}"} > /dev/null
+  local pid
+  pid=$(xcrun simctl launch "$UDID" "$BUNDLE" -DemoScene "$name" -AppleLanguages "($lang)" -AppleLocale "$locale" \
+    ${extra[@]+"${extra[@]}"} | awk -F': ' '{print $NF}')
+  # The app's CPU (%) and memory (KB) once a second: a view that keeps redrawing itself shows here.
+  ( while kill -0 "$pid" 2> /dev/null; do
+      echo "$(date +%s) $(ps -o %cpu=,rss= -p "$pid")" >> "$OUT/$name.cpu.txt"
+      sleep 1
+    done ) &
+  local sampler=$!
   for _ in $(seq 1 600); do
     if [ -f "$done" ]; then break; fi
+    if ! kill -0 "$pid" 2> /dev/null; then echo "::warning::$name: the app quit or crashed"; break; fi
     sleep 0.5
   done
   sleep 1.2
+  kill "$sampler" 2> /dev/null || true
   if [ -n "$rec" ]; then
     kill -INT "$rec"
     wait "$rec" || true
@@ -88,9 +97,18 @@ print("\n".join(json.load(open(sys.argv[1])).get("launch", [])))' "$APP/DemoScen
 if [ "$#" -eq 0 ]; then
   set -- $(grep -v '^#' "$(dirname "$0")/film.txt")
 fi
+# SwiftUI's own warnings about views that keep changing their state, for the whole run.
+xcrun simctl spawn "$UDID" log stream --style compact \
+  --predicate 'eventMessage CONTAINS "multiple times per frame" OR eventMessage CONTAINS "during view update"' \
+  > "$OUT/swiftui-warnings.log" 2>&1 &
+LOGGER=$!
 # Once through every ink first, so the filmed scenes do not wait for the shaders.
 run_scene warmup en no
 for scene in "$@"; do
   run_scene "$scene" "${scene##*-}" yes
 done
+kill "$LOGGER" 2> /dev/null || true
+# Crash reports of the app written during the run (the simulator's land on the host).
+find "$HOME/Library/Logs/DiagnosticReports" -type f -newer "$OUT/warmup.start" \( -name '*.ips' -o -name '*.crash' \) \
+  -exec cp {} "$OUT/" \; 2> /dev/null || true
 ls -la "$OUT"

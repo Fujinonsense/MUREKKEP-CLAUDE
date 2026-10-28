@@ -1,7 +1,8 @@
 # The scenes the next demo-kayit run films (tools/demo/record.sh). Filmed 2026-10-28 at pace 1.8:
 # notes-en textpen-en inks-en, then ebru-en living-en; textpen-en again with the galaxy ink;
 # check-en solve-en convert-en (runs 6ae21232 and 6ae218e0, the second one right);
-# the second phase in runs 6ae21e63 (shapes dots tilt xox) and 6ae226b3 (photo search).
-# search-en again: the count now includes the hits inside the notes, and the Turkish line is
-# one Vision reads cleanly.
-search-en
+# the second phase in runs 6ae21e63 (shapes dots tilt xox) and 6ae226b3 (photo search), search-en again in 6ae22f30.
+# 2026-10-29: not an ad. Sudoku's clock, build 225's schedule from .now against the fixed one, with the
+# app's CPU sampled once a second (sudoku*.cpu.txt) and any crash report kept.
+sudokuold-en
+sudoku-en

@@ -23,6 +23,9 @@ final class DemoStage {
     static let gameLevel = Notification.Name("DemoStage.gameLevel")
     static let dotsMove = Notification.Name("DemoStage.dotsMove")
     static let xoxMove = Notification.Name("DemoStage.xoxMove")
+    static let sudokuNew = Notification.Name("DemoStage.sudokuNew")
+    /// The check of Sudoku's clock (scene sudokuold): the schedule from `.now` that build 225 had.
+    static var oldSudokuClock: Bool { UserDefaults.standard.bool(forKey: "DemoOldSudokuClock") }
 
     /// The games on screen, registered as they appear.
     weak var ebru: EbruModel?
@@ -189,6 +192,8 @@ private final class DemoPlayer {
             NotificationCenter.default.post(name: DemoStage.dotsMove, object: nil)
         case "xox.move":
             NotificationCenter.default.post(name: DemoStage.xoxMove, object: nil)
+        case "sudoku.new":
+            NotificationCenter.default.post(name: DemoStage.sudokuNew, object: nil)
         default:
             print("Mürekkep demo: unknown step \(step.op)")
         }

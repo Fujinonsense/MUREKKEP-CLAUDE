@@ -76,7 +76,8 @@ def test_scenes_use_only_steps_the_player_knows():
         for step in steps:
             assert step["op"] in known, f"{path.name}: {step['op']}"
             if step["op"] == "game":
-                assert step["name"] in games, step["name"]
+                # No name: back to the list of games.
+                assert step["name"] is None or step["name"] in games, step["name"]
             for stroke in step.get("strokes", []):
                 times = [s[0] for s in stroke]
                 assert times == sorted(times) and all(len(s) == 4 for s in stroke), path.name

@@ -108,7 +108,7 @@ def build():
                     script("Sahneleri Kaydet", DEMO_RECORD),
                 ],
                 "artifacts": ["demo-out/*.mp4", "demo-out/*.json", "demo-out/*.png", "demo-out/*.start",
-                              "demo-out/*.log", "*.log"],
+                              "demo-out/*.log", "demo-out/*.txt", "demo-out/*.ips", "demo-out/*.crash", "*.log"],
             },
         }
     }
