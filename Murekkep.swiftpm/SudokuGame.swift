@@ -98,13 +98,33 @@ struct SudokuGame: View {
     @State private var recorded = false
     @State private var newBest = false
     @State private var confirmNew = false
+    /// Where the clock's seconds count from. A schedule starting at `.now` started afresh on every
+    /// redraw, so each tick's redraw brought another tick at once and the clock ran away.
+    @State private var clockStart = Date()
 
     var body: some View {
-        if let kept = model.save {
-            puzzle(kept)
-        } else {
-            start
+        Group {
+            if let kept = model.save {
+                puzzle(kept)
+            } else {
+                start
+            }
         }
+        #if DEMO
+        // The simulator's check of the clock (tools/demo) starts a puzzle as the button does.
+        .onReceive(NotificationCenter.default.publisher(for: DemoStage.sudokuNew)) { _ in
+            model.newPuzzle(difficulty: store[.sudoku].difficulty)
+        }
+        #endif
+    }
+
+    /// The clock's seconds, counted from when the puzzle came on screen.
+    private var clock: PeriodicTimelineSchedule {
+        #if DEMO
+        // Build 225's schedule, for the simulator's check that it ran away (scene sudokuold).
+        if DemoStage.oldSudokuClock { return .periodic(from: .now, by: 1) }
+        #endif
+        return .periodic(from: clockStart, by: 1)
     }
 
     private var start: some View {
@@ -149,7 +169,7 @@ struct SudokuGame: View {
                 Text(kept.difficulty.title)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                TimelineView(clock) { timeline in
                     Text(GameCorner.clock(model.elapsed))
                         .font(.system(.subheadline, design: .rounded).monospacedDigit())
                         .foregroundStyle(.secondary)
