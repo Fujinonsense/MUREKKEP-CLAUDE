@@ -216,12 +216,19 @@ enum AnswerLanguage: Sendable {
     /// The language of an answer: a question in the user's own words is answered in its language;
     /// a short request about the page ("bu soruyu çöz") and the ready-made actions are answered in
     /// the page's language, so an English exam question gets an English answer. The request's
-    /// language when the page has no text.
+    /// language when the page has no text, or only calculations and labels ("Homework", "5x − 3 =
+    /// 2x + 9"): too few words to tell, and a guess there answered an English page in Turkish.
     static func forAnswer(question: String, isAction: Bool, page: String) -> AnswerLanguage {
         if isAction || isPageCommand(question) {
+            guard proseWords(page) >= 3 else { return detect(question) }
             return detect(page, fallback: detect(question))
         }
         return detect(question, context: page)
+    }
+
+    /// Words of three letters or more: how much language a text holds.
+    static func proseWords(_ text: String) -> Int {
+        text.split(whereSeparator: { !$0.isLetter }).filter { $0.count >= 3 }.count
     }
 
     /// Added to every model's instructions, which are written in Turkish.

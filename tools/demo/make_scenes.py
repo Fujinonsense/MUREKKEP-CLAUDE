@@ -392,7 +392,7 @@ TEXT = {
         "solve.lines": ["3 + 3 = 33", "15 - 7 = 8", "2x + 3 = 11", "x + y = 10", "x - y = 2"],
         "solve.chat": "Is 7+8=16?",
         "convert.title": "Biology",
-        "convert.lines": ["Biology", "Exam on Friday", "Sınav cuma günü"],
+        "convert.lines": ["Biology", "Exam on Tuesday", "Sınav salı günü"],
     },
 }
 
@@ -604,12 +604,21 @@ def scene_living(lang):
     return s
 
 
-def math_font():
+def math_font(lining=False):
     """EMS Neato with a straight minus: its hyphen is a wavy dash that a reader could take for "~",
-    which no calculation has."""
+    which no calculation has. `lining` stands every figure on the line, as tall as a capital: the
+    font's 3, 4, 5, 7 and 9 hang below it, and the recording of 28 Oct read the second 3 of
+    "3 + 3 = 33" as a z."""
     font = Font("EMSNeato")
     adv, _ = font.glyphs["-"]
     font.glyphs["-"] = (adv, [[(70.0, 270.0), (350.0, 280.0)]])
+    if lining:
+        for digit in "0123456789":
+            adv, strokes = font.glyphs[digit]
+            ys = [y for st in strokes for _, y in st]
+            lo, hi = min(ys), max(ys)
+            k = font.cap / (hi - lo)
+            font.glyphs[digit] = (adv, [[(x, (y - lo) * k) for x, y in st] for st in strokes])
     return font
 
 
@@ -652,7 +661,7 @@ def scene_solve(lang):
     """Sums, an equation and a pair of equations; the toolbar's Solve (the panel opens and the page
     is solved), then a sum typed into the chat, which the engine answers without reading the page."""
     rng = np.random.default_rng(62)
-    hand = Hand(math_font(), seed=14, slant=0.04, jitter=0.9)
+    hand = Hand(math_font(lining=True), seed=14, slant=0.04, jitter=0.9)
     s = Script()
     t = TEXT[lang]
     s.add("note", title=t["solve.title"], paper="grid", seconds=1.2)
@@ -669,9 +678,10 @@ def scene_solve(lang):
 
 def scene_convert(lang):
     """Three lines in three 3D inks, then Convert to text (the drafting rail's button): the page is
-    written again as neat text on the template's lines, every word in its own ink."""
+    written again as neat text on the template's lines, every word in its own ink. The hand is the
+    text pen scene's (its lines were read right); the recording of 28 Oct read this hand's F as "f-"."""
     rng = np.random.default_rng(63)
-    hand = Hand(Font("EMSNeato"), seed=15, slant=0.08, jitter=1.0)
+    hand = Hand(Font("EMSNeato"), seed=15, slant=0.04, jitter=0.9)
     s = Script()
     t = TEXT[lang]
     s.add("note", title=t["convert.title"], paper="lined", seconds=1.2)

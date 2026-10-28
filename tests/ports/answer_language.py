@@ -26,7 +26,15 @@ def is_page_command(text):
     return 0 < len(words) <= 8 and any(w.startswith(c) for w in words for c in CUES)
 
 
+def prose_words(text):
+    """AnswerLanguage.proseWords: words of three letters or more."""
+    return len([w for w in re.findall(r"[^\W\d_]+", text) if len(w) >= 3])
+
+
 def for_answer(question, is_action, page):
     if is_action or is_page_command(question):
+        # A page of calculations and labels has too few words to tell: the request decides.
+        if prose_words(page) < 3:
+            return detect(question)
         return detect(page, fallback=detect(question))
     return detect(question, context=page)
