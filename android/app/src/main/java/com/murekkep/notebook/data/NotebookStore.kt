@@ -17,7 +17,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -312,7 +311,7 @@ class NotebookStore private constructor(context: Context) {
     }
 
     /** Takes the ink on the main thread and writes it off it; nothing when there is no change. */
-    private suspend fun save(state: EditorState) {
+    private fun save(state: EditorState) {
         val id = state.notebookId ?: return
         if (!state.dirty || state.readOnly) return
         val pages = state.pages.map { it.strokes }
@@ -322,10 +321,11 @@ class NotebookStore private constructor(context: Context) {
         notebooks = notebooks.sortedByDescending { it.modified }
         val sequence = ++nextSequence
         val cover = if (state.isPdf) null else pages.firstOrNull() ?: emptyList()
-        // Once the snapshot is taken the write goes through, even if the job is cancelled meanwhile.
-        val coverWritten = withContext(Dispatchers.IO + NonCancellable) {
+        // Once the snapshot is taken the write is the store's own job: it goes through, and the
+        // library hears of the cover, even when the save is cancelled meanwhile (the note closed).
+        scope.launch(Dispatchers.IO) {
             val bytes = InkCodec.encode(pages)
-            synchronized(writeLock) {
+            val coverWritten = synchronized(writeLock) {
                 val last = writtenSequence[id] ?: 0L
                 if (last < sequence) {
                     writtenSequence[id] = sequence
@@ -337,8 +337,14 @@ class NotebookStore private constructor(context: Context) {
                     false
                 }
             }
+            if (coverWritten) coverChanged()
         }
-        if (coverWritten) coverVersion++
+    }
+
+    /** The library reads the covers again; called from any thread, it counts on the main one (as
+     *  LibraryStore.swift bumps its versions with DispatchQueue.main.async). */
+    private fun coverChanged() {
+        scope.launch { coverVersion++ }
     }
 
     /** The library's cover of a notebook: its first page, paper template and ink, 360 pixels across
