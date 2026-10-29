@@ -39,10 +39,10 @@ object PdfShare {
      *  letter (ğ, ş, ı, ç, ö, ü) is two of them. */
     const val NAME_BYTES = 240
 
-    /** The file's name from the note's title: the characters no file system takes become "_", and
-     *  a title longer than a file name takes is cut. */
+    /** The file's name from the note's title: the characters no file system takes, and "%", become
+     *  "-" as the iPad's exportPDF makes them, and a title longer than a file name takes is cut. */
     fun fileName(title: String): String {
-        val clean = title.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trim('.').ifEmpty { "Not" }
+        val clean = title.replace(Regex("[\\\\/:*?%\"<>|\\p{Cntrl}]"), "-").trim().trim('.').ifEmpty { "Not" }
         val hasPdf = clean.endsWith(".pdf", ignoreCase = true)
         val name = if (hasPdf) clean.dropLast(4) else clean
         val cut = cutToBytes(name, NAME_BYTES).let { if (it.length < name.length) it.trimEnd() else it }

@@ -5,15 +5,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// The shared file's name from the note's title: what no file system takes becomes "_", an empty
-// title is "Not", ".pdf" once, and a name never longer than a file system takes. The imported
-// pages' pictures: twice their size while all of them fit in memory.
+// The shared file's name from the note's title: what no file system takes, and "%", becomes "-"
+// as on the iPad, an empty title is "Not", ".pdf" once, and a name never longer than a file
+// system takes. The imported pages' pictures: twice their size while all of them fit in memory.
 class PdfShareTest {
     @Test
     fun theTitleBecomesTheFileName() {
-        assertEquals("Not 25 Eki 2026 21_35.pdf", PdfShare.fileName("Not 25 Eki 2026 21:35"))
+        assertEquals("Not 25 Eki 2026 21-35.pdf", PdfShare.fileName("Not 25 Eki 2026 21:35"))
         assertEquals("Hücre biyolojisi.pdf", PdfShare.fileName("Hücre biyolojisi"))
-        assertEquals("a_b_c_d.pdf", PdfShare.fileName("a/b\\c|d"))
+        assertEquals("a-b-c-d.pdf", PdfShare.fileName("a/b\\c|d"))
+        assertEquals("100- tamam- -ya da- -x-.pdf", PdfShare.fileName("100% tamam? *ya da* <x>"))
     }
 
     @Test
