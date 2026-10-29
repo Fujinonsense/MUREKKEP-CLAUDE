@@ -1,10 +1,8 @@
 package com.murekkep.notebook
 
 import android.content.pm.ApplicationInfo
-import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,7 +18,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.murekkep.notebook.data.AppearancePreferences
 import com.murekkep.notebook.data.NotebookStore
 import com.murekkep.notebook.export.PdfShare
+import com.murekkep.notebook.ui.ActivityBars
 import com.murekkep.notebook.ui.AppTheme
 import com.murekkep.notebook.ui.EditorScreen
 import com.murekkep.notebook.ui.EditorState
@@ -59,17 +57,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             var theme by remember { mutableStateOf(appearance.theme) }
             MurekkepTheme(theme = theme) {
-                // The activity outlives a light/dark switch (it handles uiMode), so the bars' icons
-                // and the navigation bar's scrim follow the look in force whenever it changes,
-                // a picture theme's own look included.
-                val dark = Zen.colors.dark
-                DisposableEffect(dark) {
-                    enableEdgeToEdge(
-                        statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
-                        navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
-                    )
-                    onDispose {}
-                }
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     MurekkepApp(
                         store, demo, theme,
@@ -81,12 +68,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    private companion object {
-        /** androidx's own scrims behind three-button navigation, light and dark. */
-        val LIGHT_SCRIM = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
-        val DARK_SCRIM = Color.argb(0x80, 0x1B, 0x1B, 0x1B)
     }
 }
 
@@ -112,6 +93,9 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
         }
     }
     val id = openId
+    // The bars follow the screen in front: the library in its picture's look, the editor in the system's.
+    val systemDark = Zen.colors.dark
+    ActivityBars(if (id == null) theme.libraryDark(systemDark) else systemDark)
     if (id == null) {
         Box(Modifier.fillMaxSize()) {
             library.SaveableStateProvider("library") {

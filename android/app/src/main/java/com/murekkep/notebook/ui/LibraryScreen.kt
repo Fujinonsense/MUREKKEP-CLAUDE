@@ -186,7 +186,6 @@ private val PaperWarm = Color(0xFFFCFAF5)
 fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettings: () -> Unit = {}) {
     LaunchedEffect(store) { store.load() }
     val context = LocalContext.current
-    val z = Zen.colors
     val prefs = remember(context) { LibraryPreferences(context) }
     val importer = remember(context) { LibraryImport.get(context) }
     var section by rememberSaveable { mutableStateOf(prefs.section) }
@@ -220,89 +219,93 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
 
     val appTheme = LocalAppTheme.current.shown
     val picture = appTheme.picture?.let { ImageBitmap.imageResource(it) }
-    BoxWithConstraints(Modifier.fillMaxSize().background(z.paper)) {
-        val full = DpSize(maxWidth, maxHeight)
-        // A Pro theme's picture (or the ruled paper) lies behind the sidebar and the notes.
-        Backdrop(appTheme, picture)
-        val sidebar: @Composable (inDrawer: Boolean, onPicked: () -> Unit, onHide: () -> Unit) -> Unit = { inDrawer, onPicked, onHide ->
-            Sidebar(
-                notes = notes,
-                section = section,
-                query = query,
-                onQuery = { query = it },
-                onSection = {
-                    section = it
-                    prefs.section = it
-                    query = ""
-                    onPicked()
-                },
-                onSettings = onSettings,
-                onHide = onHide,
-                ground = { SidebarGround(picture, full, inDrawer) },
-            )
-        }
-        val main: @Composable (narrow: Boolean, onToggle: (() -> Unit)?) -> Unit = { narrow, onToggle ->
-            NotesArea(
-                store = store,
-                notes = shown,
-                loaded = store.loaded,
-                section = section,
-                filter = filter,
-                sort = sort,
-                query = query.trim(),
-                narrow = narrow,
-                importing = importer.running > 0,
-                onToggle = onToggle,
-                onFilter = {
-                    filter = it
-                    prefs.filter = it
-                },
-                onSort = {
-                    sort = it
-                    prefs.sort = it
-                },
-                onNew = { choosingTemplate = true },
-                onImport = { askingSource = true },
-                onOpen = onOpen,
-                onRename = { renaming = it },
-                onDelete = { deleting = it },
-                onDrop = { uris, release -> importer.importDropped(uris, release) },
-            )
-        }
-        if (maxWidth >= WideLayout) {
-            Row(Modifier.fillMaxSize()) {
-                if (sidebarShown) {
-                    Box(Modifier.width(SidebarWidth).fillMaxHeight()) { sidebar(false, {}, { sidebarShown = false }) }
-                    Box(Modifier.width(1.dp).fillMaxHeight().background(z.rule))
-                }
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    main(false, if (sidebarShown) null else ({ sidebarShown = true }))
-                }
+    // The sidebar and the notes in the picture's look; "Yeni defter" and the dialogs below keep the system's.
+    LibraryLook {
+        val z = Zen.colors
+        BoxWithConstraints(Modifier.fillMaxSize().background(z.paper)) {
+            val full = DpSize(maxWidth, maxHeight)
+            // A Pro theme's picture (or the ruled paper) lies behind the sidebar and the notes.
+            Backdrop(appTheme, picture)
+            val sidebar: @Composable (inDrawer: Boolean, onPicked: () -> Unit, onHide: () -> Unit) -> Unit = { inDrawer, onPicked, onHide ->
+                Sidebar(
+                    notes = notes,
+                    section = section,
+                    query = query,
+                    onQuery = { query = it },
+                    onSection = {
+                        section = it
+                        prefs.section = it
+                        query = ""
+                        onPicked()
+                    },
+                    onSettings = onSettings,
+                    onHide = onHide,
+                    ground = { SidebarGround(picture, full, inDrawer) },
+                )
             }
-        } else {
-            val drawer = rememberDrawerState(DrawerValue.Closed)
-            val close: () -> Unit = { scope.launch { drawer.close() } }
-            ModalNavigationDrawer(
-                drawerState = drawer,
-                drawerContent = {
-                    // The sheet given the drawer's state takes Back while the drawer is open.
-                    ModalDrawerSheet(
-                        drawerState = drawer,
-                        drawerContainerColor = Color.Transparent,
-                        drawerShape = RectangleShape,
-                        windowInsets = WindowInsets(0),
-                        modifier = Modifier.width(SidebarWidth),
-                    ) {
-                        sidebar(true, close, close)
+            val main: @Composable (narrow: Boolean, onToggle: (() -> Unit)?) -> Unit = { narrow, onToggle ->
+                NotesArea(
+                    store = store,
+                    notes = shown,
+                    loaded = store.loaded,
+                    section = section,
+                    filter = filter,
+                    sort = sort,
+                    query = query.trim(),
+                    narrow = narrow,
+                    importing = importer.running > 0,
+                    onToggle = onToggle,
+                    onFilter = {
+                        filter = it
+                        prefs.filter = it
+                    },
+                    onSort = {
+                        sort = it
+                        prefs.sort = it
+                    },
+                    onNew = { choosingTemplate = true },
+                    onImport = { askingSource = true },
+                    onOpen = onOpen,
+                    onRename = { renaming = it },
+                    onDelete = { deleting = it },
+                    onDrop = { uris, release -> importer.importDropped(uris, release) },
+                )
+            }
+            if (maxWidth >= WideLayout) {
+                Row(Modifier.fillMaxSize()) {
+                    if (sidebarShown) {
+                        Box(Modifier.width(SidebarWidth).fillMaxHeight()) { sidebar(false, {}, { sidebarShown = false }) }
+                        Box(Modifier.width(1.dp).fillMaxHeight().background(z.rule))
                     }
-                },
-            ) {
-                main(true) { scope.launch { drawer.open() } }
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        main(false, if (sidebarShown) null else ({ sidebarShown = true }))
+                    }
+                }
+            } else {
+                val drawer = rememberDrawerState(DrawerValue.Closed)
+                val close: () -> Unit = { scope.launch { drawer.close() } }
+                ModalNavigationDrawer(
+                    drawerState = drawer,
+                    drawerContent = {
+                        // The sheet given the drawer's state takes Back while the drawer is open.
+                        ModalDrawerSheet(
+                            drawerState = drawer,
+                            drawerContainerColor = Color.Transparent,
+                            drawerShape = RectangleShape,
+                            windowInsets = WindowInsets(0),
+                            modifier = Modifier.width(SidebarWidth),
+                        ) {
+                            sidebar(true, close, close)
+                        }
+                    },
+                ) {
+                    main(true) { scope.launch { drawer.open() } }
+                }
             }
-        }
-        importer.photoProgress?.let { progress ->
-            val bottom = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
-            PhotoProgressBanner(progress, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = bottom + 24.dp))
+            importer.photoProgress?.let { progress ->
+                val bottom = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
+                PhotoProgressBanner(progress, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = bottom + 24.dp))
+            }
         }
     }
 

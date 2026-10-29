@@ -68,6 +68,10 @@ enum class AppTheme(
     /** A Pro theme while Pro is closed: its tile wears the Pro badge. */
     val locked: Boolean get() = isPro && !Pro.UNLOCKED
 
+    /** Whether the library is dark (LibraryBackdrop on iPad): over a dark picture, not over a light
+     *  one, else as the system is ([systemDark]). Only the library takes a picture's look. */
+    fun libraryDark(systemDark: Boolean): Boolean = shown.darkLook ?: systemDark
+
     companion object {
         fun fromKey(key: String?): AppTheme = entries.firstOrNull { it.key == key } ?: BLACK_WHITE
     }
