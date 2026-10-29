@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -56,7 +57,9 @@ import java.io.File
 // The courses on the library's screen (LibraryView and LibraryPanes on iPad): the sidebar's rows with
 // their counts open a course's pane, whose tabs split its PDFs from its notebooks; the + makes a
 // course in the editor and opens it; a note's menu moves it into a course and out again; Diğer edits
-// and deletes a course, whose notes stay; a search finds a course by its name, with its notes.
+// and deletes a course, whose notes stay; a search finds a course by its name, with its notes. A
+// note made in a course is named after it and filed there; a course row's long press makes a
+// notebook in it, edits it and deletes it; the course and its tab come back after a relaunch.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w1280dp-h800dp")
 // Conscrypt's native library is looked up by a name lower-cased in the machine's language, which a
@@ -101,10 +104,10 @@ class CoursesScreenTest {
         return (0 until list.length()).map { list.getJSONObject(it).getString("name") }
     }
 
-    private fun show() {
+    private fun show(onOpen: (NotebookMeta) -> Unit = {}, until: String = "Biology PDF") {
         val store = NotebookStore.get(context)
-        compose.setContent { MurekkepTheme { LibraryScreen(store = store, onOpen = {}) } }
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Biology PDF")).fetchSemanticsNodes().isNotEmpty() }
+        compose.setContent { MurekkepTheme { LibraryScreen(store = store, onOpen = onOpen) } }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(until)).fetchSemanticsNodes().isNotEmpty() }
     }
 
     /** A row of the sidebar: a button that can be selected, named [name]. */
@@ -208,6 +211,75 @@ class CoursesScreenTest {
         title.performClick()
         compose.waitForIdle()
         compose.onNode(menuItem("Rename")).assertIsDisplayed()
+    }
+
+    @Test
+    fun aNoteMadeInACourseIsNamedAfterItAndFiledThere() {
+        val opened = ArrayList<NotebookMeta>()
+        show(onOpen = { opened.add(it) })
+        compose.onNode(sidebarRow("Biology")).performClick()
+        compose.onNodeWithText("New note").performClick()
+        compose.onNode(hasText("Grid") and hasClickAction()).performClick()
+        compose.waitForIdle()
+        // "Biology" and the moment, as the iPad's createNotebook names it, and opened at once.
+        val made = opened.single()
+        assertTrue(made.title, made.title.startsWith("Biology "))
+        assertEquals(biology, made.sectionId)
+        assertEquals(PaperStyle.GRID, made.paper)
+        compose.waitUntil(5_000) { File(root, "${made.id}/meta.json").isFile && record(made.id).optString("sectionID") == biology }
+        compose.onNode(sidebarRow("Biology") and hasText("3")).assertIsDisplayed()
+    }
+
+    @Test
+    fun aCoursesRowMenuMakesANotebookEditsAndDeletesIt() {
+        val opened = ArrayList<NotebookMeta>()
+        show(onOpen = { opened.add(it) })
+        // Yeni defter, from the row's menu while another list is on screen.
+        compose.onNode(sidebarRow("Biology")).performTouchInput { longClick() }
+        compose.onNode(menuItem("New notebook")).performClick()
+        compose.onNode(hasText("Lined") and hasClickAction()).performClick()
+        compose.waitForIdle()
+        assertTrue(opened.single().title.startsWith("Biology "))
+        assertEquals(biology, opened.single().sectionId)
+        // Düzenle.
+        compose.onNode(sidebarRow("Biology")).performTouchInput { longClick() }
+        compose.onNode(menuItem("Edit")).performClick()
+        compose.waitForIdle()
+        val field = compose.onNode(hasSetTextAction() and hasContentDescription("Section name (e.g. Calculus, Anatomy)"))
+        field.assertTextEquals("Biology")
+        field.performTextClearance()
+        field.performTextInput("Botany")
+        compose.onNodeWithText("Save").performClick()
+        compose.waitForIdle()
+        compose.onNode(sidebarRow("Botany")).assertIsDisplayed()
+        compose.waitUntil(5_000) { courseNames() == listOf("Botany") }
+        // Dersi sil: it asks, and the notes stay.
+        compose.onNode(sidebarRow("Botany")).performTouchInput { longClick() }
+        compose.onNode(menuItem("Delete course (its contents stay)")).performClick()
+        compose.onNodeWithText("Delete course").performClick()
+        compose.waitForIdle()
+        assertTrue(compose.onAllNodes(sidebarRow("Botany")).fetchSemanticsNodes().isEmpty())
+        compose.waitUntil(5_000) { courseNames().isEmpty() && !record("Cell-notes").has("sectionID") }
+        assertTrue(shows("Cell notes") && shows("Biology PDF"))
+    }
+
+    @Test
+    fun theCourseAndItsTabComeBackAfterARelaunch() {
+        val prefs = context.getSharedPreferences("library", Context.MODE_PRIVATE)
+        // As the last launch left them (the iPad's library.place and course.tab).
+        prefs.edit().putString("library.place", "course:$biology").putString("course.tab", "notebooks").commit()
+        show(until = "Cell notes")
+        compose.onNode(isHeading()).assertTextEquals("Biology")
+        compose.onNode(sidebarRow("Biology")).assertIsSelected()
+        compose.onNode(tab("Notebooks")).assertIsSelected()
+        assertTrue(!shows("Biology PDF"))
+        // A tab picked is kept for the next launch, and so is a list.
+        compose.onNode(tab("Sources")).performClick()
+        compose.waitForIdle()
+        assertEquals("sources", prefs.getString("course.tab", null))
+        compose.onNode(sidebarRow("All notes")).performClick()
+        compose.waitForIdle()
+        assertEquals("home", prefs.getString("library.place", null))
     }
 
     @Test
