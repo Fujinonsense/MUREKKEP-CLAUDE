@@ -1466,6 +1466,7 @@ enum Translations {
         "Aramayı temizle": "Clear the search",
         "Favori": "Favourite",
         "Diğer": "More",
+        "Kement": "Lasso",
         "Sağ üstteki \"Yeni not\" ile bir şablon seç.": "Pick a template with \"New note\" at the top right.",
         "Siyah beyaz ücretsizdir ve iPad'in açık ya da koyu görünümünü izler. Ultra premium temalar Mürekkep Pro'da: her biri Higgsfield ile yapılmış bir görselle gelir.": "Black and white is free and follows the iPad's light or dark look. The ultra premium themes come with Mürekkep Pro: each one brings a picture made with Higgsfield.",
         "Siyah beyaz iPad'in açık ya da koyu görünümünü izler. Ultra premium temalar kütüphanenin arkasına Higgsfield ile yapılmış bir görsel koyar; yazılar her birinde okunacak renge geçer.": "Black and white follows the iPad's light or dark look. The ultra premium themes lay a picture made with Higgsfield behind the library; the text switches to a colour that reads on each one.",

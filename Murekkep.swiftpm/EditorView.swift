@@ -31,6 +31,8 @@ private struct ShareItem: Identifiable {
     let url: URL
 }
 
+/// The note: the page edge to edge, the top bar ("‹ Notlar", the title, Asistan, zoom, share and
+/// Diğer), the pen bar floating along an edge, and the page counter in the corner.
 struct EditorContent: View {
     @ObservedObject var editor: EditorModel
     let assistant: AssistantModel
@@ -59,8 +61,9 @@ struct EditorContent: View {
     private var sidePanel: Bool { horizontalSizeClass == .regular }
 
     private var dock: PaletteEdge { settings.paletteEdge }
-    /// What stands along the bottom (the page badge, the bars, the writing sound's switch) moves up over the pen bar.
-    private var bottomClearance: CGFloat { dock == .bottom ? 76 : 0 }
+    /// What stands along the bottom (the page badge, the bars, the writing sound's switch) moves up
+    /// over the pen bar (64 tall, 18 from the edge).
+    private var bottomClearance: CGFloat { dock == .bottom ? 90 : 0 }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -107,37 +110,25 @@ struct EditorContent: View {
                 .allowsHitTesting(false)
                 .animation(.easeInOut(duration: 0.18), value: paletteTarget)
 
-                FloatingToolPalette(editor: editor, collapsed: $paletteCollapsed, edge: dock,
+                FloatingToolPalette(editor: editor, collapsed: $paletteCollapsed, showEngineering: $showEngineering, edge: dock,
                                     onGripMove: movePalette, onGripDrop: dropPalette, onGripCancel: cancelPaletteDrag)
                     .offset(paletteDrag)
                     .padding(paletteInsets(dock))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: paletteAlignment(dock))
-
-                // The engineering rail hides with the palette for a clean page.
-                if !paletteCollapsed {
-                    HStack {
-                        DraftingRail(editor: editor, showEngineering: $showEngineering)
-                            .padding(.leading, 12)
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxHeight: .infinity)
-                    .padding(.top, dock == .top ? 70 : 10)
-                    .padding(.bottom, bottomClearance)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                }
 
                 VStack(spacing: 8) {
                     CanvasBanner(editor: editor)
                     if editor.isConverting || editor.isTypesetting {
                         Label(editor.isTypesetting ? Loc.t("Metne çevriliyor…") : Loc.t("El yazısı okunuyor…"), systemImage: "text.viewfinder")
                             .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Theme.text)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
                             .glassCapsule()
                             .transition(.opacity)
                     }
                 }
-                .padding(.top, dock == .top ? 88 : 18)
+                .padding(.top, dock == .top ? 84 : 18)
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: editor.banner)
                 .animation(.easeInOut(duration: 0.2), value: editor.isConverting || editor.isTypesetting)
 
@@ -193,7 +184,7 @@ struct EditorContent: View {
                         Spacer()
                         if editor.pencilProDetected {
                             Chip(text: "Apple Pencil Pro", symbol: "applepencil", tint: Theme.ink)
-                                .background(.ultraThinMaterial, in: Capsule())
+                                .background(Theme.paper, in: Capsule())
                                 .transition(.scale.combined(with: .opacity))
                                 .allowsHitTesting(false)
                         }
@@ -209,12 +200,13 @@ struct EditorContent: View {
                             PageNavigator(editor: editor) { showNavigator = false }
                         }
                     }
-                    .padding(16)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                     .padding(.bottom, bottomClearance)
                 }
 
                 // The break corner's games, above the corner's column of buttons and clear of the
-                // drafting rail and the pen bar; never more than a quarter of the canvas.
+                // pen bar; never more than a quarter of the canvas.
                 if showGames {
                     GameCornerPanel(size: gamePanelSize, expanded: $gamesExpanded) { closeGames() }
                         .padding(.leading, gamePanelLeading)
@@ -226,11 +218,11 @@ struct EditorContent: View {
                 if let error = editor.loadError {
                     Text(error)
                         .padding()
-                        .glassCard(radius: 14)
+                        .glassCard(radius: 14, floating: true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .background(Color(uiColor: .systemGray6))
+            .background(Theme.paper3)
             .coordinateSpace(.named(FloatingToolPalette.space))
             .background(GeometryReader { geo in
                 Color.clear
@@ -240,7 +232,9 @@ struct EditorContent: View {
             .sensoryFeedback(.selection, trigger: paletteTarget) { old, new in old != nil && new != nil }
             .sensoryFeedback(.impact(flexibility: .soft), trigger: dock)
             if showAssistant && sidePanel {
-                Divider()
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(width: 1)
                 AssistantPanel(assistant: assistant, editor: editor) {
                     withAnimation(.easeInOut(duration: 0.22)) { showAssistant = false }
                 }
@@ -268,34 +262,15 @@ struct EditorContent: View {
         #endif
         .navigationTitle(editor.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Theme.paper2, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if !lecture.takes.isEmpty, !lecture.isRecording {
+                // While a lecture is recorded the clock stands in the bar; one tap stops it.
+                if lecture.isRecording {
                     Button {
-                        setLecturePlayer(!showLecture)
+                        toggleRecording()
                     } label: {
-                        Image(systemName: "waveform")
-                            .foregroundStyle(showLecture ? Theme.ink : Color.accentColor)
-                            .padding(4)
-                            .background(Circle().fill(showLecture ? Theme.ink.opacity(0.15) : Color.clear))
-                    }
-                    .accessibilityLabel(showLecture ? Loc.t("Oynatıcıyı kapat") : Loc.t("Kayıtları dinle"))
-                }
-                // One tap starts the lecture recording, one tap stops it; the take then opens in the player.
-                Button {
-                    if lecture.isRecording {
-                        let before = lecture.takes.count
-                        lecture.stopRecording()
-                        if lecture.takes.count > before {
-                            setLecturePlayer(true)
-                            editor.banner = Loc.t("Kaydedildi. Dinlerken mürekkebe dokun, o ana gider.")
-                        }
-                    } else {
-                        setLecturePlayer(false)
-                        lecture.toggleRecording()
-                    }
-                } label: {
-                    if lecture.isRecording {
                         HStack(spacing: 5) {
                             Image(systemName: "stop.circle.fill")
                                 .symbolEffect(.pulse, isActive: true)
@@ -303,81 +278,21 @@ struct EditorContent: View {
                                 .font(.subheadline.monospacedDigit().weight(.semibold))
                         }
                         .foregroundStyle(Color.red)
-                    } else {
-                        Image(systemName: "mic")
-                            .foregroundStyle(Color.accentColor)
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Loc.t("Kaydı durdur"))
                 }
-                .accessibilityLabel(lecture.isRecording ? Loc.t("Kaydı durdur") : Loc.t("Dersi kaydet"))
-                Button {
+                assistantButton
+                barButton("plus.magnifyingglass", active: editor.zoomWindowOn,
+                          title: editor.zoomWindowOn ? Loc.t("Yakın yazmayı kapat") : Loc.t("Yakın yazma: büyük yaz, sayfaya küçük insin")) {
                     editor.zoomWindowOn.toggle()
-                } label: {
-                    Image(systemName: "plus.magnifyingglass")
-                        .foregroundStyle(editor.zoomWindowOn ? Theme.ink : Color.accentColor)
-                        .padding(4)
-                        .background(Circle().fill(editor.zoomWindowOn ? Theme.ink.opacity(0.15) : Color.clear))
                 }
-                .accessibilityLabel(editor.zoomWindowOn ? Loc.t("Yakın yazmayı kapat") : Loc.t("Yakın yazma: büyük yaz, sayfaya küçük insin"))
-                Button {
+                barButton("square.and.arrow.up", active: false, title: Loc.t("PDF olarak paylaş")) {
                     export()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
                 }
-                .accessibilityLabel(Loc.t("PDF olarak paylaş"))
-                Menu {
-                    if !editor.isPDF {
-                        Button {
-                            showTemplates = true
-                        } label: {
-                            Label(Loc.t("Şablonu değiştir ({0})", "\(editor.meta.paper.title)"), systemImage: "square.grid.2x2")
-                        }
-                        Divider()
-                    }
-                    Toggle(isOn: $settings.pencilOnly) {
-                        Label(Loc.t("Yalnızca Pencil ile çiz"), systemImage: "applepencil")
-                    }
-                    Toggle(isOn: $settings.straightLine) {
-                        Label(Loc.t("Bekleyince şekli düzelt"), systemImage: "scribble.variable")
-                    }
-                    Toggle(isOn: $settings.animations) {
-                        Label(Loc.t("Animasyonlar"), systemImage: "sparkles")
-                    }
-                    Toggle(isOn: $settings.batterySaver) {
-                        Label(Loc.t("Pil tasarrufu"), systemImage: "battery.50")
-                    }
-                    Divider()
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Label(Loc.t("Ayarlar"), systemImage: "gearshape")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { showAssistant = true }
-                    assistant.run(.solve)
-                } label: {
-                    Label(Loc.t("Çöz"), systemImage: "wand.and.stars")
-                        .labelStyle(.titleAndIcon)
-                        .font(.subheadline.weight(.semibold))
-                }
-                .accessibilityLabel(Loc.t("Bu sayfadaki soruları çöz"))
-                Button {
-                    withAnimation(.easeInOut(duration: 0.22)) { showAssistant.toggle() }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                        Text(Loc.t("Asistan"))
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Theme.ai, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Yapay zekâ asistanı"))
+                moreMenu
             }
         }
         .sheet(isPresented: Binding(get: { showAssistant && !sidePanel }, set: { showAssistant = $0 })) {
@@ -427,6 +342,107 @@ struct EditorContent: View {
         }
     }
 
+    // MARK: Top bar
+
+    private static let buttonShape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
+    /// "Asistan": a quiet bordered button; ink while the panel is open.
+    private var assistantButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.22)) { showAssistant.toggle() }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "bubble.left")
+                    .font(.system(size: 15, weight: .medium))
+                Text(Loc.t("Asistan"))
+                    .font(.subheadline)
+            }
+            .foregroundStyle(showAssistant ? Theme.ink : Theme.text2)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(Theme.paper, in: Self.buttonShape)
+            .overlay(Self.buttonShape.strokeBorder(showAssistant ? Theme.ink : Theme.hairline, lineWidth: 1))
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Loc.t("Yapay zekâ asistanı"))
+    }
+
+    /// An icon in the top bar: ink when what it opens is on, the body's grey otherwise.
+    private func barButton(_ symbol: String, active: Bool, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(active ? Theme.ink : Theme.text2)
+                .frame(width: 44, height: 44)
+                .background(Self.buttonShape.fill(active ? Theme.ink.opacity(0.10) : Color.clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
+    /// Diğer: the solver, the lecture recorder and player, the template, the pencil and ink
+    /// switches, and Settings.
+    private var moreMenu: some View {
+        Menu {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) { showAssistant = true }
+                assistant.run(.solve)
+            } label: {
+                Label(Loc.t("Bu sayfadaki soruları çöz"), systemImage: "wand.and.stars")
+            }
+            Button {
+                toggleRecording()
+            } label: {
+                Label(lecture.isRecording ? Loc.t("Kaydı durdur") : Loc.t("Dersi kaydet"), systemImage: lecture.isRecording ? "stop.circle" : "mic")
+            }
+            if !lecture.takes.isEmpty, !lecture.isRecording {
+                Button {
+                    setLecturePlayer(!showLecture)
+                } label: {
+                    Label(showLecture ? Loc.t("Oynatıcıyı kapat") : Loc.t("Kayıtları dinle"), systemImage: "waveform")
+                }
+            }
+            Divider()
+            if !editor.isPDF {
+                Button {
+                    showTemplates = true
+                } label: {
+                    Label(Loc.t("Şablonu değiştir ({0})", "\(editor.meta.paper.title)"), systemImage: "square.grid.2x2")
+                }
+            }
+            Group {
+                Toggle(isOn: $settings.pencilOnly) {
+                    Label(Loc.t("Yalnızca Pencil ile çiz"), systemImage: "applepencil")
+                }
+                Toggle(isOn: $settings.straightLine) {
+                    Label(Loc.t("Bekleyince şekli düzelt"), systemImage: "scribble.variable")
+                }
+                Toggle(isOn: $settings.animations) {
+                    Label(Loc.t("Animasyonlar"), systemImage: "sparkles")
+                }
+                Toggle(isOn: $settings.batterySaver) {
+                    Label(Loc.t("Pil tasarrufu"), systemImage: "battery.50")
+                }
+            }
+            Divider()
+            Button {
+                showSettings = true
+            } label: {
+                Label(Loc.t("Ayarlar"), systemImage: "gearshape")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(Theme.text2)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Loc.t("Diğer"))
+    }
+
     /// Shows the page angle while the page is turned; tap for the angle controls.
     private var rotationChip: some View {
         Button {
@@ -438,10 +454,11 @@ struct EditorContent: View {
                     .monospacedDigit()
             }
             .font(.footnote.weight(.semibold))
+            .foregroundStyle(Theme.text2)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
+            .background(Theme.paper, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Sayfa açısı {0} derece", "\(Int(settings.pageAngle.rounded()))"))
@@ -449,6 +466,21 @@ struct EditorContent: View {
             PageAnglePanel()
                 .environmentObject(settings)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// One tap starts the lecture recording, one tap stops it; the take then opens in the player.
+    private func toggleRecording() {
+        if lecture.isRecording {
+            let before = lecture.takes.count
+            lecture.stopRecording()
+            if lecture.takes.count > before {
+                setLecturePlayer(true)
+                editor.banner = Loc.t("Kaydedildi. Dinlerken mürekkebe dokun, o ana gider.")
+            }
+        } else {
+            setLecturePlayer(false)
+            lecture.toggleRecording()
         }
     }
 
@@ -475,11 +507,9 @@ struct EditorContent: View {
 }
 
 private extension EditorContent {
-    /// Where the game panel's left edge stands: past the drafting rail (12…62 pt) when the rail
-    /// shows, at the margin when the page is clean; never off the right of a narrow canvas.
+    /// Where the game panel's left edge stands: at the margin, never off the right of a narrow canvas.
     var gamePanelLeading: CGFloat {
-        let wanted: CGFloat = paletteCollapsed ? 12 : 72
-        return max(12, min(wanted, canvasSize.width - gamePanelSize.width - 12))
+        max(12, min(12, canvasSize.width - gamePanelSize.width - 12))
     }
 
     /// Above the corner's column (the game tile over the sound switch, 44 + 2 + 44 pt) and the pen bar.
@@ -489,8 +519,8 @@ private extension EditorContent {
     /// pen bar's edge, the corner's column and the right margin.
     var gamePanelSize: CGSize {
         guard gamesExpanded else { return GameCorner.panelSize }
-        return GamePanelSize.larger(in: canvasSize, leading: paletteCollapsed ? 12 : 72, trailing: dock == .trailing ? 90 : 12,
-                                    top: dock == .top ? 86 : 12, bottom: gamePanelBottom)
+        return GamePanelSize.larger(in: canvasSize, leading: 12, trailing: dock == .trailing ? 90 : 12,
+                                    top: dock == .top ? 84 : 12, bottom: gamePanelBottom)
     }
 
     func closeGames() {
@@ -502,7 +532,7 @@ private extension EditorContent {
     func paletteInsets(_ edge: PaletteEdge) -> EdgeInsets {
         switch edge {
         case .top: return EdgeInsets(top: 10, leading: 12, bottom: 0, trailing: 12)
-        case .bottom: return EdgeInsets(top: 0, leading: 12, bottom: 10, trailing: 12)
+        case .bottom: return EdgeInsets(top: 0, leading: 12, bottom: 18, trailing: 12)
         case .trailing: return EdgeInsets(top: 60, leading: 0, bottom: 60, trailing: 12)
         }
     }
@@ -548,10 +578,10 @@ private struct PaletteDockHint: View {
     let edge: PaletteEdge
 
     var body: some View {
-        Capsule(style: .continuous)
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(Theme.ink.opacity(0.08))
-            .overlay(Capsule(style: .continuous).strokeBorder(Theme.ink.opacity(0.35), lineWidth: 1.5))
-            .frame(width: edge.isVertical ? 66 : 420, height: edge.isVertical ? 360 : 66)
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.ink.opacity(0.35), lineWidth: 1.5))
+            .frame(width: edge.isVertical ? 64 : 420, height: edge.isVertical ? 360 : 64)
     }
 }
 
@@ -580,7 +610,7 @@ struct CanvasRepresentable: UIViewRepresentable {
     }
 }
 
-/// "12 / 300" in the corner; a tap opens the page navigator.
+/// "12 / 300" in the corner, plain writing on the page; a tap opens the page navigator.
 struct PageBadge: View {
     let current: Int
     let total: Int
@@ -591,16 +621,15 @@ struct PageBadge: View {
             if bookmarked {
                 Image(systemName: "bookmark.fill")
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.ink)
             }
             Text("\(current) / \(total)")
-                .font(.footnote.monospacedDigit().weight(.semibold))
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(Theme.onPage)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 0.5))
-        .contentShape(Capsule())
+        .frame(height: 44)
+        .contentShape(Rectangle())
     }
 }
 

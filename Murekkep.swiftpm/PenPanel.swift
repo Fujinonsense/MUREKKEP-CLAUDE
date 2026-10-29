@@ -25,6 +25,9 @@ struct PenPanel: View {
         shelf ?? PenShelf.opening(saved: savedShelf, favorites: settings.favoriteBrushes, current: editor.activeBrush)
     }
 
+    /// Black and white draws the pens flat; a Pro theme draws their real bodies.
+    private var flat: Bool { !settings.shownBackground(locked: pro.locks).isPremium }
+
     private var shelfBinding: Binding<PenShelf> {
         Binding(get: { current }, set: { item in
             shelf = item
@@ -111,7 +114,7 @@ struct PenPanel: View {
             }
         } label: {
             HStack(spacing: 10) {
-                PenBodyView(brush: brush, ink: ink, selected: selected)
+                PenBodyView(brush: brush, ink: ink, selected: selected, flat: flat)
                     .frame(width: 34, height: 60, alignment: .top)
                     .clipped()
                     // The pen's lower end sinks into the row.

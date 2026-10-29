@@ -397,31 +397,206 @@ struct ToolIcon: View {
 }
 
 /// A little pen standing in the palette, like a tool in a pencil case. The selected one is raised.
+/// In black and white (`flat`) it is a flat silhouette; a Pro theme draws its real body (ToolArt).
 struct PenBodyView: View {
     let brush: Brush?
     let ink: Color
     let selected: Bool
+    var flat = false
 
     var body: some View {
-        ToolArtwork(brush: brush, ink: ink)
-            .frame(width: 30, height: 68, alignment: .top)
-            .shadow(color: .black.opacity(selected ? 0.28 : 0.14), radius: selected ? 5 : 2.5, x: 1, y: 2)
-            .offset(y: selected ? 2 : 18)
-            .animation(.spring(response: 0.32, dampingFraction: 0.7), value: selected)
+        Group {
+            if flat {
+                PenSilhouette(brush: brush, ink: ink, selected: selected)
+                    .frame(width: 30, height: 68, alignment: .top)
+                    .offset(y: selected ? 2 : 16)
+            } else {
+                ToolArtwork(brush: brush, ink: ink)
+                    .frame(width: 30, height: 68, alignment: .top)
+                    .shadow(color: .black.opacity(selected ? 0.28 : 0.14), radius: selected ? 5 : 2.5, x: 1, y: 2)
+                    .offset(y: selected ? 2 : 18)
+            }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: selected)
+    }
+}
+
+/// A pen as a flat silhouette for black and white: a thin outline barrel with the ink's colour as a
+/// band and at the point; the pen in hand carries its whole tip in the ink. Drawn in a 24 × 64 box,
+/// tip up, like the mockup's pens.
+struct PenSilhouette: View {
+    let brush: Brush?
+    let ink: Color
+    let selected: Bool
+
+    static let box = CGSize(width: 24, height: 64)
+    private static let line: CGFloat = 1.2
+
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.scaleBy(x: size.width / Self.box.width, y: size.height / Self.box.height)
+            Self.draw(brush, ink: ink, selected: selected, in: &ctx)
+        }
+        .frame(width: Self.box.width, height: Self.box.height)
+        .accessibilityHidden(true)
+    }
+
+    static func draw(_ brush: Brush?, ink: Color, selected: Bool, in ctx: inout GraphicsContext) {
+        let outline = GraphicsContext.Shading.color(Theme.text2)
+        guard let brush else {
+            eraser(&ctx, outline: outline)
+            return
+        }
+        if brush == .pencil {
+            pencil(&ctx, ink: ink, outline: outline)
+            return
+        }
+        switch brush.nibStyle {
+        case .chisel: highlighter(&ctx, ink: ink, outline: outline)
+        case .flat: nibPen(&ctx, ink: ink, selected: selected, outline: outline)
+        case .brush, .leaf: paintBrush(&ctx, ink: ink, outline: outline)
+        case .cone, .eraser: pen(&ctx, ink: ink, selected: selected, outline: outline)
+        }
+    }
+
+    /// The outlined barrel from `top` to the bottom of the box, with the ink's band.
+    private static func barrel(_ ctx: inout GraphicsContext, top: CGFloat, ink: Color, outline: GraphicsContext.Shading,
+                               band: Bool = true, radius: CGFloat = 2) {
+        let body = Path(roundedRect: CGRect(x: 6, y: top, width: 12, height: 64 - top), cornerRadius: radius)
+        ctx.fill(body, with: .color(Theme.paper))
+        ctx.stroke(body, with: outline, lineWidth: line)
+        if band {
+            ctx.fill(Path(CGRect(x: 6.6, y: top + 7, width: 10.8, height: 4)), with: .color(ink))
+        }
+    }
+
+    /// Pen, gel, neon and the other fine tips: a cone with the ink at its point.
+    private static func pen(_ ctx: inout GraphicsContext, ink: Color, selected: Bool, outline: GraphicsContext.Shading) {
+        var cone = Path()
+        cone.move(to: CGPoint(x: 6, y: 20))
+        cone.addLine(to: CGPoint(x: 12, y: 5))
+        cone.addLine(to: CGPoint(x: 18, y: 20))
+        cone.closeSubpath()
+        ctx.fill(cone, with: .color(selected ? ink : Theme.paper2))
+        ctx.stroke(cone, with: outline, lineWidth: line)
+        if !selected {
+            var point = Path()
+            point.move(to: CGPoint(x: 10.7, y: 8.4))
+            point.addLine(to: CGPoint(x: 12, y: 4.8))
+            point.addLine(to: CGPoint(x: 13.3, y: 8.4))
+            point.closeSubpath()
+            ctx.fill(point, with: .color(ink))
+        }
+        barrel(&ctx, top: 20, ink: ink, outline: outline)
+    }
+
+    /// A sharpened pencil: the wood, the lead in the ink, two facet lines down the barrel.
+    private static func pencil(_ ctx: inout GraphicsContext, ink: Color, outline: GraphicsContext.Shading) {
+        var wood = Path()
+        wood.move(to: CGPoint(x: 6, y: 20))
+        wood.addLine(to: CGPoint(x: 12, y: 4))
+        wood.addLine(to: CGPoint(x: 18, y: 20))
+        wood.closeSubpath()
+        ctx.fill(wood, with: .color(Theme.paper3))
+        ctx.stroke(wood, with: outline, lineWidth: line)
+        var lead = Path()
+        lead.move(to: CGPoint(x: 10.2, y: 8.8))
+        lead.addLine(to: CGPoint(x: 12, y: 4))
+        lead.addLine(to: CGPoint(x: 13.8, y: 8.8))
+        lead.closeSubpath()
+        ctx.fill(lead, with: .color(ink))
+        barrel(&ctx, top: 20, ink: ink, outline: outline, band: false, radius: 1)
+        var facets = Path()
+        facets.move(to: CGPoint(x: 10, y: 20))
+        facets.addLine(to: CGPoint(x: 10, y: 64))
+        facets.move(to: CGPoint(x: 14, y: 20))
+        facets.addLine(to: CGPoint(x: 14, y: 64))
+        ctx.stroke(facets, with: .color(Theme.hairline), lineWidth: 1)
+    }
+
+    /// Fountain and calligraphy pens: a nib with its slit and breather hole.
+    private static func nibPen(_ ctx: inout GraphicsContext, ink: Color, selected: Bool, outline: GraphicsContext.Shading) {
+        var nib = Path()
+        nib.move(to: CGPoint(x: 7, y: 21))
+        nib.addCurve(to: CGPoint(x: 12, y: 3), control1: CGPoint(x: 7, y: 14), control2: CGPoint(x: 9.5, y: 9))
+        nib.addCurve(to: CGPoint(x: 17, y: 21), control1: CGPoint(x: 14.5, y: 9), control2: CGPoint(x: 17, y: 14))
+        nib.closeSubpath()
+        ctx.fill(nib, with: .color(selected ? ink : Theme.paper3))
+        ctx.stroke(nib, with: outline, lineWidth: line)
+        if !selected {
+            var slit = Path()
+            slit.move(to: CGPoint(x: 12, y: 8))
+            slit.addLine(to: CGPoint(x: 12, y: 15))
+            ctx.stroke(slit, with: outline, lineWidth: 1)
+            ctx.fill(Path(ellipseIn: CGRect(x: 11, y: 15, width: 2, height: 2)), with: .color(Theme.text2))
+        }
+        barrel(&ctx, top: 21, ink: ink, outline: outline)
+    }
+
+    /// A marker: a wider body and a slanted felt tip in the ink.
+    private static func highlighter(_ ctx: inout GraphicsContext, ink: Color, outline: GraphicsContext.Shading) {
+        let body = Path(roundedRect: CGRect(x: 5, y: 18, width: 14, height: 46), cornerRadius: 2)
+        ctx.fill(body, with: .color(Theme.paper))
+        ctx.stroke(body, with: outline, lineWidth: line)
+        ctx.fill(Path(CGRect(x: 5.6, y: 26, width: 12.8, height: 4)), with: .color(ink))
+        var felt = Path()
+        felt.move(to: CGPoint(x: 8, y: 18))
+        felt.addLine(to: CGPoint(x: 8, y: 8))
+        felt.addLine(to: CGPoint(x: 16, y: 4))
+        felt.addLine(to: CGPoint(x: 16, y: 18))
+        felt.closeSubpath()
+        ctx.fill(felt, with: .color(ink))
+        ctx.stroke(felt, with: outline, lineWidth: line)
+    }
+
+    /// Watercolour, the wet brushes and the grass: a tuft loaded with the ink above a ferrule.
+    private static func paintBrush(_ ctx: inout GraphicsContext, ink: Color, outline: GraphicsContext.Shading) {
+        var tuft = Path()
+        tuft.move(to: CGPoint(x: 8, y: 20))
+        tuft.addCurve(to: CGPoint(x: 12, y: 2), control1: CGPoint(x: 7, y: 12), control2: CGPoint(x: 10, y: 7))
+        tuft.addCurve(to: CGPoint(x: 16, y: 20), control1: CGPoint(x: 14, y: 7), control2: CGPoint(x: 17, y: 12))
+        tuft.closeSubpath()
+        ctx.fill(tuft, with: .color(ink))
+        ctx.stroke(tuft, with: outline, lineWidth: line)
+        let ferrule = Path(CGRect(x: 7, y: 17, width: 10, height: 5))
+        ctx.fill(ferrule, with: .color(Theme.paper3))
+        ctx.stroke(ferrule, with: outline, lineWidth: line)
+        barrel(&ctx, top: 22, ink: ink, outline: outline)
+    }
+
+    /// A block eraser in its sleeve.
+    private static func eraser(_ ctx: inout GraphicsContext, outline: GraphicsContext.Shading) {
+        let block = Path(roundedRect: CGRect(x: 5, y: 8, width: 14, height: 56), cornerRadius: 4)
+        ctx.fill(block, with: .color(Theme.paper))
+        ctx.stroke(block, with: outline, lineWidth: line)
+        ctx.fill(Path(roundedRect: CGRect(x: 5.6, y: 8.6, width: 12.8, height: 12.8), cornerRadius: 3.5), with: .color(Theme.paper3))
+        var sleeve = Path()
+        sleeve.move(to: CGPoint(x: 5, y: 22))
+        sleeve.addLine(to: CGPoint(x: 19, y: 22))
+        ctx.stroke(sleeve, with: outline, lineWidth: line)
     }
 }
 
 // MARK: - Floating palette
 
+/// The pen bar, floating at the bottom by default (or along the top, or upright down the right
+/// side): undo and redo, the pens (the favourites and the ones used last), the text pen and the
+/// eraser, every pen, the colour, the lasso, the shapes and the tools menu (the drafting
+/// instruments, the compass, typed text, stickers, handwriting to text, the engineering toolbox
+/// and the page angle), and a new page. In black and white the pens are flat silhouettes; a Pro
+/// theme draws their real bodies.
 struct FloatingToolPalette: View {
     /// The editor's coordinate space: the grip's drag reports its points in it.
     static let space = "paletteDock"
 
     @ObservedObject var editor: EditorModel
     @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var pro = ProStore.shared
     @Binding var collapsed: Bool
+    /// The engineering toolbox, a sheet the editor screen presents.
+    @Binding var showEngineering: Bool
     /// The edge the bar stands on; down the right side it stands upright.
-    var edge: PaletteEdge = .top
+    var edge: PaletteEdge = .bottom
     /// The grip's drag, while the finger moves and once when it lifts.
     var onGripMove: (DragGesture.Value) -> Void = { _ in }
     var onGripDrop: (DragGesture.Value) -> Void = { _ in }
@@ -433,8 +608,14 @@ struct FloatingToolPalette: View {
     @State private var showTextPenOptions = false
     @State private var showColors = false
     @State private var showPens = false
+    @State private var showShapes = false
+    @State private var showStickers = false
+    @State private var showAngle = false
 
     private var vertical: Bool { edge.isVertical }
+
+    /// Black and white draws the pens flat; a Pro theme draws their real bodies.
+    private var flat: Bool { !settings.shownBackground(locked: pro.locks).isPremium }
 
     var body: some View {
         Group {
@@ -444,9 +625,9 @@ struct FloatingToolPalette: View {
                 full
             }
         }
-        .padding(vertical ? .vertical : .horizontal, 12)
-        .frame(width: vertical ? 66 : nil, height: vertical ? nil : 66)
-        .glassCapsule()
+        .padding(vertical ? .vertical : .horizontal, 10)
+        .frame(width: vertical ? 64 : nil, height: vertical ? nil : 64)
+        .floatingPanel(radius: 18)
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: collapsed)
     }
 
@@ -456,10 +637,35 @@ struct FloatingToolPalette: View {
         return layout { content() }
     }
 
-    private func divider(_ length: CGFloat) -> some View {
+    private func divider() -> some View {
         Rectangle()
-            .fill(Color(uiColor: .separator))
-            .frame(width: vertical ? length : 0.5, height: vertical ? 0.5 : length)
+            .fill(Theme.hairline)
+            .frame(width: vertical ? 28 : 1, height: vertical ? 1 : 28)
+            .padding(vertical ? .vertical : .horizontal, 6)
+    }
+
+    /// A tool's icon in a 44-point button: ink when the tool is in hand, faint when it cannot be used.
+    private func icon(_ symbol: String, active: Bool, enabled: Bool = true) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 20, weight: .medium))
+            .foregroundStyle(enabled ? (active ? Theme.ink : Theme.text2) : Theme.hairline)
+            .frame(width: 44, height: 44)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(active ? Theme.ink.opacity(0.10) : Color.clear))
+            .contentShape(Rectangle())
+    }
+
+    private func toolButton(_ symbol: String, title: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            icon(symbol, active: active)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    /// Picks a tool; picking the tool in hand goes back to the last pen.
+    private func toggle(_ tool: ToolKind) {
+        editor.select(editor.tool == tool ? .brush(editor.lastBrush) : tool)
     }
 
     /// Down the right side a pen lies with its tip toward the page, so a picked pen slides out to the left.
@@ -494,7 +700,7 @@ struct FloatingToolPalette: View {
     /// The grip: drag it to the top, the bottom or the right side; a long press offers the three.
     private var grip: some View {
         Capsule()
-            .fill(Color.secondary.opacity(0.45))
+            .fill(Theme.muted.opacity(0.5))
             .frame(width: vertical ? 22 : 4, height: vertical ? 4 : 22)
             .frame(width: vertical ? 44 : 16, height: vertical ? 16 : 44)
             .contentShape(Rectangle())
@@ -542,12 +748,7 @@ struct FloatingToolPalette: View {
         Button {
             showPens = true
         } label: {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(showPens ? Color.white : Color.secondary)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(showPens ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.primary.opacity(0.07))))
+            icon("square.grid.3x3", active: showPens)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Tüm kalemler"))
@@ -558,10 +759,10 @@ struct FloatingToolPalette: View {
     }
 
     private var compact: some View {
-        line(spacing: 10) {
+        line(spacing: 8) {
             grip
             undoRedo
-            divider(30)
+            divider()
             Button {
                 collapsed = false
             } label: {
@@ -569,33 +770,47 @@ struct FloatingToolPalette: View {
                     Circle()
                         .fill(editor.color(for: editor.activeBrush).swiftUIColor)
                         .frame(width: 20, height: 20)
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                        .overlay(Circle().strokeBorder(Theme.paper, lineWidth: 2))
                     switch editor.tool {
                     case .eraser:
-                        ToolIcon(brush: nil, ink: .clear, side: 30)
+                        if flat {
+                            compactSymbol("eraser")
+                        } else {
+                            ToolIcon(brush: nil, ink: .clear, side: 30)
+                        }
                     case let .brush(brush):
-                        ToolIcon(brush: brush, ink: editor.color(for: brush).swiftUIColor, side: 30)
+                        if flat {
+                            compactSymbol(brush.symbol)
+                        } else {
+                            ToolIcon(brush: brush, ink: editor.color(for: brush).swiftUIColor, side: 30)
+                        }
                     default:
-                        Image(systemName: editor.tool.symbol)
-                            .font(.system(size: 17, weight: .medium))
-                            .frame(width: 30, height: 30)
+                        compactSymbol(editor.tool.symbol)
                     }
                     Image(systemName: unfoldSymbol)
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                 }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Araçları göster"))
         }
     }
 
+    private func compactSymbol(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(Theme.text2)
+            .frame(width: 30, height: 30)
+    }
+
     private var full: some View {
-        line(spacing: 8) {
+        line(spacing: 2) {
             grip
             undoRedo
-            divider(34)
-            allPensButton
+            divider()
             Group {
                 if vertical {
                     // Upright the column holds its pens snugly and scrolls only when the side runs short.
@@ -608,54 +823,58 @@ struct FloatingToolPalette: View {
                 }
             }
             .clipped()
-            divider(34)
+            allPensButton
+            divider()
             colorWell
-            if !editor.isPDF {
-                Button {
-                    editor.addPage()
-                } label: {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 17, weight: .medium))
-                        .frame(width: 34, height: 34)
+            divider()
+            Group {
+                toolButton("lasso", title: Loc.t("Kement: seç, taşı, büyüt, yazıya çevir"), active: editor.tool == .lasso) {
+                    toggle(.lasso)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Sayfa ekle"))
+                shapesButton
+                toolsMenu
+                if !editor.isPDF {
+                    toolButton("doc.badge.plus", title: Loc.t("Sayfa ekle"), active: false) {
+                        editor.addPage()
+                    }
+                }
             }
             Button {
                 collapsed = true
             } label: {
                 Image(systemName: foldSymbol)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: vertical ? 34 : 26, height: vertical ? 26 : 34)
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: vertical ? 44 : 26, height: vertical ? 26 : 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Araçları gizle"))
         }
     }
 
-    /// The upright column's natural height: pens 30 pt, the text pen 36, 6 between, the heart
-    /// divider 7.5, padding 8 (the sizes `pens` lays out).
+    /// The upright column's natural height: pens 30 pt, the text pen 36, 4 between, the heart
+    /// divider 7, padding 8 (the sizes `pens` lays out).
     private var columnLength: CGFloat {
         let shown = strip
         let items = shown.favorites.count + shown.recent.count + 2
-        let divider: CGFloat = !shown.favorites.isEmpty && !shown.recent.isEmpty ? 7.5 + 6 : 0
-        return CGFloat(items) * 30 + 6 + CGFloat(items - 1) * 6 + divider + 8
+        let divider: CGFloat = !shown.favorites.isEmpty && !shown.recent.isEmpty ? 7 + 4 : 0
+        return CGFloat(items) * 30 + 6 + CGFloat(items - 1) * 4 + divider + 8
     }
 
     /// The pens of the strip, then the text pen and the eraser; a picked pen stands out toward the page.
     private var pens: some View {
         let shown = strip
-        let layout = vertical ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 6))
-                              : AnyLayout(HStackLayout(alignment: .bottom, spacing: 6))
+        let layout = vertical ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4))
+                              : AnyLayout(HStackLayout(alignment: .bottom, spacing: 4))
         return layout {
             ForEach(shown.favorites) { brush in
                 penButton(brush)
             }
             if !shown.favorites.isEmpty && !shown.recent.isEmpty {
-                Capsule()
-                    .fill(Color.primary.opacity(0.14))
-                    .frame(width: vertical ? 28 : 1.5, height: vertical ? 1.5 : 28)
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(width: vertical ? 28 : 1, height: vertical ? 1 : 28)
                     .padding(vertical ? .vertical : .horizontal, 3)
                     .padding(vertical ? .trailing : .bottom, 10)
             }
@@ -666,26 +885,22 @@ struct FloatingToolPalette: View {
             eraserButton
         }
         .padding(vertical ? .vertical : .horizontal, 4)
-        .frame(width: vertical ? 66 : nil, height: vertical ? nil : 66, alignment: vertical ? .trailing : .bottom)
+        .frame(width: vertical ? 64 : nil, height: vertical ? nil : 64, alignment: vertical ? .trailing : .bottom)
     }
 
     private var undoRedo: some View {
-        line(spacing: 2) {
+        line(spacing: 0) {
             Button {
                 editor.undo()
             } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 34, height: 34)
+                icon("arrow.uturn.backward", active: false, enabled: editor.canUndo)
             }
             .disabled(!editor.canUndo)
             .accessibilityLabel(Loc.t("Geri al"))
             Button {
                 editor.redo()
             } label: {
-                Image(systemName: "arrow.uturn.forward")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 34, height: 34)
+                icon("arrow.uturn.forward", active: false, enabled: editor.canRedo)
             }
             .disabled(!editor.canRedo)
             .accessibilityLabel(Loc.t("Yinele"))
@@ -702,7 +917,7 @@ struct FloatingToolPalette: View {
                 editor.select(.brush(brush))
             }
         } label: {
-            oriented(PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected))
+            oriented(PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected, flat: flat))
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -722,7 +937,7 @@ struct FloatingToolPalette: View {
         }
     }
 
-    /// The text pen: the last pen's ink, labeled "Metin". What it writes becomes text on the lines.
+    /// The text pen: the last pen's ink, marked with a text cursor. What it writes becomes text on the lines.
     private var textPenButton: some View {
         let selected = editor.tool == .textPen
         let brush = editor.lastBrush
@@ -734,16 +949,16 @@ struct FloatingToolPalette: View {
             }
         } label: {
             oriented(ZStack(alignment: .bottom) {
-                PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected)
-                // A quiet monochrome badge in the system's material, like the tool marks in Apple's apps;
-                // it stays upright on a pen lying down the right side.
+                PenBodyView(brush: brush, ink: editor.color(for: brush).swiftUIColor, selected: selected, flat: flat)
+                // A quiet mark on paper, like the tool marks in Apple's apps; it stays upright on a pen
+                // lying down the right side.
                 Image(systemName: "character.cursor.ibeam")
                     .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.75))
+                    .foregroundStyle(Theme.text2)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+                    .background(Theme.paper, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
                     .rotationEffect(.degrees(vertical ? 90 : 0))
                     .offset(y: -3)
             }
@@ -768,7 +983,7 @@ struct FloatingToolPalette: View {
                 editor.select(.eraser)
             }
         } label: {
-            oriented(PenBodyView(brush: nil, ink: .clear, selected: selected))
+            oriented(PenBodyView(brush: nil, ink: .clear, selected: selected, flat: flat))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Silgi"))
@@ -778,6 +993,7 @@ struct FloatingToolPalette: View {
         }
     }
 
+    /// The colour in hand as a plain dot; a tap opens the pen's colours and width.
     private var colorWell: some View {
         let brush = editor.activeBrush
         return Button {
@@ -785,14 +1001,14 @@ struct FloatingToolPalette: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red], center: .center))
-                    .frame(width: 32, height: 32)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
+                    .frame(width: 30, height: 30)
                 Circle()
                     .fill(editor.color(for: brush).swiftUIColor)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                    .frame(width: 24, height: 24)
             }
-            .frame(width: 38, height: 38)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Loc.t("Renk ve kalınlık"))
@@ -800,6 +1016,98 @@ struct FloatingToolPalette: View {
             BrushInspector(editor: editor, brush: brush)
                 .environmentObject(settings)
                 .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// The shape in hand; a tap picks the shape tool and opens the shapes.
+    private var shapesButton: some View {
+        toolButton(editor.shapeKind.symbol, title: Loc.t("Şekil: {0}", "\(editor.shapeKind.title)"), active: editor.tool == .shape) {
+            if editor.tool != .shape { editor.select(.shape) }
+            showShapes = true
+        }
+        .popover(isPresented: $showShapes) {
+            ShapePicker(editor: editor)
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// Araçlar: the drafting instruments, the compass, typed text, stickers, handwriting to text,
+    /// the engineering toolbox and the page angle.
+    private var toolsMenu: some View {
+        let active = editor.tool == .compass || editor.tool == .text || editor.instrument != nil
+        return Menu {
+            Menu {
+                ForEach(InstrumentKind.allCases) { kind in
+                    Button {
+                        editor.showInstrument(kind)
+                    } label: {
+                        Label(kind.title, systemImage: editor.instrument?.kind == kind ? "checkmark" : kind.symbol)
+                    }
+                }
+                if editor.instrument != nil {
+                    Divider()
+                    Menu {
+                        ForEach([0, 15, 30, 45, 60, 75, 90, 120, 135, 150], id: \.self) { d in
+                            Button("\(d)°") { editor.setInstrumentAngle(Double(d)) }
+                        }
+                    } label: {
+                        Label(Loc.t("Açıyı ayarla"), systemImage: "angle")
+                    }
+                    Button(role: .destructive) {
+                        editor.showInstrument(nil)
+                    } label: {
+                        Label(Loc.t("Kaldır"), systemImage: "xmark")
+                    }
+                }
+            } label: {
+                Label(Loc.t("Cetvel, gönye ve iletki"), systemImage: editor.instrument?.kind.symbol ?? "ruler")
+            }
+            Button {
+                toggle(.compass)
+            } label: {
+                Label(Loc.t("Pergel"), systemImage: editor.tool == .compass ? "checkmark" : "compass.drawing")
+            }
+            Button {
+                toggle(.text)
+            } label: {
+                Label(Loc.t("Metin"), systemImage: editor.tool == .text ? "checkmark" : "textformat")
+            }
+            Button {
+                showStickers = true
+            } label: {
+                Label(Loc.t("Çıkartmalar"), systemImage: "face.smiling")
+            }
+            Divider()
+            Button {
+                let page = editor.selection?.page ?? editor.currentPage
+                Task { await editor.convertHandwriting(page: page) }
+            } label: {
+                Label(Loc.t("El yazısını yazıya çevir"), systemImage: "text.viewfinder")
+            }
+            .disabled(editor.isConverting)
+            Button {
+                showEngineering = true
+            } label: {
+                Label(Loc.t("Mühendislik"), systemImage: "function")
+            }
+            Button {
+                showAngle = true
+            } label: {
+                Label(Loc.t("Sayfa açısı"), systemImage: settings.pageAngleLocked ? "rotate.right" : "rotate.right.fill")
+            }
+        } label: {
+            icon("square.grid.2x2", active: active)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel(Loc.t("Araçlar"))
+        .popover(isPresented: $showAngle) {
+            PageAnglePanel()
+                .environmentObject(settings)
+                .presentationCompactAdaptation(.popover)
+        }
+        .sheet(isPresented: $showStickers) {
+            StickerLibrary(editor: editor)
         }
     }
 }

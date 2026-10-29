@@ -15,152 +15,6 @@ extension ToolKind {
     }
 }
 
-// MARK: - Side rail
-
-/// The engineering rail on the leading edge of the canvas: selection, shapes, drafting instruments,
-/// compass, typed text, handwriting to text, the engineering toolbox and the page angle.
-struct DraftingRail: View {
-    @ObservedObject var editor: EditorModel
-    @EnvironmentObject private var settings: AppSettings
-    @Binding var showEngineering: Bool
-    @State private var showShapes = false
-    @State private var showAngle = false
-    @State private var showStickers = false
-
-    var body: some View {
-        VStack(spacing: 3) {
-            toolButton(.lasso, title: Loc.t("Kement: seç, taşı, büyüt, yazıya çevir"))
-            shapeButton
-            instrumentMenu
-            toolButton(.compass, title: Loc.t("Pergel: merkezi ve yarıçapı çiz, sonra yay çiz"))
-            toolButton(.text, title: Loc.t("Metin: dokun ve klavyeyle yaz"))
-            railButton("face.smiling", title: Loc.t("Çıkartmalar: kalp, akciğer, karaciğer, emojiler…"), active: false) {
-                showStickers = true
-            }
-            .sheet(isPresented: $showStickers) {
-                StickerLibrary(editor: editor)
-            }
-            Divider()
-                .frame(width: 26)
-                .padding(.vertical, 3)
-            convertButton
-            railButton("function", title: Loc.t("Mühendislik: hesap makinesi, birimler, formüller, grafik"), active: false) {
-                showEngineering = true
-            }
-            angleButton
-        }
-        .padding(.vertical, 7)
-        .padding(.horizontal, 5)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
-        .shadow(color: Theme.shadow.opacity(0.14), radius: 18, y: 8)
-    }
-
-    private func icon(_ symbol: String, active: Bool) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 17, weight: .medium))
-            .foregroundStyle(active ? Color.white : Color.primary)
-            .frame(width: 40, height: 40)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(active ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.clear)))
-            .contentShape(Rectangle())
-    }
-
-    private func railButton(_ symbol: String, title: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            icon(symbol, active: active)
-        }
-        .buttonStyle(.plain)
-        .help(title)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(active ? .isSelected : [])
-    }
-
-    /// Tapping the active tool again goes back to the last pen.
-    private func toolButton(_ tool: ToolKind, title: String) -> some View {
-        let active = editor.tool == tool
-        return railButton(tool.symbol, title: title, active: active) {
-            editor.select(active ? .brush(editor.lastBrush) : tool)
-        }
-    }
-
-    private var shapeButton: some View {
-        railButton(editor.shapeKind.symbol, title: Loc.t("Şekil: {0}", "\(editor.shapeKind.title)"), active: editor.tool == .shape) {
-            if editor.tool != .shape { editor.select(.shape) }
-            showShapes = true
-        }
-        .popover(isPresented: $showShapes) {
-            ShapePicker(editor: editor)
-                .presentationCompactAdaptation(.popover)
-        }
-    }
-
-    private var instrumentMenu: some View {
-        Menu {
-            ForEach(InstrumentKind.allCases) { kind in
-                Button {
-                    editor.showInstrument(kind)
-                } label: {
-                    Label(kind.title, systemImage: editor.instrument?.kind == kind ? "checkmark" : kind.symbol)
-                }
-            }
-            if editor.instrument != nil {
-                Divider()
-                Menu {
-                    ForEach([0, 15, 30, 45, 60, 75, 90, 120, 135, 150], id: \.self) { d in
-                        Button("\(d)°") { editor.setInstrumentAngle(Double(d)) }
-                    }
-                } label: {
-                    Label(Loc.t("Açıyı ayarla"), systemImage: "angle")
-                }
-                Button(role: .destructive) {
-                    editor.showInstrument(nil)
-                } label: {
-                    Label(Loc.t("Kaldır"), systemImage: "xmark")
-                }
-            }
-        } label: {
-            icon(editor.instrument?.kind.symbol ?? "ruler", active: editor.instrument != nil)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .help(Loc.t("Cetvel, gönye ve iletki: parmakla taşı ve çevir, kalemle kenarına yasla"))
-        .accessibilityLabel(Loc.t("Cetvel, gönye ve iletki"))
-    }
-
-    private var convertButton: some View {
-        Button {
-            let page = editor.selection?.page ?? editor.currentPage
-            Task { await editor.convertHandwriting(page: page) }
-        } label: {
-            ZStack {
-                if editor.isConverting {
-                    ProgressView()
-                } else {
-                    icon("text.viewfinder", active: false)
-                }
-            }
-            .frame(width: 40, height: 40)
-        }
-        .buttonStyle(.plain)
-        .disabled(editor.isConverting)
-        .help(Loc.t("El yazısını yazıya çevir (çizgilere hizalı, mürekkep ve renkler korunur)"))
-        .accessibilityLabel(Loc.t("El yazısını yazıya çevir"))
-    }
-
-    private var angleButton: some View {
-        railButton(settings.pageAngleLocked ? "rotate.right" : "rotate.right.fill",
-                   title: Loc.t("Sayfa açısı"), active: abs(settings.pageAngle) >= 0.5) {
-            showAngle = true
-        }
-        .popover(isPresented: $showAngle) {
-            PageAnglePanel()
-                .environmentObject(settings)
-                .presentationCompactAdaptation(.popover)
-        }
-    }
-}
-
 // MARK: - Shapes
 
 struct ShapePicker: View {
@@ -344,8 +198,9 @@ struct PaperSoundCornerButton: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(settings.paperSound ? Theme.ink : Color.secondary)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(.ultraThinMaterial))
-                .opacity(settings.paperSound ? 0.9 : 0.45)
+                .background(Circle().fill(Theme.paper))
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                .opacity(settings.paperSound ? 0.9 : 0.55)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
