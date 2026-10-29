@@ -6,6 +6,10 @@
     py -3 drive.py wave x y w h [n]      # a stylus wave in that box, n periods
     py -3 drive.py line x1 y1 x2 y2      # a straight stylus stroke
     py -3 drive.py loop cx cy rx ry      # a stylus loop round an ellipse (the lasso)
+    py -3 drive.py hold kind cx cy r [name] [dx dy]
+                                         # a shaky circle, square, triangle or line, the pen resting
+                                         # 1 s at its end (hold-to-shape); with a name, screenshots
+                                         # while it rests, and after sliding the pen by dx dy if given
     py -3 drive.py finger x1 y1 x2 y2    # a finger drag (pans the page)
     py -3 drive.py shot name             # screenshot to %TEMP%\murekkep-androidcheck
 ame.png
@@ -52,6 +56,56 @@ def stylus_path(points):
     adb("shell", " ; ".join(cmds))
 
 
+def shaky(kind, cx, cy, r):
+    """A hand-drawn shape: a little tremor and an overshoot, as a person draws it."""
+    if kind == "circle":
+        pts = [(cx + r * math.cos(2 * math.pi * i / 36), cy + r * 0.96 * math.sin(2 * math.pi * i / 36)) for i in range(39)]
+    elif kind == "square":
+        corners = [(cx - r, cy - r), (cx + r, cy - r), (cx + r, cy + r), (cx - r, cy + r), (cx - r, cy - r)]
+        pts = []
+        for (ax, ay), (bx, by) in zip(corners, corners[1:]):
+            pts += [(ax + (bx - ax) * k / 8, ay + (by - ay) * k / 8) for k in range(8)]
+        pts.append((cx - r, cy - r + 6))
+    elif kind == "triangle":
+        corners = [(cx, cy - r), (cx + r * 0.95, cy + r * 0.7), (cx - r, cy + r * 0.72), (cx, cy - r)]
+        pts = []
+        for (ax, ay), (bx, by) in zip(corners, corners[1:]):
+            pts += [(ax + (bx - ax) * k / 9, ay + (by - ay) * k / 9) for k in range(9)]
+        pts.append((cx + 4, cy - r + 6))
+    else:
+        pts = [(cx - r + 2 * r * k / 16, cy - r * 0.3 + 0.6 * r * k / 16) for k in range(17)]
+    return [(x + 3 * math.sin(i * 1.7), y + 3 * math.cos(i * 2.3)) for i, (x, y) in enumerate(pts)]
+
+
+def hold(argv):
+    kind, cx, cy, r = argv[2], float(argv[3]), float(argv[4]), float(argv[5])
+    name = argv[6] if len(argv) > 6 else None
+    pts = shaky(kind, cx, cy, r)
+    (x0, y0), rest = pts[0], pts[1:]
+    cmds = [f"input stylus motionevent DOWN {x0:.0f} {y0:.0f}"] + [f"input stylus motionevent MOVE {x:.0f} {y:.0f}" for x, y in rest]
+    adb("shell", " ; ".join(cmds))
+    xl, yl = pts[-1]
+    # The pen rests: the canvas turns what it drew into a shape after 0.55 s.
+    adb("shell", "sleep 1")
+    if name:
+        shot(name + "-held")
+    if len(argv) > 8:
+        dx, dy = float(argv[7]), float(argv[8])
+        adb("shell", " ; ".join(f"input stylus motionevent MOVE {xl + dx * k / 6:.0f} {yl + dy * k / 6:.0f}" for k in range(1, 7)))
+        xl, yl = xl + dx, yl + dy
+        if name:
+            shot(name + "-slid")
+    adb("shell", f"input stylus motionevent UP {xl:.0f} {yl:.0f}")
+
+
+def shot(name):
+    os.makedirs(SHOTS, exist_ok=True)
+    path = os.path.join(SHOTS, name + ".png")
+    with open(path, "wb") as f:
+        f.write(adb("exec-out", "screencap", "-p", binary=True))
+    print(path)
+
+
 def main(argv):
     # The Windows console's code page cannot print every log line (emoji in other apps' logs).
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -78,6 +132,8 @@ def main(argv):
         steps = 28
         pts = [(x + w * i / steps, y + h / 2 + h / 2 * math.sin(2 * math.pi * periods * i / steps)) for i in range(steps + 1)]
         stylus_path(pts)
+    elif cmd == "hold":
+        hold(argv)
     elif cmd == "loop":
         cx, cy, rx, ry = map(float, argv[2:6])
         steps = 40
@@ -88,11 +144,7 @@ def main(argv):
     elif cmd == "finger":
         adb("shell", "input", "touchscreen", "swipe", *argv[2:6], "600")
     elif cmd == "shot":
-        os.makedirs(SHOTS, exist_ok=True)
-        path = os.path.join(SHOTS, argv[2] + ".png")
-        with open(path, "wb") as f:
-            f.write(adb("exec-out", "screencap", "-p", binary=True))
-        print(path)
+        shot(argv[2])
     elif cmd == "log":
         crash = adb("logcat", "-d", "-b", "crash", check=False)
         print(crash.strip() or "(no crashes)")

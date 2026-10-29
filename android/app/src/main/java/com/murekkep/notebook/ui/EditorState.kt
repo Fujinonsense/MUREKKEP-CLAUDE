@@ -11,16 +11,25 @@ import com.murekkep.notebook.ink.InkColor
 import com.murekkep.notebook.ink.InkEraser
 import com.murekkep.notebook.ink.InkSelection
 import com.murekkep.notebook.ink.Lasso
+import com.murekkep.notebook.ink.EditableShape
 import com.murekkep.notebook.ink.PageInk
+import com.murekkep.notebook.ink.PenPaths
+import com.murekkep.notebook.ink.Pt
+import com.murekkep.notebook.ink.ShapeBuilder
+import com.murekkep.notebook.ink.ShapeEditState
+import com.murekkep.notebook.ink.ShapeHandleFeedback
+import com.murekkep.notebook.ink.ShapeKind
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.ink.Vec2
 import com.murekkep.notebook.ink.referenceNow
+import com.murekkep.notebook.ink.restroke
 import com.murekkep.notebook.render.PageLayout
+import kotlin.math.hypot
 import kotlin.random.Random
 
 // Ink, tools and undo for one open notebook: the part of Murekkep.swiftpm/EditorModel.swift the
-// Android edition has (pens, the eraser, the lasso, undo, the blank page at the end; no stickers,
-// shapes, text pen or PDFs yet). The canvas reads `pages` on its render thread, so the list is
+// Android edition has (pens, the eraser, the lasso, held shapes and the shape tool, undo, the blank
+// page at the end; no stickers, text pen or PDFs yet). The canvas reads `pages` on its render thread, so the list is
 // replaced whole on every change and never mutated: a frame always sees one consistent snapshot.
 // Everything else runs on the main thread (touch events and the chrome).
 
@@ -32,6 +41,9 @@ sealed class Tool {
 
     /** Select strokes by drawing around them, then move, resize, turn or restyle them. */
     data object Lasso : Tool()
+
+    /** Drag a line, arrow, box, oval, triangle or regular polygon (`EditorState.shapeKind`). */
+    data object Shape : Tool()
 
     val selectedBrush: com.murekkep.notebook.ink.Brush?
         get() = (this as? Brush)?.brush
@@ -161,6 +173,25 @@ class EditorState(
 
     /** The selection's page as it was when a drag began, and the ids that were selected then. */
     private var selectionSnapshot: Pair<List<Stroke>, Set<Int>>? = null
+
+    // Shapes
+
+    /** The shape tool's shape, its dashes and a regular polygon's sides (for this session, as on iPad). */
+    var shapeKind by mutableStateOf(ShapeKind.LINE)
+    var shapeDashed by mutableStateOf(false)
+    var polygonSides by mutableStateOf(6)
+
+    /** A shape the held pen just drew, with handles on its corners until the next touch elsewhere.
+     *  The canvas draws the handles, so a change asks for a frame. */
+    var shapeEdit: ShapeEditState? = null
+        private set(value) {
+            if (field == value) return
+            field = value
+            onInkChange?.invoke()
+        }
+
+    /** The page's strokes when a handle drag began: the drag is one undo step. */
+    private var shapeEditSnapshot: List<Stroke>? = null
 
     /** Changes since the last `markSaved`. */
     @Volatile
@@ -471,6 +502,68 @@ class EditorState(
         updateSelection(sel.page, restyled.mapTo(HashSet()) { it.id })
     }
 
+    // MARK: Adjusting a recognized shape
+
+    /** Shows the handles of a shape the held pen just drew. */
+    fun startShapeEdit(page: Int, strokeId: Int, shape: EditableShape) {
+        if (page !in pages.indices || pages[page].strokes.none { it.id == strokeId }) return
+        shapeEdit = ShapeEditState(page, strokeId, shape)
+    }
+
+    /** Hides the handles; the shape stays as it is. */
+    fun finishShapeEdit() {
+        if (shapeEditSnapshot != null) endShapeHandleDrag()
+        shapeEdit = null
+    }
+
+    fun beginShapeHandleDrag() {
+        val e = shapeEdit ?: return
+        if (readOnly || e.page !in pages.indices) return
+        shapeEditSnapshot = pages[e.page].strokes
+    }
+
+    /** Moves a handle (page points) and redraws the shape's stroke in place. */
+    fun moveShapeHandle(index: Int, to: Pt, snap: Double): ShapeHandleFeedback? {
+        val e = shapeEdit ?: return null
+        if (readOnly || e.page !in pages.indices) return null
+        val strokes = pages[e.page].strokes
+        val i = strokes.indexOfFirst { it.id == e.strokeId }
+        if (i < 0) return null
+        val move = e.shape.move(index, to, snap)
+        val redrawn = restroke(strokes[i], move.shape.path())
+        setPage(e.page, strokes.toMutableList().also { it[i] = redrawn })
+        shapeEdit = ShapeEditState(e.page, redrawn.id, move.shape)
+        onInkChange?.invoke()
+        return move.feedback
+    }
+
+    /** One undo step for the whole drag. */
+    fun endShapeHandleDrag() {
+        val before = shapeEditSnapshot ?: return
+        shapeEditSnapshot = null
+        val e = shapeEdit ?: return
+        if (e.page !in pages.indices) return
+        val after = pages[e.page].strokes
+        if (after.map { it.id } == before.map { it.id }) return
+        pushUndo(InkEdit(e.page, before, after))
+        markDirty()
+    }
+
+    // MARK: The shape tool
+
+    /** Pen paths of the current shape between two page-local points. */
+    fun shapePaths(from: Pt, to: Pt): List<List<Vec2>> {
+        val paths = ShapeBuilder.paths(shapeKind, from, to, polygonSides)
+        return if (shapeDashed) ShapeBuilder.dashed(paths) else paths
+    }
+
+    /** Draws the current shape with the last pen picked, its color and width (one undo step). */
+    fun addShape(page: Int, from: Pt, to: Pt) {
+        if (hypot(to.x - from.x, to.y - from.y) <= 2) return
+        val brush = activeBrush
+        replaceStrokes(page, removing = emptySet(), adding = PenPaths.strokes(shapePaths(from, to), brush, color(brush), width(brush), referenceNow()))
+    }
+
     // MARK: Undo
 
     fun undo() {
@@ -495,6 +588,8 @@ class EditorState(
      *  selection goes: the strokes it names were replaced (the iPad keeps a frame round nothing). */
     private fun restore(edit: InkEdit, before: Boolean) {
         clearSelection()
+        shapeEditSnapshot = null
+        shapeEdit = null
         for (e in listOf(edit) + edit.linked) {
             if (e.page in pages.indices) setPage(e.page, if (before) e.before else e.after)
         }

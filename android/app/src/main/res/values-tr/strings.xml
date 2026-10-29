@@ -27,6 +27,11 @@
     <string name="duplicate">Çoğalt</string>
     <string name="apply_ink">Mürekkebi uygula</string>
     <string name="done">Bitti</string>
+    <string name="shapes">Şekiller</string>
+    <string name="shape_hold_hint">%1$s · kalemi kaydır: boyut ve yön</string>
+    <string name="dashed_line">Kesikli çizgi</string>
+    <string name="polygon_sides">Kenar sayısı: %1$d</string>
+    <string name="shapes_help">Kalemle sürükle. Doğrular 15°\'lerde, kare ve daireler eşit kenarda tık diye oturur; ölçü kalemin yanında görünür. Şekil son seçtiğin mürekkeple çizilir.</string>
     <string name="eraser">Silgi</string>
     <string name="eraser_whole_stroke">Tüm çizgi</string>
     <string name="eraser_partial">Kısmi</string>

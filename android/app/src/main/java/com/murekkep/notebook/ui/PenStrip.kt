@@ -28,10 +28,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -56,12 +60,15 @@ import com.murekkep.notebook.ink.Brush
 import com.murekkep.notebook.ink.BrushGroup
 import com.murekkep.notebook.ink.EraserMode
 import com.murekkep.notebook.ink.InkColor
+import com.murekkep.notebook.ink.ShapeKind
+import com.murekkep.notebook.ink.ShapeName
 import java.util.Locale
 
-// The pen dock under the canvas (Murekkep.swiftpm/PenStrip.swift, ToolPalette.swift): the eraser,
-// the lasso and every pen by group in one scrolling strip, each pen named in the user's language and the Pro
-// pens starred (all usable for now; Play Billing comes later). Under it, the chosen pen's six colors
-// and a width slider, or for the eraser its mode (whole stroke, partial) and size.
+// The pen dock under the canvas (Murekkep.swiftpm/PenStrip.swift, ToolPalette.swift, DraftingTools.swift
+// ShapePicker): the eraser, the lasso, the shapes and every pen by group in one scrolling strip, each
+// pen named in the user's language and the Pro pens starred (all usable for now; Play Billing comes
+// later). Under it, the chosen pen's six colors and a width slider, or for the eraser its mode
+// (whole stroke, partial) and size; the shapes add their kinds, dashes and a polygon's sides.
 
 fun InkColor.toColor(): Color = Color(r, g, b, a)
 
@@ -72,6 +79,9 @@ private val isTurkish: Boolean
 fun Brush.localizedTitle(): String = if (isTurkish) titleTr else titleEn
 
 fun BrushGroup.localizedTitle(): String = if (isTurkish) titleTr else titleEn
+
+/** A shape's name in the user's language: Turkish, else English. */
+fun ShapeName.localizedTitle(): String = if (isTurkish) titleTr else titleEn
 
 @Composable
 fun ToolDock(state: EditorState) {
@@ -93,6 +103,10 @@ fun ToolDock(state: EditorState) {
             if (tool is Tool.Eraser) {
                 EraserOptions(state)
             } else {
+                if (tool is Tool.Shape) {
+                    ShapeOptions(state)
+                    Spacer(Modifier.height(8.dp))
+                }
                 PenOptions(state, state.activeBrush)
             }
         }
@@ -115,6 +129,11 @@ private fun PenStrip(state: EditorState) {
             selected = tool is Tool.Lasso,
             onClick = { state.tool = if (tool is Tool.Lasso) Tool.Brush(state.lastBrush) else Tool.Lasso },
         )
+        ToolChip(
+            title = stringResource(R.string.shapes),
+            selected = tool is Tool.Shape,
+            onClick = { state.tool = if (tool is Tool.Shape) Tool.Brush(state.lastBrush) else Tool.Shape },
+        ) { Icon(Icons.Outlined.Category, contentDescription = null, modifier = Modifier.size(16.dp)) }
         VerticalDivider(Modifier.height(24.dp).padding(horizontal = 4.dp))
         for (group in BrushGroup.entries) {
             Text(
@@ -191,9 +210,18 @@ private fun EraserChip(selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** The lasso (LassoChrome.kt): pick strokes by drawing round them. */
+/** The lasso (CanvasChrome.kt): pick strokes by drawing round them. */
 @Composable
 private fun LassoChip(selected: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    ToolChip(stringResource(R.string.lasso), selected, onClick) {
+        LassoGlyph(Modifier.size(16.dp), if (selected) scheme.onPrimaryContainer else scheme.onSurface)
+    }
+}
+
+/** A tool in the strip: its glyph and name, highlighted while it is the one in the hand. */
+@Composable
+private fun ToolChip(title: String, selected: Boolean, onClick: () -> Unit, glyph: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
@@ -207,9 +235,51 @@ private fun LassoChip(selected: Boolean, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            LassoGlyph(Modifier.size(16.dp), if (selected) scheme.onPrimaryContainer else scheme.onSurface)
-            Text(stringResource(R.string.lasso), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            glyph()
+            Text(title, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
+    }
+}
+
+// MARK: The shape tool's options
+
+/** The shape tool's kinds, dashed lines and a regular polygon's sides, then how it works. */
+@Composable
+private fun ShapeOptions(state: EditorState) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            for (kind in ShapeKind.entries) {
+                ModeChip(label = kind.shapeName.localizedTitle(), selected = state.shapeKind == kind, onClick = { state.shapeKind = kind })
+            }
+            VerticalDivider(Modifier.height(24.dp).padding(horizontal = 4.dp))
+            ModeChip(
+                label = stringResource(R.string.dashed_line),
+                selected = state.shapeDashed,
+                onClick = { state.shapeDashed = !state.shapeDashed },
+            )
+            if (state.shapeKind == ShapeKind.POLYGON) {
+                IconButton(onClick = { state.polygonSides = (state.polygonSides - 1).coerceAtLeast(3) }, enabled = state.polygonSides > 3) {
+                    Icon(Icons.Filled.Remove, contentDescription = null)
+                }
+                Text(stringResource(R.string.polygon_sides, state.polygonSides), style = MaterialTheme.typography.labelLarge)
+                IconButton(onClick = { state.polygonSides = (state.polygonSides + 1).coerceAtMost(12) }, enabled = state.polygonSides < 12) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                }
+            }
+        }
+        Text(
+            stringResource(R.string.shapes_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        )
     }
 }
 

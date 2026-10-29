@@ -49,9 +49,10 @@ import com.murekkep.notebook.canvas.CanvasOverlay
 import com.murekkep.notebook.canvas.HoverRing
 import com.murekkep.notebook.canvas.InkCanvasView
 
-// One open notebook: a calm top bar (back, title, undo, redo), the ink canvas with the lasso's
-// overlay and selection bar over it (LassoChrome.kt), and the pen dock under it (PenStrip.kt). The canvas is a GLSurfaceView: it pauses and resumes with the screen's
-// lifecycle and is released when the screen leaves; the notebook is saved at both moments.
+// One open notebook: a calm top bar (back, title, undo, redo), the ink canvas with its overlay and
+// the lasso's bar over it (CanvasChrome.kt), and the pen dock under it (PenStrip.kt). The canvas is
+// a GLSurfaceView: it pauses and resumes with the screen's lifecycle and is released when the screen
+// leaves; the notebook is saved at both moments.
 
 @Composable
 fun EditorScreen(state: EditorState, onBack: () -> Unit) {

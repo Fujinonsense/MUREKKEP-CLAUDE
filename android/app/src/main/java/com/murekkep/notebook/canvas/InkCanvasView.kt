@@ -14,10 +14,17 @@ import android.view.SurfaceHolder
 import android.view.VelocityTracker
 import android.widget.OverScroller
 import androidx.input.motionprediction.MotionEventPredictor
+import com.murekkep.notebook.R
 import com.murekkep.notebook.ink.Brush
+import com.murekkep.notebook.ink.EditableShape
+import com.murekkep.notebook.ink.Geo
 import com.murekkep.notebook.ink.InputSample
 import com.murekkep.notebook.ink.Lasso
+import com.murekkep.notebook.ink.Pt
 import com.murekkep.notebook.ink.SelectionDrag
+import com.murekkep.notebook.ink.ShapeBuilder
+import com.murekkep.notebook.ink.ShapeEditState
+import com.murekkep.notebook.ink.ShapeName
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.ink.StrokeBuilder
 import com.murekkep.notebook.ink.Vec2
@@ -28,6 +35,8 @@ import com.murekkep.notebook.render.InkRenderer
 import com.murekkep.notebook.render.PageLayout
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.Tool
+import com.murekkep.notebook.ui.localizedTitle
+import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -49,6 +58,9 @@ import kotlin.random.Random
 // - pen events come unbatched (requestUnbufferedDispatch) and the line under the tip runs a little
 //   ahead of the pen with Jetpack's motion prediction;
 // - the screen runs at its highest refresh rate (120 Hz where the tablet has it).
+// As on iPad, a pen resting at the end of a stroke turns it into a clean shape that then follows
+// the pen (size and turn) and keeps handles on its corners after it lifts; the lasso and the shape
+// tool draw their loops, frames and previews in the screen's overlay (CanvasOverlay).
 /** A pen hovering over the canvas: where (view pixels) and the radius of what it would draw or erase. */
 data class HoverRing(val x: Float, val y: Float, val radius: Float, val erasing: Boolean)
 
@@ -60,10 +72,25 @@ data class OverlayLabel(val x: Float, val y: Float, val text: String)
 
 /** What the screen draws over the ink, in view pixels (CanvasOverlay.swift on iPad): the lasso's
  *  loop while it is drawn (x, y pairs), the box of the selected strokes (its dashed frame and
- *  handles go round it) and a measurement next to the pen. */
-class CanvasOverlay(val lasso: FloatArray?, val selection: ViewRect?, val label: OverlayLabel?)
+ *  handles go round it), a measurement next to the pen, the handles of a recognized shape (x, y
+ *  pairs; the last one moves the whole shape) and the shape tool's shape while it is dragged. */
+class CanvasOverlay(
+    val lasso: FloatArray?,
+    val selection: ViewRect?,
+    val label: OverlayLabel?,
+    val shapeHandles: FloatArray? = null,
+    val preview: List<FloatArray>? = null,
+)
 
 class InkCanvasView(context: Context, private val state: EditorState) : GLSurfaceView(context) {
+    companion object {
+        /** How long the pen rests before what it drew becomes a shape (StrokeBuilder.snapToShape). */
+        private const val HOLD_MILLIS = 550L
+
+        /** How far from a shape's handle (dp) a finger still takes it: a finger is broader than a pen. */
+        private const val FINGER_REACH = 34f
+    }
+
     private val renderer = InkRenderer()
     @Volatile private var frameInput: FrameInput? = null
 
@@ -101,7 +128,23 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private var lastLassoTick = 0L
     private var selectionDrag: SelectionDrag? = null
     private var lastTurnSnap: Int? = null
-    private var dragLabel: Pair<Vec2, String>? = null
+
+    /** A measurement or a hint next to the pen (document point, text). */
+    private var liveLabel: Pair<Vec2, String>? = null
+
+    // Held shapes: the pen resting still for a moment (view pixels where it rests) turns the stroke
+    // into a clean shape; a recognized shape keeps handles until the next touch elsewhere.
+    private var holdAnchorX = Float.NaN
+    private var holdAnchorY = 0f
+    private val holdFire = Runnable { holdFired() }
+    private var snappedName: ShapeName? = null
+    private var shapeHandleDrag: Int? = null
+    private var shapeHandleOffset = Pt(0.0, 0.0)
+    private var lastShapeSnapped = false
+
+    // The shape tool: the page and start of the drag (page points) and where it ends now.
+    private var shapeStart: Pair<Int, Pt>? = null
+    private var shapeEnd: Pt? = null
 
     // The fingers.
     private val scaleDetector = ScaleGestureDetector(context, ScaleListener())
@@ -111,6 +154,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private var lastPanX = 0f
     private var lastPanY = 0f
     private var navigating = false
+    private var tapX = 0f
+    private var tapY = 0f
 
     init {
         setEGLContextClientVersion(3)
@@ -174,8 +219,30 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         } else {
             null
         }
-        val label = dragLabel
-        if (sel == null && loop == null && label == null) {
+        val label = liveLabel
+        val handles = state.shapeEdit?.let { edit ->
+            val top = pageLayout().top(edit.page)
+            val hs = edit.shape.handles
+            FloatArray(hs.size * 2).also { a ->
+                for ((i, h) in hs.withIndex()) {
+                    a[2 * i] = viewX(h.x.toFloat())
+                    a[2 * i + 1] = viewY(top + h.y.toFloat())
+                }
+            }
+        }
+        val preview = shapeStart?.let { (page, from) ->
+            val end = shapeEnd ?: return@let null
+            val top = pageLayout().top(page)
+            state.shapePaths(from, end).map { path ->
+                FloatArray(path.size * 2).also { a ->
+                    for ((i, q) in path.withIndex()) {
+                        a[2 * i] = viewX(q.x)
+                        a[2 * i + 1] = viewY(top + q.y)
+                    }
+                }
+            }
+        }
+        if (sel == null && loop == null && label == null && handles == null && preview == null) {
             if (overlayShown) {
                 overlayShown = false
                 onOverlay?.invoke(null)
@@ -187,7 +254,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             ViewRect(viewX(s.bounds.minX), viewY(top + s.bounds.minY), viewX(s.bounds.maxX), viewY(top + s.bounds.maxY))
         }
         overlayShown = true
-        onOverlay?.invoke(CanvasOverlay(loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }))
+        onOverlay?.invoke(CanvasOverlay(loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }, handles, preview))
     }
 
     private fun setAnimating(on: Boolean) {
@@ -318,8 +385,16 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
                     }
                     return true
                 }
-                // A finger: draws only on a device whose pen has not been seen, and only alone.
+                // A finger: draws only on a device whose pen has not been seen, and only alone; once a pen
+                // has been seen it can still take a recognized shape's handles.
                 if (penPointer != -1 && penIsStylus) return true
+                val edit = state.shapeEdit
+                if (stylusSeen && edit != null && event.pointerCount == 1 && penPointer == -1 && !navigating &&
+                    shapeHandle(Vec2(docX(event.getX(index)), docY(event.getY(index))), edit, FINGER_REACH) != null
+                ) {
+                    penDown(event, index, stylus = false)
+                    return true
+                }
                 if (!stylusSeen && event.pointerCount == 1 && penPointer == -1 && !navigating) {
                     penDown(event, index, stylus = false)
                     return true
@@ -385,6 +460,32 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             event.isButtonPressed(MotionEvent.BUTTON_STYLUS_SECONDARY)
         val eraserEnd = event.getToolType(i) == MotionEvent.TOOL_TYPE_ERASER
         val borrowsEraser = stylus && (sideButton || eraserEnd)
+        // A recognized shape shows handles on its corners: a handle is dragged, any other touch puts
+        // them away (and then does what the tool does).
+        state.shapeEdit?.let { edit ->
+            val index = if (borrowsEraser) null else shapeHandle(Vec2(x, y), edit, if (stylus) 16f else FINGER_REACH)
+            if (index != null) {
+                val h = edit.shape.handles[index]
+                shapeHandleDrag = index
+                shapeHandleOffset = Pt(h.x - x, h.y - (y - l.top(edit.page)))
+                lastShapeSnapped = false
+                state.beginShapeHandleDrag()
+                penPointer = event.getPointerId(i)
+                penIsStylus = stylus
+                return
+            }
+            state.finishShapeEdit()
+        }
+        if (state.tool is Tool.Shape && !borrowsEraser) {
+            val page = l.pageAt(x, y) ?: return
+            val start = Pt(x.toDouble(), (y - l.top(page)).toDouble())
+            shapeStart = Pair(page, start)
+            shapeEnd = start
+            penPointer = event.getPointerId(i)
+            penIsStylus = stylus
+            requestFrame()
+            return
+        }
         if (state.tool is Tool.Lasso && !borrowsEraser) {
             if (!lassoBegan(Vec2(x, y))) return
             penPointer = event.getPointerId(i)
@@ -412,6 +513,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         b.add(sample(event, i, -1))
         builder = b
         active = ActiveStroke(page, brush, b.color, b.width, b.seed, b.preview(emptyList()), strokeStart)
+        holdAnchorX = Float.NaN
+        trackHold(event.getX(i), event.getY(i))
         requestFrame()
     }
 
@@ -420,6 +523,15 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         if (page != null) {
             for (h in 0 until event.historySize) erasePoint(page, sample(event, i, h))
             erasePoint(page, sample(event, i, -1))
+            return
+        }
+        val handle = shapeHandleDrag
+        if (handle != null) {
+            dragShapeHandle(handle, Vec2(docX(event.getX(i)), docY(event.getY(i))))
+            return
+        }
+        if (shapeStart != null) {
+            updateShapePreview(Vec2(docX(event.getX(i)), docY(event.getY(i))))
             return
         }
         if (selectionDrag != null) {
@@ -446,6 +558,15 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             p.recycle()
         }
         active = ActiveStroke(a.page, a.brush, a.color, a.width, a.seed, b.preview(predicted), a.startTime)
+        // A snapped shape follows the pen: show its size and turn.
+        val name = snappedName
+        val adjustment = b.shapeAdjustment
+        val tip = b.tip
+        if (name != null && adjustment != null && tip != null) {
+            val scale = NumberFormat.getPercentInstance().format(adjustment.scale)
+            liveLabel = Pair(Vec2(tip.x, tip.y + pageLayout().top(a.page)), "${name.localizedTitle()} · $scale · ${adjustment.degrees}°")
+        }
+        trackHold(event.getX(i), event.getY(i))
         requestFrame()
     }
 
@@ -456,6 +577,28 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     }
 
     private fun penUp(event: MotionEvent, i: Int) {
+        cancelHold()
+        if (shapeHandleDrag != null) {
+            penMoved(event, i)
+            shapeHandleDrag = null
+            liveLabel = null
+            state.endShapeHandleDrag()
+            penPointer = -1
+            requestFrame()
+            return
+        }
+        val shape = shapeStart
+        if (shape != null) {
+            penMoved(event, i)
+            val end = shapeEnd
+            shapeStart = null
+            shapeEnd = null
+            liveLabel = null
+            penPointer = -1
+            if (end != null) state.addShape(shape.first, shape.second, end)
+            requestFrame()
+            return
+        }
         if (eraserPage != null) {
             penMoved(event, i)
             state.endErase()
@@ -471,14 +614,21 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val a = active
         if (b != null && a != null) {
             b.add(sample(event, i, -1))
+            val straight = b.isStraight
             val points = b.finish()
             if (points.isNotEmpty()) {
                 val now = referenceNow()
-                state.addStroke(a.page, Stroke(a.brush, a.color, a.width, now, a.seed, points, max(0.0, now - strokeStart)))
+                val stroke = Stroke(a.brush, a.color, a.width, now, a.seed, points, max(0.0, now - strokeStart))
+                state.addStroke(a.page, stroke)
+                // The shape keeps handles on its corners until the next touch elsewhere.
+                b.editable?.let { state.startShapeEdit(a.page, stroke.id, it) }
+                if (straight) confirm()
             }
         }
         builder = null
         active = null
+        snappedName = null
+        liveLabel = null
         penPointer = -1
         requestFrame()
     }
@@ -489,10 +639,16 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             finishEraser()
             return
         }
+        cancelHold()
+        if (shapeHandleDrag != null) state.endShapeHandleDrag()
+        shapeHandleDrag = null
+        shapeStart = null
+        shapeEnd = null
+        snappedName = null
         // A cancelled drag keeps where the selection got to, as on iPad; a cancelled loop selects nothing.
         if (selectionDrag != null) state.endSelectionEdit()
         selectionDrag = null
-        dragLabel = null
+        liveLabel = null
         lassoPage = null
         lassoPoints.clear()
         builder = null
@@ -537,7 +693,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
                 is SelectionDrag.Move -> state.transformSelection(p - drag.start, 1f, Vec2.ZERO)
                 is SelectionDrag.Scale -> {
                     val k = hypot(p.x - drag.anchor.x, p.y - drag.anchor.y) / drag.startDistance
-                    dragLabel = Pair(doc, NumberFormat.getPercentInstance().format(k.toDouble().coerceIn(0.05, 20.0)))
+                    liveLabel = Pair(doc, NumberFormat.getPercentInstance().format(k.toDouble().coerceIn(0.05, 20.0)))
                     state.transformSelection(Vec2.ZERO, k, drag.anchor)
                 }
                 is SelectionDrag.Rotate -> {
@@ -550,7 +706,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
                     } else {
                         lastTurnSnap = null
                     }
-                    dragLabel = Pair(doc, "${(-angle * 180.0 / PI).roundToInt()}°")
+                    liveLabel = Pair(doc, "${(-angle * 180.0 / PI).roundToInt()}°")
                     state.transformSelection(Vec2.ZERO, 1f, drag.center, angle)
                 }
             }
@@ -575,7 +731,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private fun lassoEnded() {
         if (selectionDrag != null) {
             selectionDrag = null
-            dragLabel = null
+            liveLabel = null
             state.endSelectionEdit()
             penPointer = -1
             requestFrame()
@@ -596,10 +752,108 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         } else {
             state.selectStrokes(page, polygon)
         }
-        if (took) {
-            performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY)
+        if (took) confirm()
+        requestFrame()
+    }
+
+    // MARK: held shapes
+
+    /** Waits for the pen to rest: every move farther than 4 dp from where it rested starts the wait again. */
+    private fun trackHold(vx: Float, vy: Float) {
+        val b = builder ?: return
+        if (b.isStraight) return
+        if (!holdAnchorX.isNaN() && hypot(vx - holdAnchorX, vy - holdAnchorY) < 4f * resources.displayMetrics.density) return
+        holdAnchorX = vx
+        holdAnchorY = vy
+        removeCallbacks(holdFire)
+        postDelayed(holdFire, HOLD_MILLIS)
+    }
+
+    private fun cancelHold() {
+        removeCallbacks(holdFire)
+        holdAnchorX = Float.NaN
+    }
+
+    /** The pen rested: what it drew becomes a line, circle, ellipse, curve, rectangle or polygon in
+     *  the same ink; a shape other than a line then follows the pen (size and turn). */
+    private fun holdFired() {
+        val b = builder ?: return
+        val a = active ?: return
+        if (penPointer == -1) return
+        val last = b.drawnPath.lastOrNull()
+        val name = b.snapToShape() ?: return
+        active = ActiveStroke(a.page, a.brush, a.color, a.width, a.seed, b.preview(emptyList()), a.startTime)
+        snappedName = name
+        tick()
+        if (last != null) {
+            val title = name.localizedTitle()
+            val text = if (b.shapeAdjustment == null) title else context.getString(R.string.shape_hold_hint, title)
+            liveLabel = Pair(Vec2(last.x.toFloat(), last.y.toFloat() + pageLayout().top(a.page)), text)
         }
         requestFrame()
+    }
+
+    /** The handle of the recognized shape under the pen (or finger), if any; `reach` in dp. With
+     *  `inside`, a touch within a closed shape (or along an open one) that misses the corner handles
+     *  takes the move handle, so the shape moves from anywhere on it. */
+    private fun shapeHandle(doc: Vec2, edit: ShapeEditState, reach: Float, inside: Boolean = true): Int? {
+        val p = Pt(doc.x.toDouble(), (doc.y - pageLayout().top(edit.page)).toDouble())
+        val handles = edit.shape.handles
+        var best: Int? = null
+        var bestDistance = (reach * unit()).toDouble()
+        for ((i, h) in handles.withIndex()) {
+            val d = hypot(p.x - h.x, p.y - h.y)
+            if (d < bestDistance) {
+                bestDistance = d
+                best = i
+            }
+        }
+        if (best != null || !inside || handles.isEmpty()) return best
+        val outline = edit.shape.path()
+        if (outline.size < 2) return null
+        when (edit.shape.kind) {
+            is EditableShape.Kind.Polygon, is EditableShape.Kind.Oval -> {
+                val loop = outline.map { Vec2(it.x.toFloat(), it.y.toFloat()) }
+                if (Lasso.contains(loop, p.x.toFloat(), p.y.toFloat())) return handles.size - 1
+            }
+            is EditableShape.Kind.Polyline, is EditableShape.Kind.Curve -> {
+                val tolerance = 14.0 * unit()
+                for (j in 1 until outline.size) {
+                    if (Geo.segmentDistance(p, outline[j - 1], outline[j]) <= tolerance) return handles.size - 1
+                }
+            }
+        }
+        return null
+    }
+
+    private fun dragShapeHandle(index: Int, doc: Vec2) {
+        val edit = state.shapeEdit ?: return
+        val p = Pt(doc.x + shapeHandleOffset.x, doc.y - pageLayout().top(edit.page) + shapeHandleOffset.y)
+        val feedback = state.moveShapeHandle(index, p, snap = 9.0 * unit()) ?: return
+        if (feedback.snapped && !lastShapeSnapped) tick()
+        lastShapeSnapped = feedback.snapped
+        val separator = DecimalFormatSymbols.getInstance().decimalSeparator
+        liveLabel = feedback.label?.let { Pair(doc, it.format({ n -> n.localizedTitle() }, separator)) }
+        requestFrame()
+    }
+
+    // MARK: the shape tool
+
+    /** The shape from where the pen went down to where it is, its end settling at 15° steps for
+     *  lines and on squares for boxes, with its size next to the pen. */
+    private fun updateShapePreview(doc: Vec2) {
+        val (page, from) = shapeStart ?: return
+        val top = pageLayout().top(page)
+        val end = ShapeBuilder.snappedEnd(state.shapeKind, Pt(doc.x.toDouble(), (doc.y - top).toDouble()), from)
+        shapeEnd = end
+        val separator = DecimalFormatSymbols.getInstance().decimalSeparator
+        liveLabel = Pair(Vec2(end.x.toFloat(), end.y.toFloat() + top), ShapeBuilder.measurement(state.shapeKind, from, end).format(separator))
+        requestFrame()
+    }
+
+    /** A firm click: a selection made, a stroke straightened into a shape. */
+    private fun confirm() {
+        performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY)
     }
 
     /** A light click: the loop growing by a dash, a turn settling at a right angle. */
@@ -621,6 +875,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private fun startNavigation(event: MotionEvent) {
         scroller.forceFinished(true)
         navigating = true
+        tapX = event.getX(event.actionIndex)
+        tapY = event.getY(event.actionIndex)
         velocity?.recycle()
         velocity = VelocityTracker.obtain().also { it.addMovement(event) }
         val i = event.actionIndex
@@ -658,6 +914,10 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     private fun endNavigation(event: MotionEvent) {
         navigating = false
+        // A finger tap (no pan) puts a recognized shape's handles away.
+        if (state.shapeEdit != null && hypot(event.x - tapX, event.y - tapY) < 10f * resources.displayMetrics.density) {
+            state.finishShapeEdit()
+        }
         val v = velocity ?: return
         v.addMovement(event)
         v.computeCurrentVelocity(1000)

@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,15 +49,17 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-// The lasso's chrome (CanvasOverlay.swift and DraftingTools.swift SelectionBar on iPad): the loop
-// and the selection's frame drawn over the ink, the bar of what can be done with the selection,
-// and the lasso's glyph for the pen dock.
+// What the canvas shows over the ink and the lasso's bar (CanvasOverlay.swift and DraftingTools.swift
+// SelectionBar on iPad): the lasso's loop, the selection's frame, a recognized shape's handles, the
+// shape tool's preview and the measurement next to the pen; the bar of what can be done with the
+// selection; the lasso's glyph for the pen dock.
 
 /** The iPad's overlay blue. */
 private val Accent = Color(0xFF1A54CC)
 
-/** The lasso's loop, the selection's dashed frame with its turn handle and corner handles, and the
- *  measurement next to the pen, as the canvas reports them in view pixels. Touches go through. */
+/** The lasso's loop, the selection's dashed frame with its turn handle and corner handles, the
+ *  shape tool's preview, a recognized shape's handles and the measurement next to the pen, as the
+ *  canvas reports them in view pixels. Touches go through. */
 @Composable
 fun CanvasOverlayLayer(overlay: CanvasOverlay) {
     val measurer = rememberTextMeasurer()
@@ -73,6 +76,17 @@ fun CanvasOverlayLayer(overlay: CanvasOverlay) {
             val pad = Lasso.FRAME_PAD.dp.toPx()
             drawSelectionFrame(Rect(box.left - pad, box.top - pad, box.right + pad, box.bottom + pad), dash)
         }
+        overlay.preview?.let { paths ->
+            val line = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            for (a in paths) {
+                if (a.size < 4) continue
+                val path = Path()
+                path.moveTo(a[0], a[1])
+                for (i in 1 until a.size / 2) path.lineTo(a[2 * i], a[2 * i + 1])
+                drawPath(path, Accent.copy(alpha = 0.9f), style = line)
+            }
+        }
+        overlay.shapeHandles?.let { drawShapeHandles(it) }
         overlay.label?.let { label ->
             val text = measurer.measure(label.text, labelStyle)
             val padX = 8.dp.toPx()
@@ -80,8 +94,8 @@ fun CanvasOverlayLayer(overlay: CanvasOverlay) {
             val w = text.size.width + 2 * padX
             val h = text.size.height + 2 * padY
             // Above and to the right of the pen, clear of the hand.
-            val left = (label.x + 16.dp.toPx()).coerceAtMost(size.width - w)
-            val top = (label.y - 40.dp.toPx() - h / 2).coerceAtLeast(0f)
+            val left = (label.x + 26.dp.toPx() - w / 2).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
+            val top = (label.y - 30.dp.toPx() - h / 2).coerceAtLeast(0f)
             drawRoundRect(Color(0xE6202124), Offset(left, top), Size(w, h), CornerRadius(h / 2))
             drawText(text, topLeft = Offset(left + padX, top + padY))
         }
@@ -113,6 +127,34 @@ private fun DrawScope.drawSelectionFrame(frame: Rect, dash: PathEffect) {
     for (c in listOf(frame.topLeft, frame.topRight, frame.bottomRight, frame.bottomLeft)) {
         drawCircle(Color.White, radius = 8.dp.toPx(), center = c)
         drawCircle(Accent, radius = 7.dp.toPx(), center = c, style = Stroke(width = 2.dp.toPx()))
+    }
+}
+
+/** Round handles on the corners (or axis ends) of a recognized shape, and a filled one with arrows
+ *  in its middle (the last) that moves it whole. */
+private fun DrawScope.drawShapeHandles(a: FloatArray) {
+    val n = a.size / 2
+    for (i in 0 until n) {
+        val c = Offset(a[2 * i], a[2 * i + 1])
+        if (i == n - 1) {
+            drawCircle(Accent.copy(alpha = 0.9f), radius = 11.dp.toPx(), center = c)
+            val arrow = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
+            for ((dx, dy) in listOf(1f to 0f, -1f to 0f, 0f to 1f, 0f to -1f)) {
+                val tip = Offset(c.x + dx * 6.5f.dp.toPx(), c.y + dy * 6.5f.dp.toPx())
+                val w = 2.2f.dp.toPx()
+                val path = Path().apply {
+                    moveTo(c.x + dx * 2.dp.toPx(), c.y + dy * 2.dp.toPx())
+                    lineTo(tip.x, tip.y)
+                    moveTo(tip.x - dx * w + dy * w, tip.y - dy * w + dx * w)
+                    lineTo(tip.x, tip.y)
+                    lineTo(tip.x - dx * w - dy * w, tip.y - dy * w - dx * w)
+                }
+                drawPath(path, Color.White, style = arrow)
+            }
+        } else {
+            drawCircle(Color.White, radius = 9.dp.toPx(), center = c)
+            drawCircle(Accent, radius = 8.dp.toPx(), center = c, style = Stroke(width = 2.dp.toPx()))
+        }
     }
 }
 

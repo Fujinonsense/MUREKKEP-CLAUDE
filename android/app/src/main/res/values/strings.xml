@@ -27,6 +27,11 @@
     <string name="duplicate">Duplicate</string>
     <string name="apply_ink">Apply ink</string>
     <string name="done">Done</string>
+    <string name="shapes">Shapes</string>
+    <string name="shape_hold_hint">%1$s · slide the pen: size and direction</string>
+    <string name="dashed_line">Dashed line</string>
+    <string name="polygon_sides">Number of sides: %1$d</string>
+    <string name="shapes_help">Drag with the pen. Lines snap at 15° steps, squares and circles click into equal sides; the size shows next to the pen. The shape is drawn with the ink you picked last.</string>
     <string name="eraser">Eraser</string>
     <string name="eraser_whole_stroke">Whole stroke</string>
     <string name="eraser_partial">Partial</string>
