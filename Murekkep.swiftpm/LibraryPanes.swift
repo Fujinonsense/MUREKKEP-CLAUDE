@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 // MARK: - Shared
 
 /// The big title at the top of a pane, with the sidebar's toggle when the sidebar is away and the
-/// pane's buttons on the right.
+/// pane's buttons on the right. On a Pro theme's picture the grey line under the title stands on a
+/// plate (`pictureLabel`); the title and the buttons stand on the picture.
 struct PaneHeader<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil
@@ -29,6 +30,7 @@ struct PaneHeader<Trailing: View>: View {
                         .font(.subheadline)
                         .foregroundStyle(Theme.muted)
                         .lineLimit(2)
+                        .pictureLabel()
                 }
             }
             Spacer(minLength: 10)
@@ -114,6 +116,7 @@ struct LibraryButton: View {
     }
 }
 
+/// A section's name over its cards; on a Pro theme's picture it stands on a plate (`pictureLabel`).
 struct SectionTitle: View {
     let title: String
     var action: (title: String, run: () -> Void)? = nil
@@ -123,6 +126,7 @@ struct SectionTitle: View {
             Text(title)
                 .font(Theme.display(.title3, weight: .semibold))
                 .foregroundStyle(Theme.text)
+                .pictureLabel()
             Spacer()
             if let action {
                 Button(action.title, action: action.run)
@@ -222,12 +226,14 @@ struct NoteMenu: View {
     }
 }
 
-/// A dashed box to drop PDFs on, with a button for the file picker.
+/// A dashed box to drop PDFs on, with a button for the file picker. On a Pro theme's picture it
+/// stands on the plates' paper and shadow (Theme.plate, plateShadow) and keeps its dashed edge.
 struct DropZone: View {
     let title: String
     let detail: String
     let isTargeted: Bool
     let onPick: () -> Void
+    @Environment(\.onPicture) private var onPicture
 
     private static let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
@@ -249,7 +255,14 @@ struct DropZone: View {
             LibraryButton(Loc.t("Dosya seç"), action: onPick)
         }
         .padding(16)
-        .background(Self.shape.fill(isTargeted ? Theme.ink.opacity(0.06) : Theme.paper2))
+        .background(Self.shape.fill(isTargeted ? Theme.ink.opacity(0.06) : (onPicture ? Color.clear : Theme.paper2)))
+        .background {
+            if onPicture {
+                Self.shape
+                    .fill(Theme.plate)
+                    .plateShadow()
+            }
+        }
         .overlay(Self.shape.strokeBorder(isTargeted ? Theme.ink : Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
         .animation(.easeInOut(duration: 0.2), value: isTargeted)
     }
@@ -412,6 +425,7 @@ struct NotesPane: View {
             }
             if notes.isEmpty {
                 empty
+                    .picturePlate(maxWidth: 440)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 30)
             } else {
@@ -424,7 +438,12 @@ struct NotesPane: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(Theme.ink, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     .background(Theme.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(Label(Loc.t("PDF'leri kütüphaneye bırak"), systemImage: "arrow.down.doc").font(.headline).foregroundStyle(Theme.ink))
+                    .overlay(
+                        Label(Loc.t("PDF'leri kütüphaneye bırak"), systemImage: "arrow.down.doc")
+                            .font(.headline)
+                            .foregroundStyle(Theme.ink)
+                            .pictureLabel()
+                    )
                     .padding(16)
                     .allowsHitTesting(false)
             }
@@ -503,6 +522,7 @@ struct SearchPane: View {
         } content: {
             if notes.isEmpty && overviews.isEmpty && courses.isEmpty && hits.isEmpty && !searching {
                 ContentUnavailableView.search(text: query)
+                    .picturePlate(maxWidth: 440)
                     .frame(maxWidth: .infinity)
             }
             if !courses.isEmpty {
@@ -654,6 +674,7 @@ struct CoursePane: View {
                     Text(Loc.t("Henüz kaynak yok. PDF ekleyince buradan video ve sesli özet çıkarabilirsin."))
                         .font(.subheadline)
                         .foregroundStyle(Theme.muted)
+                        .pictureLabel()
                 } else {
                     NoteGrid(notes: pdfs, actions: actions)
                 }
@@ -662,6 +683,7 @@ struct CoursePane: View {
                     Text(notebooks.isEmpty ? Loc.t("Bu derste henüz defter yok.") : Loc.t("{0} defter", "\(notebooks.count)"))
                         .font(.subheadline)
                         .foregroundStyle(Theme.muted)
+                        .pictureLabel()
                     Spacer()
                     LibraryButton(Loc.t("Yeni defter")) { actions.newNotebook(section.id) }
                 }
@@ -699,6 +721,7 @@ struct CoursePane: View {
                 Text(Loc.t("{0} kaynak · {1} defter · {2} özet", "\(pdfs)", "\(notebooks)", "\(overviews)"))
                     .font(.subheadline)
                     .foregroundStyle(Theme.muted)
+                    .pictureLabel()
             }
             Spacer(minLength: 10)
             ProCornerButton()

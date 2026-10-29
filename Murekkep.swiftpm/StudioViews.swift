@@ -678,6 +678,8 @@ struct OverviewCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+        // On a Pro theme's picture the poster and its captions stand on a plate, as a note does.
+        .picturePlate()
         .contentShape(Rectangle())
         .task(id: overview.voiceSignature + overview.id.uuidString) {
             image = await LibraryStore.loadImage(at: studio.thumbnailURL(for: overview.id))
@@ -864,6 +866,7 @@ struct StudioSection: View {
                 Text(Loc.t("Bu dersin kaynaklarından ilk özetini oluştur. Hazır olunca burada ve Stüdyo'da görünür."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .pictureLabel()
             } else if !overviews.isEmpty {
                 SectionTitle(title: Loc.t("Özetler"))
                 OverviewGrid(overviews: overviews, actions: actions)
