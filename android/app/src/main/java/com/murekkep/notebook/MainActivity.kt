@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,17 +21,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.murekkep.notebook.data.NotebookStore
+import com.murekkep.notebook.export.PdfShare
 import com.murekkep.notebook.ui.EditorScreen
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.LibraryScreen
 import com.murekkep.notebook.ui.MurekkepTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,13 +99,34 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
     if (state == null || state.notebookId != id) {
         Opening()
     } else {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val snackbar = remember { SnackbarHostState() }
+        val exportFailed = stringResource(R.string.export_failed)
+        var sharing by remember { mutableStateOf(false) }
         EditorScreen(
             state = state,
             onBack = close,
+            onShare = {
+                if (!sharing) {
+                    sharing = true
+                    scope.launch {
+                        try {
+                            val file = PdfShare.write(context, state)
+                            PdfShare.share(context, file, state.title)
+                        } catch (e: Exception) {
+                            snackbar.showSnackbar(exportFailed)
+                        } finally {
+                            sharing = false
+                        }
+                    }
+                }
+            },
             onRename = { title ->
                 store.rename(id, title)
                 state.title = title
             },
+            snackbar = snackbar,
         )
     }
 }
