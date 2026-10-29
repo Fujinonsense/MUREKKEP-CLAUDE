@@ -1471,6 +1471,7 @@ enum Translations {
         "Uç açısı": "Nib angle",
         "{0} sn": "{0} s",
         "Boyut": "Size",
+        "3B": "3D",
         "Sınırsız yapay zekâ, 3B mürekkepler ve ultra premium temalar.": "Unlimited AI, 3D inks and the ultra premium themes.",
         "Bu tema Mürekkep Pro'da.": "This theme is in Mürekkep Pro.",
         "Ultra premium temalar: ebru, lapis, varak, sıvı cam ve fazlası": "Ultra premium themes: marbling, lapis, gold leaf, liquid glass and more",

@@ -25,7 +25,7 @@ enum PenShelf: String, CaseIterable, Identifiable {
     /// The name in the panel's segmented control, short enough to never be cut.
     var shortTitle: String {
         switch self {
-        case .threeD: return "3B"
+        case .threeD: return Loc.t("3B")
         default: return title
         }
     }
