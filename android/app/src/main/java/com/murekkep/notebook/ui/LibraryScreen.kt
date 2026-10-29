@@ -124,6 +124,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -136,6 +137,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -784,7 +786,7 @@ private fun PaneHeader(title: String, subtitle: String?, narrow: Boolean, onTogg
     }
 }
 
-/** Hepsi / Defterler / PDF'ler on Tüm notlar (up to 320 dp, its segments equal) and the order, except on Son açılanlar. */
+/** Hepsi / Defterler / PDF'ler on Tüm notlar (up to 320 dp) and the order, except on Son açılanlar. */
 @Composable
 private fun OrderRow(section: LibrarySection, filter: LibraryFilter, sort: LibrarySort, onFilter: (LibraryFilter) -> Unit, onSort: (LibrarySort) -> Unit) {
     Row(
@@ -799,34 +801,53 @@ private fun OrderRow(section: LibrarySection, filter: LibraryFilter, sort: Libra
     }
 }
 
-/** The filter as the iPad's segmented picker: a paper-3 track, equal segments, the picked one on paper with a hairline. */
+/**
+ * The filter as the iPad's segmented picker: a paper-3 track, the picked segment on paper with a
+ * hairline, the labels at the picker's 13 sp. The segments are equal while every label fits in an
+ * equal share; on a phone, where one would be cut, each takes its label's width
+ * ([LibraryRules.segmentWidths]).
+ */
 @Composable
 private fun FilterSegments(filter: LibraryFilter, onFilter: (LibraryFilter) -> Unit, modifier: Modifier) {
     val z = Zen.colors
     val label = stringResource(R.string.filter_label)
-    Row(modifier.background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp).semantics { contentDescription = label }) {
-        for (option in LibraryFilter.entries) {
-            val on = option == filter
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (on) z.paper else Color.Transparent)
-                    .then(if (on) Modifier.border(1.dp, z.rule, RoundedCornerShape(8.dp)) else Modifier)
-                    .clickable { onFilter(option) }
-                    .semantics { this.selected = on }
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    stringResource(option.titleRes),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (on) z.ink else z.ink2,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+    Layout(
+        content = {
+            for (option in LibraryFilter.entries) {
+                val on = option == filter
+                Box(
+                    Modifier
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (on) z.paper else Color.Transparent)
+                        .then(if (on) Modifier.border(1.dp, z.rule, RoundedCornerShape(8.dp)) else Modifier)
+                        .clickable { onFilter(option) }
+                        .semantics { this.selected = on }
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        stringResource(option.titleRes),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (on) z.ink else z.ink2,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        modifier = modifier.background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp).semantics { contentDescription = label },
+    ) { segments, constraints ->
+        val natural = segments.map { it.maxIntrinsicWidth(constraints.maxHeight) }
+        val total = if (constraints.hasBoundedWidth) constraints.maxWidth else natural.sum()
+        val widths = LibraryRules.segmentWidths(natural, total)
+        val placed = segments.mapIndexed { i, segment -> segment.measure(Constraints.fixedWidth(widths[i])) }
+        layout(widths.sum(), placed.maxOf { it.height }) {
+            var x = 0
+            for (p in placed) {
+                p.placeRelative(x, 0)
+                x += p.width
             }
         }
     }

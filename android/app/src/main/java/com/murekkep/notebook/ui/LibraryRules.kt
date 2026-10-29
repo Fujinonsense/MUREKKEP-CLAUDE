@@ -12,8 +12,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 // The library's pure rules (NotesPane, SearchPane and NoteCard on iPad): which notes a section
-// shows, in what order, what a search finds, how the covers fill a row, and what a cover's line
-// says ("3 sayfa, dün").
+// shows, in what order, what a search finds, how the covers fill a row, how wide the filter's
+// segments are, and what a cover's line says ("3 sayfa, dün").
 
 /** The sidebar's sections; raw values are the iPad's `library.place`. */
 enum class LibrarySection(val raw: String) {
@@ -148,6 +148,39 @@ object LibraryRules {
     fun adaptiveColumns(available: Float, minWidth: Float, maxWidth: Float, spacing: Float): Pair<Int, Float> {
         val n = max(1, ((available + spacing) / (minWidth + spacing)).toInt())
         return n to min((available - spacing * (n - 1)) / n, maxWidth)
+    }
+
+    /**
+     * The widths of a segmented control's segments across [total], given the width each label
+     * needs with its padding ([natural]): equal shares, as the iPad's picker has them, while every
+     * label fits in one. When an equal share would cut a label, each segment takes its label's
+     * width and the room left is shared out evenly; when even that does not fit, the short labels
+     * keep their width and the long ones share what is left. The widths fill [total] exactly.
+     */
+    fun segmentWidths(natural: List<Int>, total: Int): List<Int> {
+        val n = natural.size
+        if (n == 0) return emptyList()
+        val widths = when {
+            natural.all { it * n <= total } -> IntArray(n) { total / n }
+            natural.sum() <= total -> {
+                val extra = (total - natural.sum()) / n
+                IntArray(n) { natural[it] + extra }
+            }
+            else -> {
+                val out = IntArray(n)
+                var left = total
+                var count = n
+                for (i in natural.indices.sortedBy { natural[it] }) {
+                    out[i] = min(natural[i], left / count)
+                    left -= out[i]
+                    count--
+                }
+                out
+            }
+        }
+        // The pixels lost to rounding go to the first segments.
+        val rest = total - widths.sum()
+        return widths.mapIndexed { i, w -> if (i < rest) w + 1 else w }
     }
 
     /**

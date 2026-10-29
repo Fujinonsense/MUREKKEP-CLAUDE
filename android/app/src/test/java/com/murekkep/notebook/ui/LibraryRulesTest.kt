@@ -10,7 +10,7 @@ import java.time.ZoneId
 import java.util.Locale
 
 // The library's rules: the page count a cover shows, the sections and the filter, the orders, the
-// search, the counts, the covers' columns and the time under a cover.
+// search, the counts, the covers' columns, the filter's segments and the time under a cover.
 class LibraryRulesTest {
     private fun note(title: String, kind: NoteKind = NoteKind.NOTEBOOK, modified: Long = 0, pages: Int = 1) =
         NotebookMeta(id = title, title = title, created = 0, modified = modified, pageCount = pages, paper = PaperStyle.LINED, kind = kind)
@@ -108,6 +108,19 @@ class LibraryRulesTest {
         // The theme tiles' 112...150 with 14 between.
         assertEquals(2 to 143f, LibraryRules.adaptiveColumns(300f, 112f, 150f, 14f))
         assertEquals(1 to 150f, LibraryRules.adaptiveColumns(200f, 112f, 150f, 14f))
+    }
+
+    @Test
+    fun theFiltersSegments() {
+        // Equal thirds while every label fits in one, as the iPad's picker has them.
+        assertEquals(listOf(105, 105, 105), LibraryRules.segmentWidths(listOf(39, 60, 49), 315))
+        // A 360 dp phone's 172: "Defterler" would be cut in a third, so each takes its label and a share of the rest.
+        assertEquals(listOf(48, 67, 57), LibraryRules.segmentWidths(listOf(39, 58, 49), 172))
+        // Narrower still: the short labels whole, the long ones share what is left.
+        assertEquals(listOf(30, 35, 35), LibraryRules.segmentWidths(listOf(30, 70, 50), 100))
+        // The pixels lost to rounding go to the first segments, so the track is filled.
+        assertEquals(listOf(34, 33, 33), LibraryRules.segmentWidths(listOf(10, 10, 10), 100))
+        assertEquals(emptyList<Int>(), LibraryRules.segmentWidths(emptyList(), 100))
     }
 
     @Test
