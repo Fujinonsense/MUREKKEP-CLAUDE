@@ -201,8 +201,9 @@ private val SidebarWidth = 288.dp
 /** Under this width the sidebar is a drawer. */
 private val WideLayout = 600.dp
 
-/** Under this window width (a phone) the pane keeps 16 dp at its sides, where the iPad's 40 would
- *  leave its header no room; every width an iPad has keeps the iPad's 40. */
+/** Under this window width (a phone's) the pane keeps 16 dp at its sides, where the iPad's 40 would
+ *  leave its header no room: a deliberate change, as the iPad's compact layout keeps its 40 (it is
+ *  never a phone). From this width on the pane keeps the iPad's 40. */
 private val PhoneWidth = 480.dp
 
 /** The covers' columns: 190 to 260 dp wide, 28 apart (NoteGrid on iPad). */

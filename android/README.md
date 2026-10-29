@@ -40,17 +40,17 @@ PC; the folder of the newest build is named after its commit.
 | Pressure, tilt (`AXIS_TILT`), direction (`AXIS_ORIENTATION`) | shape the line, pencil and watercolor shading | Apple Pencil force, altitude, azimuth |
 | Side button (S Pen, USI) held | temporary eraser while held | Pencil Pro squeeze |
 | Eraser end (`TOOL_TYPE_ERASER`) | erases | — |
-| Pen hovering (`ACTION_HOVER_*`) | a ring with the line's width, red with the eraser's size while erasing | Pencil hover preview |
-| Palm on the screen | ignored once a pen has been used; fingers move and zoom | Pencil-only drawing |
+| Pen hovering (`ACTION_HOVER_*`) | a ring with the line's width, red with the eraser's size while erasing (Ayarlar › Kalem › Havada önizleme) | Pencil hover preview |
+| Palm on the screen | ignored once a pen has been used, or always with Yalnızca kalemle çiz (Diğer, Ayarlar › Kalem); fingers move and zoom | Pencil-only drawing |
 | A touch the system cancels (`FLAG_CANCELED`) | takes its stroke back | — |
 | Unbuffered pen events + motion prediction | every pen sample, the line a step ahead of the tip | coalesced and predicted touches |
 | 120 Hz panels | the highest refresh rate of the display | ProMotion |
 
 ## Status (2026-10-29)
 
-**Builds:** on the PC and on Codemagic, with the 99 JUnit tests passing (the ink logic checked
+**Builds:** on the PC and on Codemagic, with the 224 JUnit tests passing (the ink logic checked
 against the iPad's numbers; the shape recognizer, its handles and the shape tool against the
-iPad's own Swift code, run on the PC by `tools/shapecheck`).
+iPad's own Swift code, run on the PC by `tools/shapecheck`; the library's screen on Robolectric).
 
 **Seen working on the emulator** (Pixel Tablet, Android 16, the PC's GPU through the emulator's
 GLES translator), `docs/emulator-pens.png`:
@@ -117,10 +117,11 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 (`data/InkSettings.kt`).
 
 **In the Android edition:**
-- library (new, rename, delete, search, sections, covers) and settings (the theme, the 3D ink);
+- library (new, rename, delete, search, sections, favourites, covers) and settings (the language,
+  the theme, the pen, the 3D ink);
 - PDFs: import (files, photos as one PDF, drag and drop) and Paylaş as a PDF, an imported PDF with
   its own pages;
-- notebook pages, pinch and fling;
+- notebook pages, pinch and fling; a notebook's template changed from Diğer;
 - all 23 pens with the iPad's shading, including 3D inks, shadows, grass blades and flowers;
 - highlighter, eraser (whole stroke and partial), undo/redo;
 - the lasso: select, move, resize, turn, carry to another page, duplicate, apply ink, delete;
@@ -131,6 +132,14 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - pen preferences;
 - notebooks saved in the iPad's own ink format;
 - the pen features in the table above.
+
+**Deliberately unlike the iPad:**
+- on a phone (a window under 480 dp) the library keeps 16 dp at the sides of its notes, where the
+  iPad's 40 would leave the header no room; from 480 dp it keeps the iPad's 40 and its 34 sp title;
+- Yalnızca kalemle çiz starts off: fingers draw until a pen has touched the screen, as many Android
+  tablets have no pen (the iPad's starts on);
+- Ayarlar › Dil offers the device's language besides Türkçe and English, as Android's per-app
+  language does.
 
 **Not ported yet:**
 - the compass, the ruler, set squares and protractor;
