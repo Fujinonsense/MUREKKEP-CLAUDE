@@ -163,7 +163,7 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(autoBrainDownload, forKey: "autoBrainDownload") }
     }
 
-    /// The background behind the library (AppBackgrounds); a Pro one shows only with Pro.
+    /// The theme (AppBackgrounds): black and white, or one of the Pro themes, which shows only with Pro.
     @Published var appBackground: AppBackground {
         didSet { UserDefaults.standard.set(appBackground.rawValue, forKey: "appBackground") }
     }
@@ -211,7 +211,7 @@ final class AppSettings: ObservableObject {
             "textOnlyPDF": false,
             // The App Store edition asks before the 2–6 GB model comes down (guideline 4.2.3).
             "autoBrainDownload": !ProPlan.sells,
-            "appBackground": (ProPlan.sells ? AppBackground.paper : AppBackground.ruled).rawValue,
+            "appBackground": AppBackground.free.rawValue,
         ])
         language = AppLanguage.stored
         engine = AIEngine.migrated(AIEngine(rawValue: d.string(forKey: "engine") ?? ""))
@@ -269,7 +269,7 @@ final class AppSettings: ObservableObject {
         dryDuration = min(max(d.double(forKey: "dryDuration"), 1), 20)
         lavaCoolDuration = min(max(d.double(forKey: "lavaCoolDuration"), 2), 20)
         flowerLevel = min(max(d.integer(forKey: "flowerLevel"), 0), 2)
-        appBackground = AppBackground.migrated(d.string(forKey: "appBackground") ?? "") ?? .paper
+        appBackground = AppBackground.migrated(d.string(forKey: "appBackground") ?? "") ?? .free
         favoriteBrushes = (d.array(forKey: "favoriteBrushes") as? [Int] ?? []).compactMap { Brush(rawValue: UInt8(clamping: $0)) }
         paletteEdge = PaletteEdge(rawValue: d.string(forKey: "paletteEdge") ?? "") ?? .top
         hasAPIKey = !ProPlan.sells && (Keychain.read(account: Self.keyAccount) ?? d.string(forKey: Self.fallbackKey)) != nil
@@ -279,9 +279,11 @@ final class AppSettings: ObservableObject {
         favoriteBrushes = PenStrip.toggled(brush, in: favoriteBrushes)
     }
 
-    /// The background to draw: a Pro one falls back to paper while Pro is locked.
+    /// The theme to draw: a retired colour is black and white, and a Pro theme falls back to black
+    /// and white while Pro is locked.
     func shownBackground(locked: Bool) -> AppBackground {
-        appBackground.isPremium && locked ? .paper : appBackground
+        let kind = appBackground.shown
+        return kind.isPremium && locked ? .free : kind
     }
 
     /// The Claude key; never in the App Store edition, which sends nothing to a third-party AI.

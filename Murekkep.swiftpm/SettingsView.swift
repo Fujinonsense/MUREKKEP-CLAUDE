@@ -90,18 +90,19 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Background
+    // MARK: Appearance
 
+    /// Görünüm › Tema: black and white (free), then the ultra premium themes.
     private var backgroundSection: some View {
         Section {
             AppBackgroundPicker(selection: $settings.appBackground)
                 .padding(.vertical, 6)
         } header: {
-            Text(Loc.t("Kitaplık arka planı"))
+            Text(Loc.t("Görünüm"))
         } footer: {
             Text(ProStore.sells
-                 ? Loc.t("Düz renkler ücretsiz; sıvı cam, ipek, erimiş altın ve diğer sanat arka planları Mürekkep Pro'da.")
-                 : Loc.t("Sanat arka planları kitaplığın arkasında durur; yazılar her birinde okunacak renge geçer."))
+                 ? Loc.t("Siyah beyaz ücretsizdir ve iPad'in açık ya da koyu görünümünü izler. Ultra premium temalar Mürekkep Pro'da: her biri Higgsfield ile yapılmış bir görselle gelir.")
+                 : Loc.t("Siyah beyaz iPad'in açık ya da koyu görünümünü izler. Ultra premium temalar kütüphanenin arkasına Higgsfield ile yapılmış bir görsel koyar; yazılar her birinde okunacak renge geçer."))
         }
     }
 

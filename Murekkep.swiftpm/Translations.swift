@@ -5,7 +5,7 @@ enum Translations {
     static let english: [String: String] = {
         var all: [String: String] = [:]
         all.reserveCapacity(920)
-        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11, part12, part13, part14] {
+        for part in [part1, part2, part3, part4, part5, part6, part7, part8, part9, part10, part11, part12, part13, part14, part15] {
             all.merge(part) { first, _ in first }
         }
         return all
@@ -1441,5 +1441,13 @@ enum Translations {
         "Kolay: 3×3; iPad sık sık dalgın.": "Easy: 3×3; the iPad is often careless.",
         "Orta: 4×4; iPad kolay kare vermez.": "Medium: 4×4; the iPad gives nothing away lightly.",
         "Zor: 5×5; iPad oyunun sonunu hesaplar.": "Hard: 5×5; the iPad counts the endgame through.",
+    ]
+
+    // The zen interface (2026-10-29): the themes, the library, the editor's bar and the pen bar.
+    private static let part15: [String: String] = [
+        "Siyah beyaz": "Black and white",
+        "Tema": "Theme",
+        "Siyah beyaz ücretsizdir ve iPad'in açık ya da koyu görünümünü izler. Ultra premium temalar Mürekkep Pro'da: her biri Higgsfield ile yapılmış bir görselle gelir.": "Black and white is free and follows the iPad's light or dark look. The ultra premium themes come with Mürekkep Pro: each one brings a picture made with Higgsfield.",
+        "Siyah beyaz iPad'in açık ya da koyu görünümünü izler. Ultra premium temalar kütüphanenin arkasına Higgsfield ile yapılmış bir görsel koyar; yazılar her birinde okunacak renge geçer.": "Black and white follows the iPad's light or dark look. The ultra premium themes lay a picture made with Higgsfield behind the library; the text switches to a colour that reads on each one.",
     ]
 }
