@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,12 +24,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Brush as Gradient
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -88,7 +92,8 @@ internal fun ColorGrid(state: EditorState, brush: Brush) {
     }
 }
 
-/** A dot of the colour, 32 dp (24 among the recent ones); the chosen one wears a ring of ink-2 a little way out. */
+/** A dot of the colour in a hairline rim, 32 dp (24 among the recent ones); the chosen one wears a
+ *  ring of ink-2 a little way out. */
 @Composable
 private fun Swatch(color: InkColor, selected: Boolean, label: String, small: Boolean = false, onClick: () -> Unit) {
     val z = Zen.colors
@@ -99,7 +104,8 @@ private fun Swatch(color: InkColor, selected: Boolean, label: String, small: Boo
             .padding(if (small) 3.dp else 4.dp)
             .clip(CircleShape)
             .background(color.toColor())
-            .border(1.dp, z.ink.copy(alpha = 0.12f), CircleShape)
+            // The iPad's hairline rim: a dark colour keeps its edge on the paper.
+            .border(1.dp, z.rule, CircleShape)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = label
@@ -146,7 +152,8 @@ private fun HsvPicker(color: InkColor, opacity: Boolean, onChange: (InkColor) ->
         hsv = next
         onChange(next.toInk(opacity))
     }
-    val shape = RoundedCornerShape(Zen.control)
+    // Only the colours are cut to the rounded field; the thumb is drawn whole over its edge, as the
+    // system picker's never is cut (a palette colour stands at full brightness, on the top edge).
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val pure = Hsv(hsv.h, 1f, 1f, 1f).toInk().toColor()
         val shadeLabel = stringResource(R.string.picker_shade)
@@ -154,13 +161,13 @@ private fun HsvPicker(color: InkColor, opacity: Boolean, onChange: (InkColor) ->
             Modifier
                 .fillMaxWidth()
                 .height(120.dp)
-                .clip(shape)
-                .border(1.dp, z.rule, shape)
                 .semantics { contentDescription = shadeLabel }
                 .track { x, y -> set(hsv.copy(s = x, v = 1f - y)) },
         ) {
-            drawRect(Gradient.horizontalGradient(listOf(Color.White, pure)))
-            drawRect(Gradient.verticalGradient(listOf(Color.Transparent, Color.Black)))
+            field(rim = z.rule) {
+                drawRect(Gradient.horizontalGradient(listOf(Color.White, pure)))
+                drawRect(Gradient.verticalGradient(listOf(Color.Transparent, Color.Black)))
+            }
             thumb(Offset(hsv.s * size.width, (1f - hsv.v) * size.height), hsv.copy(a = 1f).toInk().toColor())
         }
         val hueLabel = stringResource(R.string.picker_hue)
@@ -168,11 +175,10 @@ private fun HsvPicker(color: InkColor, opacity: Boolean, onChange: (InkColor) ->
             Modifier
                 .fillMaxWidth()
                 .height(22.dp)
-                .clip(shape)
                 .semantics { contentDescription = hueLabel }
                 .track { x, _ -> set(hsv.copy(h = x * 360f)) },
         ) {
-            drawRect(Gradient.horizontalGradient(HueStops))
+            field(rim = null) { drawRect(Gradient.horizontalGradient(HueStops)) }
             thumb(Offset(hsv.h / 360f * size.width, size.height / 2), pure)
         }
         if (opacity) {
@@ -181,17 +187,29 @@ private fun HsvPicker(color: InkColor, opacity: Boolean, onChange: (InkColor) ->
                 Modifier
                     .fillMaxWidth()
                     .height(22.dp)
-                    .clip(shape)
-                    .border(1.dp, z.rule, shape)
                     .semantics { contentDescription = opacityLabel }
                     .track { x, _ -> set(hsv.copy(a = x)) },
             ) {
-                checkers()
-                val solid = hsv.copy(a = 1f).toInk().toColor()
-                drawRect(Gradient.horizontalGradient(listOf(solid.copy(alpha = 0f), solid)))
+                field(rim = z.rule) {
+                    checkers()
+                    val solid = hsv.copy(a = 1f).toInk().toColor()
+                    drawRect(Gradient.horizontalGradient(listOf(solid.copy(alpha = 0f), solid)))
+                }
                 thumb(Offset(hsv.a * size.width, size.height / 2), hsv.toInk().toColor())
             }
         }
+    }
+}
+
+/** A control's colours cut to its rounded shape (the controls' 10 dp corners), with a hairline
+ *  [rim] round them; what is drawn after it (the thumb) is not cut. */
+private fun DrawScope.field(rim: Color?, paint: DrawScope.() -> Unit) {
+    val corner = CornerRadius(Zen.control.toPx())
+    val shape = Path().apply { addRoundRect(RoundRect(size.toRect(), corner)) }
+    clipPath(shape) { paint() }
+    if (rim != null) {
+        val w = 1.dp.toPx()
+        drawRoundRect(rim, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), CornerRadius(corner.x - w / 2), style = Stroke(w))
     }
 }
 
