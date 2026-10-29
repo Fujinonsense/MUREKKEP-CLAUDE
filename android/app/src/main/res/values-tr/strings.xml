@@ -65,7 +65,6 @@
     <string name="tap_again_settings">Ayarlarını açmak için tekrar dokun</string>
     <string name="pro">Pro</string>
     <string name="eraser_help">Kalemin yan düğmesini basılı tutarak da silebilirsin; kalemin silgi ucu da siler.</string>
-    <string name="rename_note">Yeniden adlandır</string>
     <string name="pen_desc_pen">Basınca duyarlı, keskin tükenmez kalem.</string>
     <string name="pen_desc_wet">Parlak ve kabarık başlar, birkaç saniyede kurur.</string>
     <string name="pen_desc_wave">Kuşbakışı 3B deniz: içinde dalgalar ve ışık oyunları.</string>

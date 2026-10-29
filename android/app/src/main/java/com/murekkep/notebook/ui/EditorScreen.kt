@@ -5,6 +5,7 @@ import android.content.ContextWrapper
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.View
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -29,19 +30,24 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Gesture
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -50,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +64,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -65,9 +74,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,8 +101,9 @@ import kotlinx.coroutines.launch
 
 // One open notebook, the spec's editor: a quiet top bar on paper-2 ("‹ Notlar", the title in the
 // middle, Paylaş and Diğer), the page edge to edge under it, the lasso's bar and the floating pen
-// bar over it (PenStrip.kt), the page badge "1 / 1" at the bottom right. The canvas is a
-// GLSurfaceView: it pauses and resumes with the screen's lifecycle and is released when the screen
+// bar over it along an edge (PenStrip.kt), the page badge "1 / 1" at the bottom right. Diğer holds
+// the switches of the iPad's that Android has and Ayarlar, which opens over the note. The canvas is
+// a GLSurfaceView: it pauses and resumes with the screen's lifecycle and is released when the screen
 // leaves; the notebook is saved at both moments.
 
 @Composable
@@ -97,7 +111,8 @@ fun EditorScreen(
     state: EditorState,
     onBack: () -> Unit,
     onShare: () -> Unit = {},
-    onRename: ((String) -> Unit)? = null,
+    /** Ayarlar over the open note, given the way back to it; null leaves it out of Diğer. */
+    settings: (@Composable (close: () -> Unit) -> Unit)? = null,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val context = LocalContext.current
@@ -159,72 +174,80 @@ fun EditorScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(z.paper3)) {
-        EditorTopBar(state, onBack, onShare, onRename)
-        BoxWithConstraints(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .onGloballyPositioned { canvasPlace.coordinates = it },
-        ) {
-            AndroidView(factory = { canvas }, modifier = Modifier.fillMaxSize())
-            overlay?.let { CanvasOverlayLayer(it) }
-            // A hovering pen (S Pen, USI) shows the size of what it would draw, or erase in red.
-            hover?.let { ring ->
-                Canvas(Modifier.fillMaxSize()) {
-                    drawCircle(
-                        color = if (ring.erasing) Color(0x99D93025) else z.accent.copy(alpha = 0.5f),
-                        radius = ring.radius,
-                        center = Offset(ring.x, ring.y),
-                        style = Stroke(width = 1.5.dp.toPx()),
-                    )
-                }
-            }
-            if (state.readOnly) {
-                ReadOnlyNotice(Modifier.align(Alignment.TopCenter).padding(12.dp))
-            }
-            if (state.tool is Tool.Lasso && state.selection != null) {
-                SelectionBar(state, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomInset + 52.dp + bottomClearance))
-            }
-            paletteTarget?.let { target ->
-                PaletteDockHint(target, Modifier.align(target.alignment).padding(paletteInsets(target, bottomInset, leftInset, rightInset)))
-            }
-            val nearest = { finger: Offset ->
-                val at = canvasPlace.coordinates?.let { it.localPositionOf(it.findRootCoordinates(), finger) } ?: finger
-                PaletteEdge.nearest(at.x, at.y, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat(), edge)
-            }
-            PenBar(
-                state,
-                popoverRoom = popoverRoom(edge, maxHeight, bottomInset),
-                onGripMove = { finger, moved ->
-                    paletteDrag = moved
-                    val target = nearest(finger)
-                    if (paletteTarget != null && paletteTarget != target) view.selectionTick()
-                    paletteTarget = target
-                },
-                onGripDrop = { finger ->
-                    val target = nearest(finger)
-                    if (target != edge) view.dockThud()
-                    state.paletteEdge = target
-                    paletteDrag = Offset.Zero
-                    paletteTarget = null
-                },
-                onGripCancel = {
-                    paletteTarget = null
-                    val from = paletteDrag
-                    scope.launch {
-                        animate(Offset.VectorConverter, from, Offset.Zero, animationSpec = spring(dampingRatio = 0.82f, stiffness = springStiffness(0.38f))) { value, _ ->
-                            paletteDrag = value
-                        }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().background(z.paper3)) {
+            EditorTopBar(state, onBack, onShare, onSettings = settings?.let { { settingsOpen = true } })
+            BoxWithConstraints(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .onGloballyPositioned { canvasPlace.coordinates = it },
+            ) {
+                AndroidView(factory = { canvas }, modifier = Modifier.fillMaxSize())
+                overlay?.let { CanvasOverlayLayer(it) }
+                // A hovering pen (S Pen, USI) shows the size of what it would draw, or erase in red.
+                hover?.let { ring ->
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = if (ring.erasing) Color(0x99D93025) else z.accent.copy(alpha = 0.5f),
+                            radius = ring.radius,
+                            center = Offset(ring.x, ring.y),
+                            style = Stroke(width = 1.5.dp.toPx()),
+                        )
                     }
-                },
-                modifier = Modifier
-                    .align(edge.alignment)
-                    .padding(paletteInsets(edge, bottomInset, leftInset, rightInset))
-                    .offset { IntOffset(paletteDrag.x.roundToInt(), paletteDrag.y.roundToInt()) },
-            )
-            PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset, bottom = bottomInset + 8.dp + bottomClearance))
-            SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter))
+                }
+                if (state.readOnly) {
+                    ReadOnlyNotice(Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 520.dp))
+                }
+                if (state.tool is Tool.Lasso && state.selection != null) {
+                    SelectionBar(state, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomInset + 52.dp + bottomClearance))
+                }
+                paletteTarget?.let { target ->
+                    PaletteDockHint(target, Modifier.align(target.alignment).padding(paletteInsets(target, bottomInset, leftInset, rightInset)))
+                }
+                val nearest = { finger: Offset ->
+                    val at = canvasPlace.coordinates?.let { it.localPositionOf(it.findRootCoordinates(), finger) } ?: finger
+                    PaletteEdge.nearest(at.x, at.y, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat(), edge)
+                }
+                PenBar(
+                    state,
+                    popoverRoom = popoverRoom(edge, maxHeight, bottomInset),
+                    onGripMove = { finger, moved ->
+                        paletteDrag = moved
+                        val target = nearest(finger)
+                        if (paletteTarget != null && paletteTarget != target) view.selectionTick()
+                        paletteTarget = target
+                    },
+                    onGripDrop = { finger ->
+                        val target = nearest(finger)
+                        if (target != edge) view.dockThud()
+                        state.paletteEdge = target
+                        paletteDrag = Offset.Zero
+                        paletteTarget = null
+                    },
+                    onGripCancel = {
+                        paletteTarget = null
+                        val from = paletteDrag
+                        scope.launch {
+                            animate(Offset.VectorConverter, from, Offset.Zero, animationSpec = spring(dampingRatio = 0.82f, stiffness = springStiffness(0.38f))) { value, _ ->
+                                paletteDrag = value
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(edge.alignment)
+                        .padding(paletteInsets(edge, bottomInset, leftInset, rightInset))
+                        .offset { IntOffset(paletteDrag.x.roundToInt(), paletteDrag.y.roundToInt()) },
+                )
+                PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset, bottom = bottomInset + 8.dp + bottomClearance))
+                SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter))
+            }
+        }
+        if (settingsOpen && settings != null) {
+            BackHandler { settingsOpen = false }
+            // Over the note, as the iPad's sheet: nothing reaches the page beneath.
+            Box(Modifier.fillMaxSize().pointerInput(Unit) {}) { settings { settingsOpen = false } }
         }
     }
 }
@@ -301,18 +324,18 @@ private fun Context.findLifecycleOwner(): LifecycleOwner? {
     return null
 }
 
-/** "‹ Notlar" on the left, the title in the middle, Paylaş and Diğer on the right, on paper-2 over a hairline. */
+/** "‹ Notlar" in the accent on the left, the title in the middle, Paylaş and Diğer on the right, on
+ *  paper-2 over a hairline (the iPad's navigation bar). */
 @Composable
-private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> Unit, onRename: ((String) -> Unit)?) {
+private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> Unit, onSettings: (() -> Unit)?) {
     val z = Zen.colors
     var menuOpen by remember { mutableStateOf(false) }
-    var renaming by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxWidth()
             .background(z.paper2)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .height(52.dp),
+            .height(TopBarHeight),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(
@@ -323,40 +346,44 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
                     .padding(start = 6.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = null, tint = z.ink2, modifier = Modifier.size(24.dp))
-                Text(stringResource(R.string.notes), style = MaterialTheme.typography.bodyLarge, color = z.ink2)
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = null, tint = z.accent, modifier = Modifier.size(24.dp))
+                Text(stringResource(R.string.notes), style = MaterialTheme.typography.bodyLarge, color = z.accent)
             }
             Spacer(Modifier.weight(1f))
             BarButton(stringResource(R.string.share), onClick = onShare) {
-                Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(22.dp))
+                Icon(Icons.Outlined.IosShare, contentDescription = null, modifier = Modifier.size(22.dp))
             }
             Box {
                 BarButton(stringResource(R.string.more), onClick = { menuOpen = true }) {
                     Icon(Icons.Outlined.MoreHoriz, contentDescription = null, modifier = Modifier.size(22.dp))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (onRename != null) {
+                    MenuSwitch(stringResource(R.string.editor_straighten_on_hold), Icons.Outlined.Gesture, state.straightLine) {
+                        state.straightLine = it
+                        menuOpen = false
+                    }
+                    MenuSwitch(stringResource(R.string.editor_animations), Icons.Outlined.AutoAwesome, state.animations) {
+                        state.animations = it
+                        menuOpen = false
+                    }
+                    if (onSettings != null) {
+                        HorizontalDivider(color = z.rule)
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.rename_note)) },
+                            text = { Text(stringResource(R.string.settings)) },
+                            leadingIcon = { Spacer(Modifier.size(24.dp)) },
+                            trailingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
                             onClick = {
                                 menuOpen = false
-                                renaming = true
+                                onSettings()
                             },
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.share_pdf)) },
-                        onClick = {
-                            menuOpen = false
-                            onShare()
-                        },
-                    )
                 }
             }
         }
         Text(
             state.title,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             color = z.ink,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -365,16 +392,23 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
         )
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(z.rule))
     }
-    if (renaming && onRename != null) {
-        RenameDialog(
-            initial = state.title,
-            onDismiss = { renaming = false },
-            onRename = { title ->
-                onRename(title)
-                renaming = false
-            },
-        )
-    }
+}
+
+/** A switch in a menu, as iPadOS draws one: a check before it while it is on, its symbol after it. */
+@Composable
+private fun MenuSwitch(title: String, icon: ImageVector, on: Boolean, onChange: (Boolean) -> Unit) {
+    DropdownMenuItem(
+        text = { Text(title) },
+        leadingIcon = {
+            if (on) Icon(Icons.Filled.Check, contentDescription = null) else Spacer(Modifier.size(24.dp))
+        },
+        trailingIcon = { Icon(icon, contentDescription = null) },
+        onClick = { onChange(!on) },
+        modifier = Modifier.semantics {
+            role = Role.Switch
+            toggleableState = ToggleableState(on)
+        },
+    )
 }
 
 /** "1 / 1": the page under the middle of the view and how many there are, in plain text on the page,
@@ -400,19 +434,13 @@ private fun PageBadge(state: EditorState, modifier: Modifier) {
     }
 }
 
+/** The ink could not be read: a floating paper card in the middle of the page (the iPad's loadError). */
 @Composable
 private fun ReadOnlyNotice(modifier: Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        shadowElevation = 2.dp,
-    ) {
-        Text(
-            stringResource(R.string.read_only_notice),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
+    Text(
+        stringResource(R.string.read_only_notice),
+        style = MaterialTheme.typography.bodyLarge,
+        color = Zen.colors.ink,
+        modifier = modifier.floating(14.dp).padding(16.dp),
+    )
 }
