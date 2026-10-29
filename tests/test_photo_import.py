@@ -66,7 +66,9 @@ def test_photos_can_be_dropped_everywhere_a_pdf_can():
     for name in ("LibraryView.swift", "LibraryPanes.swift"):
         text = src(name)
         assert ".onDrop(of: [.pdf]," not in text, name
-    assert src("LibraryPanes.swift").count(".onDrop(of: [.pdf, .image],") == 4
+    # The notes (one pane for every list of the sidebar), a course, and the sidebar's course rows.
+    assert src("LibraryPanes.swift").count(".onDrop(of: [.pdf, .image],") == 2
+    assert src("LibraryView.swift").count(".onDrop(of: [.pdf, .image],") == 1
     view = src("LibraryView.swift")
     drop = view[view.index("private func handleDrop"):]
     assert "UTType.image.identifier" in drop and "convertPhotos(" in drop

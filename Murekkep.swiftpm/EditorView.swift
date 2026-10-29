@@ -507,10 +507,9 @@ struct EditorContent: View {
 }
 
 private extension EditorContent {
-    /// Where the game panel's left edge stands: at the margin, never off the right of a narrow canvas.
-    var gamePanelLeading: CGFloat {
-        max(12, min(12, canvasSize.width - gamePanelSize.width - 12))
-    }
+    /// Where the game panel's left edge stands: at the margin (the drafting rail is gone; the
+    /// panel's size keeps it inside a narrow canvas).
+    var gamePanelLeading: CGFloat { 12 }
 
     /// Above the corner's column (the game tile over the sound switch, 44 + 2 + 44 pt) and the pen bar.
     var gamePanelBottom: CGFloat { 104 + bottomClearance }

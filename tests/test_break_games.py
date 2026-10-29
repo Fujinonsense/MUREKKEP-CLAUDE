@@ -35,7 +35,7 @@ def test_the_tile_stands_above_the_sound_switch_in_the_corner():
     assert "@State private var showGames = false" in editor
 
 
-def test_the_panel_opens_above_the_column_clear_of_the_rail_and_the_pen_bar_and_stays_small():
+def test_the_panel_opens_above_the_column_clear_of_the_pen_bar_and_stays_small():
     editor = src("EditorView.swift")
     panel = editor[editor.index("if showGames {"):][:700]
     assert "GameCornerPanel(size: gamePanelSize, expanded: $gamesExpanded) { closeGames() }" in panel
@@ -43,10 +43,11 @@ def test_the_panel_opens_above_the_column_clear_of_the_rail_and_the_pen_bar_and_
     assert ".padding(.bottom, gamePanelBottom)" in panel
     assert "alignment: .bottomLeading" in panel
     assert ".transition(GameCorner.transition(reduceMotion: reduceMotion))" in panel
-    # Past the drafting rail (12…62 pt) while it shows; above the 44 + 2 + 44 pt column; never off a narrow canvas.
-    assert "paletteCollapsed ? 12 : 72" in editor
+    # At the margin (the zen editor has no drafting rail; its tools are in the pen bar's menu); above
+    # the 44 + 2 + 44 pt column.
+    assert "DraftingRail" not in editor
+    assert "var gamePanelLeading: CGFloat { 12 }" in editor
     assert "var gamePanelBottom: CGFloat { 104 + bottomClearance }" in editor
-    assert "canvasSize.width - gamePanelSize.width - 12" in editor
     # One larger step at most, through the checked rule: at most 400×500 and a quarter of the canvas; no sheet, no cover.
     assert "guard gamesExpanded else { return GameCorner.panelSize }" in editor
     assert "GamePanelSize.larger(in: canvasSize" in editor
@@ -77,7 +78,7 @@ def test_the_tile_and_the_panel():
     assert "reduceMotion ? .easeInOut(duration: 0.15) : .spring(" in corner
     assert "reduceMotion ? .opacity : .scale(scale: 0.86, anchor: .bottomLeading)" in corner
     # The card keeps every touch to itself: nothing reaches the ink canvas beneath.
-    assert re.search(r"\.glassCard\(radius: GameCorner\.radius\)\s*\.contentShape\(RoundedRectangle[^\n]*\n[^\n]*\n\s*\.onTapGesture \{\}", corner)
+    assert re.search(r"\.glassCard\(radius: GameCorner\.radius, floating: true\)\s*\.contentShape\(RoundedRectangle[^\n]*\n[^\n]*\n\s*\.onTapGesture \{\}", corner)
     # Header: title, close, back, restart, the one larger step.
     assert 'Loc.t("Mola")' in corner and 'Loc.t("Kapat")' in corner
     assert 'headerButton("chevron.left", label: Loc.t("Oyunlara dön"))' in corner
@@ -370,9 +371,10 @@ def test_every_text_of_the_corner_goes_through_loc():
 def test_the_games_grey_text_is_drawn_plain():
     # `.secondary` over a material is drawn vibrant against it; the game area is clipped on top of the
     # panel's material, so the games' grey lines (Sudoku's clock, XOX's turn and wins, every hint) were
-    # not drawn at all (Codemagic run 6ae26643). They use the secondary label's grey as a plain colour.
+    # not drawn at all (Codemagic run 6ae26643). They use Theme.muted, a plain grey (the zen spec's
+    # muted, #565656 by day and #A9ACB1 at night), never the vibrant `.secondary`.
     theme = (APP / "Theme.swift").read_text(encoding="utf-8")
-    assert "static let muted = Color(uiColor: .secondaryLabel)" in theme
+    assert "static let muted = dynamic(light: grey(0x56, 0x56, 0x56), dark: grey(0xA9, 0xAC, 0xB1))" in theme
     for name in ("SudokuGame.swift", "XOXGame.swift", "DotsGame.swift", "MandalaGame.swift", "BubblesGame.swift",
                  "FlyerGame.swift", "ShooterGame.swift", "EbruGame.swift", "LivingInkGame.swift"):
         text = src(name)
