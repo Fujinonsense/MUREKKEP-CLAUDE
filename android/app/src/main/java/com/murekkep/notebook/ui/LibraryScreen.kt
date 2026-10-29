@@ -52,9 +52,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
@@ -765,7 +767,9 @@ private val LibrarySection.titleRes: Int
         LibrarySection.PDFS -> R.string.library_pdfs
     }
 
-/** The big title, the sidebar's button while the sidebar is away, and the pane's buttons on the right. */
+/** The big title, the sidebar's button while the sidebar is away, and the pane's buttons on the
+ *  right. A title too long for its room shrinks to 70 % before it is cut, as the iPad's
+ *  minimumScaleFactor(0.7) does. */
 @Composable
 private fun PaneHeader(title: String, subtitle: String?, narrow: Boolean, onToggle: (() -> Unit)?, trailing: @Composable RowScope.() -> Unit) {
     val z = Zen.colors
@@ -780,12 +784,13 @@ private fun PaneHeader(title: String, subtitle: String?, narrow: Boolean, onTogg
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
+            val style = if (narrow) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge
+            BasicText(
                 title,
-                style = if (narrow) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
-                color = z.ink,
+                style = style.copy(color = z.ink),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.7f, maxFontSize = style.fontSize, stepSize = 1.sp),
             )
             if (subtitle != null) {
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = z.muted, maxLines = 2)
