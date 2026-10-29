@@ -244,7 +244,10 @@ sealed class InstrumentReading {
  * carries it, two of them turn it, the turn settling on 15° steps within 1.6°. Finger positions are
  * document points, keyed by pointer id; a finger that joins or leaves moves nothing.
  */
-class InstrumentDrag(start: Instrument) {
+class InstrumentDrag(
+    /** The instrument as the first finger found it. */
+    val start: Instrument,
+) {
     companion object {
         /** How close (degrees) a turn comes to a 15° step before it settles on it. */
         const val SETTLE = 1.6

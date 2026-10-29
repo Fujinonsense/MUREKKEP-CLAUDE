@@ -56,6 +56,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Architecture
 import androidx.compose.material.icons.outlined.DensityMedium
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HeartBroken
@@ -732,6 +733,7 @@ private fun ToolInHand(state: EditorState) {
         Tool.Eraser -> if (z.proTheme) ToolIcon(null, Color.Transparent, side = 30.dp) else CompactSymbol(EraserGlyph)
         Tool.Lasso -> LassoGlyph(Modifier.size(18.dp), z.ink2)
         Tool.Shape -> ShapeToolGlyph(z.ink2)
+        Tool.Compass -> CompactSymbol(Icons.Outlined.Architecture)
     }
 }
 
