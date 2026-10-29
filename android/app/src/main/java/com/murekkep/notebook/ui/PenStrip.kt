@@ -805,7 +805,9 @@ private fun BarPopover(
     val provider = remember(density, edge) {
         with(density) { BesideAnchor(edge, PopoverShadowPad.roundToPx(), PopoverGap.roundToPx(), PopoverMargin.roundToPx()) }
     }
-    Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+    // Not clipped to the screen: the shadow's margin may run past its edge while BesideAnchor keeps
+    // the card inside, so the system does not push the whole window (and the card) back in.
+    Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
         Box(Modifier.padding(PopoverShadowPad)) {
             Column(
                 Modifier
