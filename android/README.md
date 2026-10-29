@@ -129,6 +129,12 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
   with handles to fix them afterwards;
 - the shape tool: line, arrow, double arrow, rectangle, ellipse, circle from the center, triangle,
   right triangle, regular polygon (3 to 12 sides), dashed or not;
+- the break corner: a tile at the bottom left of the page opens the break card (340 x 420, or one
+  step larger that is never more than a quarter of the canvas) with Sudoku, XOX and kare kapmaca
+  against the device and the ink bubbles, each at Kolay, Orta and Zor; their logic is the iPad's to
+  the bit (`games/`, checked against tools/gamescheck's cases and vectors printed by the iPad's Swift
+  code), the best scores, wins and times and a half-done Sudoku are kept, and the clocks stop when
+  the card closes or the app goes behind another;
 - pen preferences;
 - notebooks saved in the iPad's own ink format;
 - the pen features in the table above.
@@ -139,7 +145,10 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - Yalnızca kalemle çiz starts off: fingers draw until a pen has touched the screen, as many Android
   tablets have no pen (the iPad's starts on);
 - Ayarlar › Dil offers the device's language besides Türkçe and English, as Android's per-app
-  language does.
+  language does;
+- the break card on a window too small for it (a phone, a split screen) is cut to the room there is,
+  and on a short one it comes down over its tile; its games say "the device" where the iPad's say
+  "iPad", and Back leaves a game, then closes the card.
 
 **Not ported yet:**
 - the compass, the ruler, set squares and protractor;
@@ -149,7 +158,8 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - the text pen (handwriting to text);
 - page templates beyond plain, lined, grid and dotted;
 - stickers;
-- the break corner (games, Ebru, living ink pond);
+- the break corner's things to make (Ebru, the living ink pond, the ink mandala) and its levelled
+  games (the flying drop, the colour popper); its Yaratıcılık layer shows once they come;
 - the assistant;
 - Pro with Play Billing.
 
