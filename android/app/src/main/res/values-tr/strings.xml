@@ -123,12 +123,12 @@
     <string name="theme_varak">Varak</string>
     <string name="theme_lavi">Lavi</string>
     <string name="theme_ruled">Defter</string>
-    <string name="theme_ferro">Ferro</string>
-    <string name="theme_holo">Holo</string>
+    <string name="theme_ferro">Manyetik sıvı</string>
+    <string name="theme_holo">Hologram</string>
     <string name="theme_silk">İpek</string>
     <string name="theme_molten">Erimiş altın</string>
     <string name="theme_glass">Sıvı cam</string>
-    <string name="theme_pearl">İnci</string>
+    <string name="theme_pearl">Sedef</string>
     <string name="pro_soon_title">Pro yakında</string>
     <string name="pro_soon_message">Pro temalar Play Store sürümüyle geliyor. O zamana kadar görünüm siyah beyaz kalır.</string>
 </resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kütüphane, iPad'deki gibi (LibraryView, LibraryPanes, TemplateGallery) -->
+
+    <!-- Ayarlar › Görünüm -->
+    <string name="theme_paper_wave">Kâğıt dalga</string>
+    <string name="theme_reeded">Buzlu cam</string>
+    <string name="theme_orbs">Cam küreler</string>
+    <string name="theme_light_paint">Işık izi</string>
+</resources>

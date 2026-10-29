@@ -123,13 +123,13 @@
     <string name="theme_cini">Glaze</string>
     <string name="theme_varak">Gold leaf</string>
     <string name="theme_lavi">Ink wash</string>
-    <string name="theme_ruled">Ruled paper</string>
-    <string name="theme_ferro">Ferro</string>
-    <string name="theme_holo">Holo</string>
+    <string name="theme_ruled">Notebook</string>
+    <string name="theme_ferro">Magnetic fluid</string>
+    <string name="theme_holo">Hologram</string>
     <string name="theme_silk">Silk</string>
     <string name="theme_molten">Molten gold</string>
     <string name="theme_glass">Liquid glass</string>
-    <string name="theme_pearl">Pearl</string>
+    <string name="theme_pearl">Mother of pearl</string>
     <string name="pro_soon_title">Pro is coming</string>
     <string name="pro_soon_message">The Pro themes arrive with the Play Store edition. Until then the look stays black and white.</string>
 </resources>

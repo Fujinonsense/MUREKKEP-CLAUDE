@@ -31,6 +31,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG opens the Pro themes in debug builds (ui/AppTheme.kt).
+        buildConfig = true
     }
 
     testOptions {

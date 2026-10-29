@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The library as on the iPad (LibraryView, LibraryPanes, TemplateGallery; English from Translations.swift) -->
+
+    <!-- Ayarlar › Görünüm -->
+    <string name="theme_paper_wave">Paper waves</string>
+    <string name="theme_reeded">Reeded glass</string>
+    <string name="theme_orbs">Glass orbs</string>
+    <string name="theme_light_paint">Light trails</string>
+</resources>
