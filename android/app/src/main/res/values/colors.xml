@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The desk around the pages (MTKView's clear color on iPad: 0.93, 0.93, 0.95). -->
+    <color name="paper_desk">#EDEDF2</color>
+    <color name="ink_navy">#1E2A5A</color>
+    <color name="icon_background">#F6F1E7</color>
+</resources>

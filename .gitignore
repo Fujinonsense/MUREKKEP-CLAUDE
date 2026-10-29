@@ -22,6 +22,7 @@ entities.json
 !/docs/
 !/tests/
 !/tools/
+!/android/
 /ml/**/data/
 /ml/**/runs/
 /ml/**/*.pt

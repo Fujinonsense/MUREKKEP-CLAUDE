@@ -1,0 +1,44 @@
+name: Murekkep Android
+
+# The Android edition (android/): unit tests, a debug APK to install and an unsigned release
+# bundle (AAB) for Google Play. Runs on pushes to the android branch; the iOS workflow (main.yml)
+# only runs for main.
+on:
+  push:
+    branches: [android]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Projeyi Indir
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Testler, APK ve AAB
+        working-directory: android
+        run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug bundleRelease
+
+      - name: Ciktilar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: murekkep-android
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/reports/tests/
+          if-no-files-found: ignore
