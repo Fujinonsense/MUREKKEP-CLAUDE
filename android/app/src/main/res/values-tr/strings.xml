@@ -42,7 +42,6 @@
     <string name="pen_width">Kalınlık</string>
     <string name="color_number">Renk %1$d</string>
     <string name="premium_pen">Pro mürekkep</string>
-    <string name="read_only_notice">Bu defterin mürekkebi okunamadı; defter salt okunur açıldı, dosyanın üzerine hiçbir şey yazılmayacak.</string>
 
     <!-- Zen editör -->
     <string name="notes">Notlar</string>

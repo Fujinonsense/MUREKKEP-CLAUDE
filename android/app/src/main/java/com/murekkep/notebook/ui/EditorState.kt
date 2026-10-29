@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.murekkep.notebook.data.LoadProblem
 import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.data.PenPreferences
 import com.murekkep.notebook.ink.Brush
@@ -65,9 +66,9 @@ class EditorState(
     initialPages: List<List<Stroke>> = emptyList(),
     /** Per-pen colors and widths kept between sessions; null keeps them for this run only. */
     private val prefs: PenPreferences? = null,
-    /** The ink file could not be read (damaged, or written by a newer Mürekkep): nothing is changed
-     *  or written, so the file stays for a build that can read it. */
-    val readOnly: Boolean = false,
+    /** What could not be read when the note opened (its PDF, or its ink file: damaged, or written by
+     *  a newer Mürekkep); the editor says why. Any of them opens the note read-only. */
+    val loadProblems: List<LoadProblem> = emptyList(),
     /** An imported PDF's page sizes: its pages are the PDF's and none are added. Null for a notebook,
      *  whose pages are A4. */
     val pageSizes: List<PageSize>? = null,
@@ -83,6 +84,10 @@ class EditorState(
         const val DEFAULT_ERASER_SIZE = 18f
         private const val UNDO_LIMIT = 300
     }
+
+    /** Nothing is changed or written: the files stay as they are for a build (or a repair) that can
+     *  read them. */
+    val readOnly: Boolean = loadProblems.isNotEmpty()
 
     /** Pages written on an imported PDF. */
     val isPdf: Boolean get() = pageSizes != null

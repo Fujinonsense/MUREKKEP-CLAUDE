@@ -282,7 +282,7 @@ class NotebookStore private constructor(context: Context) {
 
     // MARK: Opening and saving
 
-    private class Loaded(val pages: List<List<Stroke>>, val readOnly: Boolean, val pdfSizes: List<PageSize>? = null)
+    private class Loaded(val pages: List<List<Stroke>>, val problems: List<LoadProblem>, val pdfSizes: List<PageSize>?)
 
     /** Loads the notebook's ink off the main thread into an editor state hooked to this store, and
      *  notes the moment for the library's "Son açılanlar". */
@@ -295,24 +295,37 @@ class NotebookStore private constructor(context: Context) {
         val file = inkFile(meta.id)
         val isPdf = meta.kind == NoteKind.PDF
         val result = withContext(Dispatchers.IO) {
-            // An imported PDF's pages are its own; a PDF Android cannot read now opens read-only.
+            val problems = ArrayList<LoadProblem>()
+            // An imported PDF's pages are its own; a PDF Android cannot read now opens read-only
+            // (the iPad goes on with one A4 page, whose next save would drop the later pages' ink).
             val sizes = if (!isPdf) null else try {
                 PdfSource(pdfFile(meta.id)).use { it.sizes }.takeIf { it.isNotEmpty() }
             } catch (e: Exception) {
                 null
             }
-            val pdfUnreadable = isPdf && sizes == null
-            if (!file.isFile) {
-                Loaded(emptyList(), readOnly = pdfUnreadable, pdfSizes = sizes)
-            } else {
-                try {
-                    Loaded(InkCodec.decode(file.readBytes()), readOnly = pdfUnreadable, pdfSizes = sizes)
+            if (isPdf && sizes == null) problems.add(LoadProblem.PDF_UNREADABLE)
+            var pages: List<List<Stroke>> = emptyList()
+            if (file.isFile) {
+                val bytes = try {
+                    file.readBytes()
                 } catch (e: Exception) {
-                    // The file stays as it is: the notebook opens read-only, so no save replaces ink
-                    // a newer build (or a repair) could still read.
-                    Loaded(emptyList(), readOnly = true, pdfSizes = sizes)
+                    null
+                }
+                try {
+                    pages = InkCodec.decode(bytes ?: throw InkCodec.CodecException("unreadable"))
+                } catch (e: Exception) {
+                    // The file stays as it is: the note opens read-only, so no save replaces ink a
+                    // newer build (or a repair) could still read. A damaged file also gets a copy
+                    // next to it, as on the iPad.
+                    if (bytes != null && InkCodec.isNewerFormat(bytes)) {
+                        problems.add(LoadProblem.INK_NEWER)
+                    } else {
+                        FileBackup.keep(file)
+                        problems.add(LoadProblem.INK_DAMAGED)
+                    }
                 }
             }
+            Loaded(pages, problems, sizes)
         }
         // The record may count more pages than the file holds (blank pages at the end); a PDF has
         // exactly its own pages.
@@ -324,7 +337,7 @@ class NotebookStore private constructor(context: Context) {
             notebookId = meta.id,
             initialPages = pages,
             prefs = penPreferences,
-            readOnly = result.readOnly,
+            loadProblems = result.problems,
             pageSizes = sizes,
             pdfFile = if (result.pdfSizes != null) pdfFile(meta.id) else null,
             paper = meta.paper,

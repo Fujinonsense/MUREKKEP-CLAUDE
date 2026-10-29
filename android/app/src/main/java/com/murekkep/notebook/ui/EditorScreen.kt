@@ -98,6 +98,7 @@ import com.murekkep.notebook.canvas.CanvasOverlay
 import com.murekkep.notebook.canvas.Clearance
 import com.murekkep.notebook.canvas.HoverRing
 import com.murekkep.notebook.canvas.InkCanvasView
+import com.murekkep.notebook.data.LoadProblem
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
@@ -216,8 +217,8 @@ fun EditorScreen(
                         )
                     }
                 }
-                if (state.readOnly) {
-                    ReadOnlyNotice(Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 520.dp))
+                if (state.loadProblems.isNotEmpty()) {
+                    LoadNotice(state.loadProblems, Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 520.dp))
                 }
                 if (state.tool is Tool.Lasso && state.selection != null) {
                     SelectionBar(state, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomInset + 52.dp + bottomClearance))
@@ -455,13 +456,22 @@ private fun PageBadge(state: EditorState, modifier: Modifier) {
     }
 }
 
-/** The ink could not be read: a floating paper card in the middle of the page (the iPad's loadError). */
+/** Why the note opened read-only, a floating paper card in the middle of the page (the iPad's
+ *  loadError): the PDF's problem, then the ink's, a blank line between them. */
 @Composable
-private fun ReadOnlyNotice(modifier: Modifier) {
+private fun LoadNotice(problems: List<LoadProblem>, modifier: Modifier) {
+    val text = problems.map { stringResource(it.messageRes) }.joinToString("\n\n")
     Text(
-        stringResource(R.string.read_only_notice),
+        text,
         style = MaterialTheme.typography.bodyLarge,
         color = Zen.colors.ink,
         modifier = modifier.floating(14.dp).padding(16.dp),
     )
 }
+
+private val LoadProblem.messageRes: Int
+    get() = when (this) {
+        LoadProblem.PDF_UNREADABLE -> R.string.load_pdf_unreadable
+        LoadProblem.INK_NEWER -> R.string.load_ink_newer
+        LoadProblem.INK_DAMAGED -> R.string.load_ink_damaged
+    }

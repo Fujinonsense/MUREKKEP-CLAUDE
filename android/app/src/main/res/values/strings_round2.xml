@@ -6,4 +6,9 @@
 
     <!-- The picked pen's tap, as TalkBack says it: "Double-tap to open its settings" -->
     <string name="open_settings_action">open its settings</string>
+
+    <!-- Why a note opened read-only (the iPad's three texts) -->
+    <string name="load_pdf_unreadable">Couldn\'t open the PDF. The file may be damaged or encrypted.</string>
+    <string name="load_ink_newer">This note was saved by a newer version of Mürekkep, which this version can\'t open. The ink is still in the file; update the app to see it.</string>
+    <string name="load_ink_damaged">This note\'s ink file couldn\'t be read. The file was kept as it is, with a copy next to it; the note opened read-only.</string>
 </resources>

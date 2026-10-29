@@ -42,7 +42,6 @@
     <string name="pen_width">Thickness</string>
     <string name="color_number">Color %1$d</string>
     <string name="premium_pen">Pro ink</string>
-    <string name="read_only_notice">The ink of this notebook could not be read, so it is open read-only; nothing will be written over the file.</string>
 
     <!-- Zen editor -->
     <string name="notes">Notes</string>
