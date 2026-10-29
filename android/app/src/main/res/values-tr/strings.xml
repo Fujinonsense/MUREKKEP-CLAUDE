@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mürekkep</string>
+
+    <!-- Kütüphane -->
+    <string name="library_title">Defterler</string>
+    <string name="new_notebook">Yeni defter</string>
+    <string name="notebook_default_title">Not</string>
+    <string name="library_empty_title">Henüz defter yok</string>
+    <string name="library_empty_hint">“Yeni defter”e dokun ve yazmaya başla.</string>
+    <string name="more_actions">Daha fazla</string>
+    <string name="rename">Yeniden adlandır</string>
+    <string name="delete">Sil</string>
+    <string name="rename_title">Defteri yeniden adlandır</string>
+    <string name="notebook_title_label">Başlık</string>
+    <string name="ok">Tamam</string>
+    <string name="cancel">Vazgeç</string>
+    <string name="delete_title">Bu defter silinsin mi?</string>
+    <string name="delete_message">“%1$s” ve tüm sayfaları silinecek. Bu geri alınamaz.</string>
+    <string name="opening">Açılıyor…</string>
+
+    <!-- Düzenleyici -->
+    <string name="back">Geri</string>
+    <string name="undo">Geri al</string>
+    <string name="redo">Yinele</string>
+    <string name="eraser">Silgi</string>
+    <string name="eraser_whole_stroke">Tüm çizgi</string>
+    <string name="eraser_partial">Kısmi</string>
+    <string name="eraser_size">Silgi boyutu</string>
+    <string name="pen_width">Kalınlık</string>
+    <string name="color_number">Renk %1$d</string>
+    <string name="premium_pen">Pro mürekkep</string>
+    <string name="read_only_notice">Bu defterin mürekkebi okunamadı; defter salt okunur açıldı, dosyanın üzerine hiçbir şey yazılmayacak.</string>
+</resources>

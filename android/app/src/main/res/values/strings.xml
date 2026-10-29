@@ -1,4 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Mürekkep</string>
+
+    <!-- Library -->
+    <string name="library_title">Notebooks</string>
+    <string name="new_notebook">New notebook</string>
+    <string name="notebook_default_title">Note</string>
+    <string name="library_empty_title">No notebooks yet</string>
+    <string name="library_empty_hint">Tap “New notebook” and start writing.</string>
+    <string name="more_actions">More</string>
+    <string name="rename">Rename</string>
+    <string name="delete">Delete</string>
+    <string name="rename_title">Rename notebook</string>
+    <string name="notebook_title_label">Title</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete_title">Delete this notebook?</string>
+    <string name="delete_message">“%1$s” and all of its pages will be removed. This cannot be undone.</string>
+    <string name="opening">Opening…</string>
+
+    <!-- Editor -->
+    <string name="back">Back</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="eraser">Eraser</string>
+    <string name="eraser_whole_stroke">Whole stroke</string>
+    <string name="eraser_partial">Partial</string>
+    <string name="eraser_size">Eraser size</string>
+    <string name="pen_width">Width</string>
+    <string name="color_number">Color %1$d</string>
+    <string name="premium_pen">Pro ink</string>
+    <string name="read_only_notice">The ink of this notebook could not be read, so it is open read-only; nothing will be written over the file.</string>
 </resources>
