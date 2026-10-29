@@ -860,16 +860,21 @@ fun ZenSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPoin
     )
 }
 
-/** A switch in the accent. */
+/** The system's light grey fill (a switch's off track, a stepper), lighter than the card at night too. */
+internal fun systemFill(dark: Boolean): Color = if (dark) Color(0xFF39393D) else Color(0xFFE9E9EA)
+
+/** A switch in the accent; off, a white knob of the same size on the system's light grey track, as iOS draws one. */
 @Composable
 fun ZenSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     val z = Zen.colors
     Switch(
         checked = checked,
         onCheckedChange = onChange,
+        // Any thumb content keeps the knob at its full 24 dp when off.
+        thumbContent = {},
         colors = SwitchDefaults.colors(
             checkedTrackColor = z.accent, checkedThumbColor = Color.White, checkedBorderColor = z.accent,
-            uncheckedTrackColor = z.paper3, uncheckedThumbColor = z.muted, uncheckedBorderColor = z.rule,
+            uncheckedTrackColor = systemFill(z.dark), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color.Transparent,
         ),
     )
 }
