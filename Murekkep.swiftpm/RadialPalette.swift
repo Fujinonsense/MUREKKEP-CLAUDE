@@ -266,6 +266,6 @@ struct RadialPalette: View {
         .frame(width: 264)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .glassCard(radius: 22)
+        .glassCard(radius: 22, floating: true)
     }
 }

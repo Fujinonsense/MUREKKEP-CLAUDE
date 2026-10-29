@@ -1,43 +1,68 @@
 import SwiftUI
 import UIKit
 
-/// The app's look, taken from its name: blue-black ink on cool notebook paper. Titles are set in a
-/// serif like a textbook's headings; everything else stays in the system font. The AI's colour is the
-/// ink family too: indigo running into turquoise, Turkey's classic school ink.
+/// The app's look: black ink on plain paper, greys with no colour in them, and the brand's ink blue
+/// only where something is chosen or in focus. Everything is set in the system font. Surfaces lie
+/// flat with a one-point hairline; a shadow falls only from what floats (the pen bar, a popover, a
+/// menu). The values are the zen spec's (docs/superpowers/specs/2026-10-29-zen-arayuz-design.md);
+/// a Pro theme lays its picture behind the library and may use a material over it.
 enum Theme {
     /// Wet ink, the accent of every control: #2457D6, lighter at night (#4D7BEA) so it still reads on
     /// the dark paper (contrast 6.2 by day, 4.6 at night).
     static let ink = dynamic(light: UIColor(red: 0.141, green: 0.341, blue: 0.839, alpha: 1),
                              dark: UIColor(red: 0.302, green: 0.482, blue: 0.918, alpha: 1))
-    /// Indigo ink (#4B3FD6) and turquoise ink (#177E92): the assistant, the Studio, PDFs. White text
-    /// stays above 4.5:1 on both.
-    static let aiStart = Color(red: 0.29, green: 0.25, blue: 0.84)
-    static let aiEnd = Color(red: 0.09, green: 0.494, blue: 0.573)
-    static let ai = LinearGradient(colors: [aiStart, aiEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// The assistant, the Studio, PDFs: once an indigo-to-turquoise gradient, flat ink now. The two
+    /// ends are the same colour, so everything drawn with them is a plain fill.
+    static let aiStart = ink
+    static let aiEnd = ink
+    static let ai = LinearGradient(colors: [ink, ink], startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// The warm bath under the Pro themes' pictures.
     static let paperWarm = Color(red: 0.99, green: 0.98, blue: 0.96)
 
-    /// Notebook paper: cool grey-blue by day (#F3F5F8), deep ink by night (#0E1528).
-    static let paper = dynamic(light: UIColor(red: 0.953, green: 0.961, blue: 0.973, alpha: 1),
-                               dark: UIColor(red: 0.055, green: 0.082, blue: 0.157, alpha: 1))
-    /// The ruled lines of the paper.
-    static let rule = dynamic(light: UIColor(red: 0.14, green: 0.34, blue: 0.84, alpha: 0.075),
-                              dark: UIColor(white: 1, alpha: 0.045))
-    /// Thin edge of cards and panels: ink by day, light by night.
-    static let hairline = dynamic(light: UIColor(red: 0.086, green: 0.13, blue: 0.24, alpha: 0.09),
-                                  dark: UIColor(white: 1, alpha: 0.10))
-    /// Shadows are blue-black ink, not grey.
-    static let shadow = Color(red: 0.086, green: 0.13, blue: 0.24)
-    /// The secondary label's grey as a plain colour. `.secondary` over a material is drawn vibrant,
-    /// against the material behind it; inside the break panel's clipped game area there is none, so
-    /// the games' grey lines (Sudoku's clock, XOX's turn and wins, every hint) were not drawn at all.
-    static let muted = Color(uiColor: .secondaryLabel)
+    // MARK: Paper
 
-    /// The ruled paper behind the library.
-    static var libraryBackground: some View { RuledPaper() }
+    /// Surfaces: the library, the pen bar, cards and popovers (#FDFDFC; #2A2B2E at night).
+    static let paper = dynamic(light: grey(0xFD, 0xFD, 0xFC), dark: grey(0x2A, 0x2B, 0x2E))
+    /// Bars and the sidebar (#F6F6F4; #202124).
+    static let paper2 = dynamic(light: grey(0xF6, 0xF6, 0xF4), dark: grey(0x20, 0x21, 0x24))
+    /// The ground under the page, and a chosen row (#EDEDEA; #151618).
+    static let paper3 = dynamic(light: grey(0xED, 0xED, 0xEA), dark: grey(0x15, 0x16, 0x18))
 
-    /// A title in the textbook serif (New York).
-    static func display(_ style: Font.TextStyle, weight: Font.Weight = .semibold) -> Font {
-        .system(style, design: .serif, weight: weight)
+    // MARK: Text
+
+    /// Titles and text (#141414; #F2F3F5).
+    static let text = dynamic(light: grey(0x14, 0x14, 0x14), dark: grey(0xF2, 0xF3, 0xF5))
+    /// Body text and icons (#2E2E2E; #D7D9DC).
+    static let text2 = dynamic(light: grey(0x2E, 0x2E, 0x2E), dark: grey(0xD7, 0xD9, 0xDC))
+    /// Secondary text (#565656; #A9ACB1). A plain colour, not the vibrant `.secondary`: over a
+    /// material `.secondary` is drawn against what lies behind, and inside the break panel's clipped
+    /// game area there was nothing, so the games' grey lines were not drawn at all.
+    static let muted = dynamic(light: grey(0x56, 0x56, 0x56), dark: grey(0xA9, 0xAC, 0xB1))
+    /// Writing laid over the page itself (the page counter); the page stays white at night too.
+    static let onPage = Color(red: 0.337, green: 0.337, blue: 0.337)
+
+    // MARK: Lines and shadows
+
+    /// The thin edge of every surface (#DFDFDC; #43454A).
+    static let hairline = dynamic(light: grey(0xDF, 0xDF, 0xDC), dark: grey(0x43, 0x45, 0x4A))
+    /// The ruled lines of the notebook paper (the Pro "Defter" theme).
+    static let rule = dynamic(light: UIColor(white: 0, alpha: 0.08), dark: UIColor(white: 1, alpha: 0.07))
+    /// Shadows are plain black, thinned by each use.
+    static let shadow = Color.black
+    /// What floats casts this: 0 12 32 at 12 % with an edge of 0 1 2 at 8 %, deeper at night.
+    static let floatShadow = dynamic(light: UIColor(white: 0, alpha: 0.12), dark: UIColor(white: 0, alpha: 0.45))
+    static let floatShadowEdge = dynamic(light: UIColor(white: 0, alpha: 0.08), dark: UIColor(white: 0, alpha: 0.30))
+
+    /// Behind the library: plain paper (a Pro theme's picture comes from AppBackgroundView instead).
+    static var libraryBackground: some View { paper }
+
+    /// A title: the system font, bold and tight. No serif.
+    static func display(_ style: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
+        .system(style, design: .default, weight: weight)
+    }
+
+    private static func grey(_ r: Int, _ g: Int, _ b: Int) -> UIColor {
+        UIColor(red: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: 1)
     }
 
     private static func dynamic(light: UIColor, dark: UIColor) -> Color {
@@ -45,7 +70,8 @@ enum Theme {
     }
 }
 
-/// Faint notebook lines, drawn once (static, so they cost nothing while scrolling).
+/// Faint notebook lines on paper, drawn once (static, so they cost nothing while scrolling): the
+/// Pro "Defter" theme.
 struct RuledPaper: View {
     var spacing: CGFloat = 34
     /// Where the first line runs (below a title).
@@ -69,23 +95,29 @@ struct RuledPaper: View {
     }
 }
 
+/// A capsule that floats over the page (a bar, a banner): paper, a hairline and the floating shadow.
 private struct GlassCapsule: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(.regularMaterial, in: Capsule(style: .continuous))
-            .overlay(Capsule(style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
-            .shadow(color: Theme.shadow.opacity(0.14), radius: 18, y: 8)
+            .background(Theme.paper, in: Capsule(style: .continuous))
+            .overlay(Capsule(style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+            .floatingShadow()
     }
 }
 
+/// A card: paper with a hairline. Resting on a surface it casts no shadow; `floating` (a panel over
+/// the page, a banner) it casts the floating shadow.
 private struct GlassCard: ViewModifier {
     var radius: CGFloat
+    var floating: Bool
 
     func body(content: Content) -> some View {
-        content
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 0.6))
-            .shadow(color: Theme.shadow.opacity(0.08), radius: 14, y: 6)
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return content
+            .background(Theme.paper, in: shape)
+            .overlay(shape.strokeBorder(Theme.hairline, lineWidth: 1))
+            .shadow(color: floating ? Theme.floatShadow : Color.clear, radius: floating ? 16 : 0, y: floating ? 12 : 0)
+            .shadow(color: floating ? Theme.floatShadowEdge : Color.clear, radius: floating ? 1 : 0, y: floating ? 1 : 0)
     }
 }
 
@@ -94,8 +126,19 @@ extension View {
         modifier(GlassCapsule())
     }
 
-    func glassCard(radius: CGFloat = 22) -> some View {
-        modifier(GlassCard(radius: radius))
+    func glassCard(radius: CGFloat = 22, floating: Bool = false) -> some View {
+        modifier(GlassCard(radius: radius, floating: floating))
+    }
+
+    /// A rounded panel that floats over the page (the pen bar, a popover's card).
+    func floatingPanel(radius: CGFloat = 18) -> some View {
+        modifier(GlassCard(radius: radius, floating: true))
+    }
+
+    /// The shadow of what floats: 0 12 32 black at 12 % and an edge of 0 1 2 at 8 %.
+    func floatingShadow() -> some View {
+        shadow(color: Theme.floatShadow, radius: 16, y: 12)
+            .shadow(color: Theme.floatShadowEdge, radius: 1, y: 1)
     }
 }
 

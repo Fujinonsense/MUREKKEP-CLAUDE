@@ -303,7 +303,7 @@ struct GameCornerPanel: View {
             .clipped()
         }
         .frame(width: size.width, height: size.height)
-        .glassCard(radius: GameCorner.radius)
+        .glassCard(radius: GameCorner.radius, floating: true)
         .contentShape(RoundedRectangle(cornerRadius: GameCorner.radius, style: .continuous))
         // The card keeps every touch to itself: nothing reaches the page beneath it.
         .onTapGesture {}
