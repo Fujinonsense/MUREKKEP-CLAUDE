@@ -21,8 +21,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -154,24 +156,27 @@ private fun InspectorNote(text: String) {
 
 /**
  * The ink as it lands (StrokePreview on iPad): one S-curve across the sample in the pen, its colour
- * and width (no wider than a third of the height), drawn by FlatInk on white paper [height] tall.
- * [seed] is the stroke's (grass carries its flowers in it).
+ * and width (no wider than a third of the height), drawn by FlatInk on [paper] [height] tall: the
+ * card's own white, or a row's colour, or clear for the row to show through. [seed] is the
+ * stroke's (grass carries its flowers in it).
  */
 @Composable
-internal fun InkSample(brush: Brush, color: InkColor, width: Float, seed: Float, height: Dp, modifier: Modifier = Modifier) {
+internal fun InkSample(brush: Brush, color: InkColor, width: Float, seed: Float, height: Dp, modifier: Modifier = Modifier, paper: Color = Color.White) {
     BoxWithConstraints(modifier.fillMaxWidth().height(height)) {
         val density = LocalDensity.current.density
         val w = maxWidth.value
-        val image = remember(brush, color, width, seed, w, height, density) { renderInkSample(brush, color, width, seed, w, height.value, density) }
+        val under = paper.toArgb()
+        val image = remember(brush, color, width, seed, w, height, density, under) { renderInkSample(brush, color, width, seed, w, height.value, density, under) }
         Image(image, contentDescription = null, modifier = Modifier.fillMaxSize())
     }
 }
 
-/** The iPad's sample stroke in a box [w] x [h] (dp, a page point each): from 16 in from the left to
- *  16 in from the right at 62 % of the height, up through the first third and a little down after. */
-private fun renderInkSample(brush: Brush, color: InkColor, width: Float, seed: Float, w: Float, h: Float, density: Float): ImageBitmap {
+/** The iPad's sample stroke in a box [w] x [h] (dp, a page point each) on [paper] (argb): from 16 in
+ *  from the left to 16 in from the right at 62 % of the height, up through the first third and a
+ *  little down after. */
+private fun renderInkSample(brush: Brush, color: InkColor, width: Float, seed: Float, w: Float, h: Float, density: Float, paper: Int): ImageBitmap {
     val bitmap = Bitmap.createBitmap(max(1, (w * density).roundToInt()), max(1, (h * density).roundToInt()), Bitmap.Config.ARGB_8888)
-    bitmap.eraseColor(android.graphics.Color.WHITE)
+    bitmap.eraseColor(paper)
     val canvas = android.graphics.Canvas(bitmap)
     canvas.scale(density, density)
     val mid = h * 0.62f

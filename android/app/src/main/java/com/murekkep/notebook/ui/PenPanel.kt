@@ -1,5 +1,6 @@
 package com.murekkep.notebook.ui
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush as Gradient
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -163,6 +165,8 @@ private fun PanelPen(state: EditorState, brush: Brush, modifier: Modifier, onPic
     val ink = state.color(brush)
     val name = brush.localizedTitle()
     val shape = RoundedCornerShape(16.dp)
+    // The picked row's faint accent lies on the panel's paper.
+    val paper = if (selected) z.accent.copy(alpha = 0.10f).compositeOver(z.paper) else z.paper2
     var menu by remember { mutableStateOf(false) }
     val favoriteLabel = stringResource(if (starred) R.string.remove_favorite else R.string.add_favorite)
     Box(modifier.height(RowHeight)) {
@@ -170,7 +174,7 @@ private fun PanelPen(state: EditorState, brush: Brush, modifier: Modifier, onPic
             Modifier
                 .fillMaxSize()
                 .clip(shape)
-                .background(if (selected) z.accent.copy(alpha = 0.10f) else z.paper2)
+                .background(paper)
                 .border(if (selected) 1.5.dp else 1.dp, if (selected) z.accent else z.rule, shape)
                 .combinedClickable(onClick = onPick, onLongClick = { menu = true }, onLongClickLabel = favoriteLabel)
                 .semantics {
@@ -204,7 +208,7 @@ private fun PanelPen(state: EditorState, brush: Brush, modifier: Modifier, onPic
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(end = 30.dp),
                 )
-                InkSample(brush, ink, min(state.width(brush), 9f), GrassGenerator.strokeSeed(brush, state.flowerLevel, 0.37f), 28.dp)
+                InkSample(brush, ink, min(state.width(brush), 9f), GrassGenerator.strokeSeed(brush, state.flowerLevel, 0.37f), 28.dp, paper = samplePaper(paper))
             }
         }
         Heart(name, starred, Modifier.align(Alignment.TopEnd)) { state.toggleFavorite(brush) }
@@ -220,6 +224,14 @@ private fun PanelPen(state: EditorState, brush: Brush, modifier: Modifier, onPic
         }
     }
 }
+
+/**
+ * What a row's ink sample is drawn on. From Android 10 a clear bitmap: the sample lies straight on
+ * the row, as the iPad's, and the highlighter's multiply leaves its ink as it is there (the iPad's
+ * sample does not multiply; on the row's colour it would sink into a dark row at night). Before,
+ * Porter-Duff's multiply wipes ink off a clear bitmap, so the row's colour is painted in.
+ */
+private fun samplePaper(row: Color): Color = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Color.Transparent else row
 
 /** The heart beside a pen: one tap makes it a favourite or takes it away, without picking it. */
 @Composable
