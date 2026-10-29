@@ -101,3 +101,50 @@ Long-exposure light painting: silky luminous arcs and ribbons of warm gold and c
 ```
 Extreme macro of mother-of-pearl nacre surface, iridescent rainbow sheen of soft pink, mint, lilac and silver flowing in fine layered waves, polished and luminous, soft diffused light.
 ```
+
+## Zen temaları (2026-10-29)
+
+Zen arayüzün altı Pro teması. Bunlar daha ucuz yoldan yapıldı: her konsept önce 2K yüksek kalitede
+üretildi (2,75 kredi), seçilen görsel Higgsfield'ın 4K büyütmesiyle (bytedance, 2 kredi) aynısı
+korunarak 4096 px'e çıkarıldı. 4K'da yeniden üretmek 15 kredi tutar ve başka bir görsel verir.
+
+GPT Image kalabalık kısmı sola, sakin alanı sağa koyuyor; kütüphanenin kenar çubuğu ve başlığı solda
+olduğu için görseller uygulamaya girmeden önce yatay aynalandı. Her temanın örtüsü (`wash`) bir
+kontrast ölçümünden geldi: kenar çubuğu ve başlık alanındaki en kötü %5'lik piksele karşı yazı en
+az 4,5:1 okunur.
+
+### 13. ebru.png
+
+```
+Turkish ebru marbling seen from directly above on dark water: deep indigo and ink-blue fields combed into fine feathered swirls, threads of liquid gold and a few pale cream drops, glossy wet surface, soft raking light, macro photography.
+```
+
+### 14. hokka.png
+
+```
+A single drop of blue-black fountain pen ink blooming in perfectly clear water, slow silky tendrils and translucent veils unfurling, deep navy fading into soft smoky grey, backlit against a pale warm-grey ground, high-speed macro photography.
+```
+
+### 15. lapis.png
+
+```
+Macro of a polished slab of lapis lazuli: deep ultramarine stone with fine golden pyrite flecks and soft white calcite veins, glossy surface with a gentle reflection, controlled studio light falling off into darkness.
+```
+
+### 16. cini.png
+
+```
+Macro of a glossy hand-glazed ceramic surface: loose cobalt-blue brush washes bleeding softly into a milky white glaze, a fine crackle network across the glaze, one small hint of coral red, soft north daylight, no motifs or patterns, abstract.
+```
+
+### 17. varak.png
+
+```
+Torn sheets of real gold leaf resting on deep black urushi lacquer, crinkled metallic edges catching a warm low light, a few small flakes drifting, mirror-like black reflections, macro photography.
+```
+
+### 18. lavi.png
+
+```
+Handmade white mulberry paper with long visible fibers and a deckled texture, a single soft wash of diluted black ink fading from charcoal to nothing across one corner, quiet and airy, soft window daylight, extreme close detail.
+```
