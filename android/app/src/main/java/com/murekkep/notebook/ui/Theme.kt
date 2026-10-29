@@ -167,7 +167,7 @@ private val ZenTypography = Typography(
 )
 
 private val ZenShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
+    extraSmall = RoundedCornerShape(Zen.control),
     small = RoundedCornerShape(Zen.control),
     medium = RoundedCornerShape(Zen.popover),
     large = RoundedCornerShape(Zen.bar),

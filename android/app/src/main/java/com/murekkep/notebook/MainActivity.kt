@@ -162,10 +162,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                     }
                 }
             },
-            onRename = { title ->
-                store.rename(id, title)
-                state.title = title
-            },
+            settings = { close -> SettingsScreen(theme = theme, onTheme = onTheme, onBack = close) },
         )
         // A failed export is an alert, as on the iPad, and the share button is free again at once.
         if (exportFailed) {

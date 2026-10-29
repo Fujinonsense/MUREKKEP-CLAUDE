@@ -10,7 +10,7 @@ object PenPaths {
     /** One stroke per pen path. Straight pieces are filled in with points: the renderer draws a
      *  smooth curve through the points, and between far-apart corners that curve would bulge (an
      *  octagon became a circle). */
-    fun strokes(paths: List<List<Vec2>>, brush: Brush, color: InkColor, width: Float, birth: Double): List<Stroke> {
+    fun strokes(paths: List<List<Vec2>>, brush: Brush, color: InkColor, width: Float, birth: Double, flowerLevel: Int): List<Stroke> {
         val r = max(width * 0.5f, 0.35f)
         val spacing = max(0.6f, r * 0.5f)
         return paths.mapNotNull { path ->
@@ -27,8 +27,8 @@ object PenPaths {
                     pts.add(InkPoint(p.x, p.y, r, 0.55f))
                 }
             }
-            // The canvas seeds every pen stroke this way (grass gets its flowers from it too).
-            Stroke(brush, color, width, birth, Random.nextFloat(), pts)
+            // Seeded as the canvas seeds a pen stroke: grass carries its flower level.
+            Stroke(brush, color, width, birth, GrassGenerator.strokeSeed(brush, flowerLevel, Random.nextFloat()), pts)
         }
     }
 }

@@ -45,9 +45,7 @@ import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.random.Random
 
 // The iPad's CanvasView (Murekkep.swiftpm/CanvasView.swift) on Android: the pages, the pen and
 // the fingers. Android pens bring what the Apple Pencil does on iPad, mapped as follows:
@@ -200,6 +198,17 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             requestFrame()
         }
 
+    /** The room the floating pen bar takes along the canvas's edges (view pixels), set by the screen:
+     *  the pages can always be moved out from under it. */
+    var clearance = Clearance()
+        set(value) {
+            if (field == value) return
+            field = value
+            if (!fitted) return
+            clamp()
+            requestFrame()
+        }
+
     /** An imported PDF's pages as textures (made once; the GL thread uses and frees them). */
     private val pdfTextures: PdfTextures? = state.pdfFile?.let { file -> PdfTextures(file) { requestRender() } }
 
@@ -215,7 +224,9 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             zoom = zoom,
             active = active,
             paperStyle = state.paper.shaderIndex,
-            animate = true,
+            animate = state.animations,
+            dryDuration = state.dryDuration,
+            coolDuration = state.coolDuration,
             pdf = pdfTextures,
             fitScale = fitZoom,
             ground = ground,
@@ -338,7 +349,10 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         fitZoom = max(0.1f, (w - 2 * margin) / layout.pageWidth)
         if (!fitted) {
             zoom = fitZoom
-            originY = margin
+            // In the middle: with a bar down the right side the clamp lets a fitted page stand left of
+            // the middle, so it would leave it at the left edge.
+            originX = (w - layout.pageWidth * zoom) / 2f
+            originY = margin + clearance.top
             fitted = true
         } else {
             // A turned tablet or a resized window: the same zoom against the page's width (a fitted
@@ -365,13 +379,13 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     private fun clamp() {
         val l = pageLayout()
-        val contentW = l.pageWidth * zoom
-        originX = if (contentW <= width) (width - contentW) / 2 else min(0f, max(width - contentW, originX))
-        val contentH = l.totalHeight * zoom
-        val margin = 24f * resources.displayMetrics.density
-        val minY = min(margin, height - contentH - margin)
-        originY = originY.coerceIn(minY, margin)
+        originX = PageScroll.clampX(originX, width.toFloat(), l.pageWidth * zoom, clearance)
+        originY = originY.coerceIn(verticalRange())
     }
+
+    /** Where the document's origin may stand vertically (view pixels). */
+    private fun verticalRange(): ClosedFloatingPointRange<Float> =
+        PageScroll.verticalRange(height.toFloat(), pageLayout().totalHeight * zoom, 24f * resources.displayMetrics.density, clearance)
 
     private fun docX(x: Float) = (x - originX) / zoom
     private fun docY(y: Float) = (y - originY) / zoom
@@ -552,7 +566,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             return
         }
         val brush: Brush = (state.tool as? Tool.Brush)?.brush ?: state.activeBrush
-        val b = StrokeBuilder(brush, state.color(brush), state.width(brush), Random.nextFloat())
+        val b = StrokeBuilder(brush, state.color(brush), state.width(brush), state.newSeed(brush))
+        b.nibAngle = state.nibAngle * PI.toFloat() / 180f
         strokeStart = referenceNow()
         active = ActiveStroke(page, brush, b.color, b.width, b.seed, emptyList(), strokeStart)
         b.add(sample(event, i, -1))
@@ -805,7 +820,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     /** Waits for the pen to rest: every move farther than 4 dp from where it rested starts the wait again. */
     private fun trackHold(vx: Float, vy: Float) {
         val b = builder ?: return
-        if (b.isStraight) return
+        if (b.isStraight || !state.straightLine) return
         if (!holdAnchorX.isNaN() && hypot(vx - holdAnchorX, vy - holdAnchorY) < 4f * resources.displayMetrics.density) return
         holdAnchorX = vx
         holdAnchorY = vy
@@ -970,10 +985,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val vy = v.getYVelocity(panPointer)
         v.recycle()
         velocity = null
-        val l = pageLayout()
-        val margin = 24f * resources.displayMetrics.density
-        val minY = min(margin, height - l.totalHeight * zoom - margin)
-        scroller.fling(0, originY.toInt(), 0, vy.toInt(), 0, 0, minY.toInt(), margin.toInt())
+        val range = verticalRange()
+        scroller.fling(0, originY.toInt(), 0, vy.toInt(), 0, 0, range.start.toInt(), range.endInclusive.toInt())
         postOnAnimation(::flingStep)
     }
 
