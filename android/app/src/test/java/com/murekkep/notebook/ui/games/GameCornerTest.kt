@@ -11,18 +11,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getAlignmentLinePosition
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -300,6 +305,25 @@ class GameCornerTest {
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("0:57").assertExists()
+    }
+
+    @Test
+    fun theBubblesClockStandsOnTheLineOfTheScoreAndTheBest() {
+        // The iPad's header is an HStack on the first text baseline: the clock's digits stand on the
+        // line of the score's and the best's numbers, not centred against their two lines.
+        show()
+        openGame()
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription(tiles[0]).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1_000)
+        fun baseline(node: SemanticsNodeInteraction) = (node.getBoundsInRoot().top + node.getAlignmentLinePosition(FirstBaseline)).value
+        val clock = baseline(compose.onNode(hasContentDescription("seconds left", substring = true), useUnmergedTree = true))
+        val numbers = compose.onAllNodesWithText("0", useUnmergedTree = true)
+        numbers.assertCountEquals(2)
+        assertEquals("the score", baseline(numbers[0]), clock, 0.5f)
+        assertEquals("the best", baseline(numbers[1]), clock, 0.5f)
     }
 
     @Test

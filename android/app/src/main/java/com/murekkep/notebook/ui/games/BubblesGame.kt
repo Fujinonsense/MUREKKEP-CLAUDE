@@ -200,18 +200,19 @@ internal fun BubblesGame(store: GameProgressStore) {
                 model.restart(it)
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Stat(stringResource(R.string.games_score), "${model.score}")
+        // On the first text baseline, as the iPad's: the clock's digits on the line of the numbers.
+        Row {
+            Stat(stringResource(R.string.games_score), "${model.score}", Modifier.alignByBaseline())
             Spacer(Modifier.weight(1f))
             val spoken = stringResource(R.string.games_seconds_left, model.secondsLeft)
             Text(
                 clock(model.secondsLeft),
                 style = GameText.title3.copy(fontWeight = FontWeight.SemiBold).numeric(),
                 color = if (model.secondsLeft <= 10 && !model.isOver) MaterialTheme.colorScheme.error else z.ink,
-                modifier = Modifier.semantics { contentDescription = spoken },
+                modifier = Modifier.alignByBaseline().semantics { contentDescription = spoken },
             )
             Spacer(Modifier.weight(1f))
-            Stat(stringResource(R.string.games_best_label), "$best")
+            Stat(stringResource(R.string.games_best_label), "$best", Modifier.alignByBaseline())
         }
         Box(Modifier.weight(1f).fillMaxWidth().gameBoard()) {
             BubbleArea(model) { result ->
@@ -261,9 +262,9 @@ internal fun BubblesGame(store: GameProgressStore) {
 
 /** A number over its name: the score, the best. */
 @Composable
-private fun Stat(title: String, value: String) {
+private fun Stat(title: String, value: String, modifier: Modifier = Modifier) {
     val z = Zen.colors
-    Column(Modifier.widthIn(min = 56.dp).semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.widthIn(min = 56.dp).semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = GameText.headline, color = z.ink)
         Text(title, style = GameText.caption2, color = z.muted)
     }
