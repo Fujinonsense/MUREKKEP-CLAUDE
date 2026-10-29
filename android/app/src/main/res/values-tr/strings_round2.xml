@@ -11,4 +11,7 @@
     <string name="load_pdf_unreadable">PDF açılamadı. Dosya bozuk ya da şifreli olabilir.</string>
     <string name="load_ink_newer">Bu not daha yeni bir Mürekkep sürümüyle kaydedilmiş; bu sürüm onu açamıyor. Yazılar dosyada duruyor; görmek için uygulamayı güncelle.</string>
     <string name="load_ink_damaged">Bu notun mürekkep dosyası okunamadı. Dosya olduğu gibi saklandı ve yanına bir kopyası alındı; not salt okunur açıldı.</string>
+
+    <!-- Diğer -->
+    <string name="editor_battery_saver">Pil tasarrufu</string>
 </resources>

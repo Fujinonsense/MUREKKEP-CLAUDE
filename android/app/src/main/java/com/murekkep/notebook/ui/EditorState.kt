@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.murekkep.notebook.data.InkSettings
 import com.murekkep.notebook.data.LoadProblem
 import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.data.PenPreferences
@@ -197,35 +198,70 @@ class EditorState(
     /** The eraser's diameter in page points. */
     var eraserSize by mutableStateOf(DEFAULT_ERASER_SIZE)
 
-    // The ink's settings (AppSettings on iPad), kept in PenPreferences; the canvas hands them to the
-    // renderer and the stroke builder.
+    // The ink's settings (AppSettings on iPad): the app's one set in PenPreferences, which Ayarlar ›
+    // 3B mürekkep shows too (this state's own without prefs); the canvas hands them to the renderer
+    // and the stroke builder. A change asks the canvas for a frame; the editor's screen also asks for
+    // one when Ayarlar changes them.
+
+    /** The ink's settings this state reads and writes. */
+    val ink: InkSettings = prefs?.ink ?: InkSettings()
 
     /** The moving inks move: the sea, the wind in the grass, lava's flow and embers. */
-    var animations: Boolean by kept(prefs?.animations ?: true) {
-        prefs?.animations = it
-        onInkChange?.invoke()
-    }
+    var animations: Boolean
+        get() = ink.animations
+        set(value) {
+            if (ink.animations == value) return
+            ink.animations = value
+            onInkChange?.invoke()
+        }
+
+    /** Moving ink is drawn at most 30 times a second (Pil tasarrufu). */
+    var batterySaver: Boolean
+        get() = ink.batterySaver
+        set(value) {
+            if (ink.batterySaver == value) return
+            ink.batterySaver = value
+            onInkChange?.invoke()
+        }
 
     /** A pen resting at the end of a stroke straightens it into a clean shape. */
-    var straightLine: Boolean by kept(prefs?.straightLine ?: true) { prefs?.straightLine = it }
+    var straightLine: Boolean
+        get() = ink.straightLine
+        set(value) {
+            ink.straightLine = value
+        }
 
     /** Seconds wet ink takes to dry; ink drying on the page follows a change at once. */
-    var dryDuration: Float by kept(prefs?.dryDuration ?: 4f) {
-        prefs?.dryDuration = it
-        onInkChange?.invoke()
-    }
+    var dryDuration: Float
+        get() = ink.dryDuration
+        set(value) {
+            if (ink.dryDuration == value) return
+            ink.dryDuration = value
+            onInkChange?.invoke()
+        }
 
     /** Seconds lava takes to cool; lava cooling on the page follows a change at once. */
-    var coolDuration: Float by kept(prefs?.coolDuration ?: 6f) {
-        prefs?.coolDuration = it
-        onInkChange?.invoke()
-    }
+    var coolDuration: Float
+        get() = ink.coolDuration
+        set(value) {
+            if (ink.coolDuration == value) return
+            ink.coolDuration = value
+            onInkChange?.invoke()
+        }
 
     /** The grass's flowers: 0 none, 1 some, 2 lots; new grass strokes carry it in their seed. */
-    var flowerLevel: Int by kept(prefs?.flowerLevel ?: 1) { prefs?.flowerLevel = it }
+    var flowerLevel: Int
+        get() = ink.flowerLevel
+        set(value) {
+            ink.flowerLevel = value
+        }
 
     /** The calligraphy nib's angle in degrees. */
-    var nibAngle: Float by kept(prefs?.nibAngle ?: 38f) { prefs?.nibAngle = it }
+    var nibAngle: Float
+        get() = ink.nibAngle
+        set(value) {
+            ink.nibAngle = value
+        }
 
     /** The edge the pen bar stands on. */
     var paletteEdge: PaletteEdge by kept(prefs?.paletteEdge ?: PaletteEdge.BOTTOM) { prefs?.paletteEdge = it }

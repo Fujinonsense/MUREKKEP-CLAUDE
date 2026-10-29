@@ -1,5 +1,6 @@
 package com.murekkep.notebook.ui
 
+import com.murekkep.notebook.data.InkSettings
 import com.murekkep.notebook.ink.Brush
 import com.murekkep.notebook.ink.GrassGenerator
 import com.murekkep.notebook.ink.InkColor
@@ -8,6 +9,7 @@ import com.murekkep.notebook.ink.Pt
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.ink.Vec2
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,6 +43,41 @@ class EditorStateInkSettingsTest {
         assertEquals(2, frames)
         assertEquals(8f, state.dryDuration)
         assertEquals(12f, state.coolDuration)
+    }
+
+    @Test
+    fun theInkSettingsStartAtTheIpadsDefaults() {
+        val ink = InkSettings()
+        assertTrue(ink.animations)
+        assertFalse(ink.batterySaver)
+        assertTrue(ink.straightLine)
+        assertEquals(4f, ink.dryDuration)
+        assertEquals(6f, ink.coolDuration)
+        assertEquals(1, ink.flowerLevel)
+        assertEquals(38f, ink.nibAngle)
+    }
+
+    @Test
+    fun ayarlarAndTheEditorShareOneSetOfInkSettings() {
+        val state = EditorState()
+        var frames = 0
+        state.onInkChange = { frames++ }
+        // Ayarlar › 3B mürekkep writes the shared settings; the editor reads them back at once (its
+        // screen asks the canvas for a frame).
+        state.ink.animations = false
+        state.ink.dryDuration = 9f
+        state.ink.flowerLevel = 2
+        assertFalse(state.animations)
+        assertEquals(9f, state.dryDuration)
+        assertEquals(2, GrassGenerator.flowerLevel(state.newSeed(Brush.GRASS)))
+        // A pen's popover and Diğer write through the editor; Ayarlar shows the same values.
+        state.batterySaver = true
+        state.coolDuration = 11f
+        state.straightLine = false
+        assertTrue(state.ink.batterySaver)
+        assertEquals(11f, state.ink.coolDuration)
+        assertFalse(state.ink.straightLine)
+        assertEquals(2, frames)
     }
 
     @Test

@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.opengl.GLSurfaceView
 import android.os.Build
 import android.os.SystemClock
+import android.view.Choreographer
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -56,7 +57,8 @@ import kotlin.math.roundToInt
 //   touch the system cancels as a palm (FLAG_CANCELED) takes its stroke back;
 // - pen events come unbatched (requestUnbufferedDispatch) and the line under the tip runs a little
 //   ahead of the pen with Jetpack's motion prediction;
-// - the screen runs at its highest refresh rate (120 Hz where the tablet has it).
+// - the screen runs at its highest refresh rate (120 Hz where the tablet has it), and moving ink is
+//   drawn at that rate, or at most 30 times a second with the battery saver (Pil tasarrufu).
 // As on iPad, a pen resting at the end of a stroke turns it into a clean shape that then follows
 // the pen (size and turn) and keeps handles on its corners after it lifts; the lasso and the shape
 // tool draw their loops, frames and previews in the screen's overlay (CanvasOverlay).
@@ -182,6 +184,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     /** The screen is going away: frees the GL resources. */
     fun release() {
+        saverLoop.running = false
         state.onInkChange = null
         val pdf = pdfTextures
         queueEvent {
@@ -303,9 +306,21 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         onOverlay?.invoke(CanvasOverlay(loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }, handles, preview))
     }
 
+    /** While ink on screen moves the canvas draws at the display's full rate, as the iPad's loop; with
+     *  the battery saver at most 30 times a second (the pen's own moves still draw at once). */
     private fun setAnimating(on: Boolean) {
-        val mode = if (on) RENDERMODE_CONTINUOUSLY else RENDERMODE_WHEN_DIRTY
+        val saver = on && state.batterySaver
+        val mode = if (on && !saver) RENDERMODE_CONTINUOUSLY else RENDERMODE_WHEN_DIRTY
         if (renderMode != mode) renderMode = mode
+        saverLoop.running = saver
+    }
+
+    /** The battery saver's frames. */
+    private val saverLoop = SaverLoop { requestRender() }
+
+    override fun onPause() {
+        saverLoop.running = false
+        super.onPause()
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -1010,5 +1025,42 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             requestFrame()
             return true
         }
+    }
+}
+
+/**
+ * The battery saver's loop: asks for a frame on the display's vsync at most every 1/30 s while it
+ * runs (the iPad's preferredFramesPerSecond = 30): every other vsync at 60 Hz, every fourth at 120.
+ * Main thread only.
+ */
+private class SaverLoop(private val frame: () -> Unit) : Choreographer.FrameCallback {
+    private var last = 0L
+
+    var running = false
+        set(value) {
+            if (field == value) return
+            field = value
+            val choreographer = Choreographer.getInstance()
+            if (value) {
+                last = 0L
+                choreographer.postFrameCallback(this)
+            } else {
+                choreographer.removeFrameCallback(this)
+            }
+        }
+
+    override fun doFrame(frameTimeNanos: Long) {
+        if (!running) return
+        // A vsync a little before the 1/30 s is on time (a 60 Hz panel's second one comes at 33.3 ms).
+        if (frameTimeNanos - last >= INTERVAL_NANOS - SLACK_NANOS) {
+            last = frameTimeNanos
+            frame()
+        }
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+
+    private companion object {
+        const val INTERVAL_NANOS = 1_000_000_000L / 30
+        const val SLACK_NANOS = 4_000_000L
     }
 }

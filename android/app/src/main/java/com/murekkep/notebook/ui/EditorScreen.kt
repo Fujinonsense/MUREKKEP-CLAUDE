@@ -65,8 +65,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
@@ -182,6 +184,13 @@ fun EditorScreen(
     // iPad's sensoryFeedback on its dock).
     LaunchedEffect(state, view) {
         snapshotFlow { state.paletteEdge }.drop(1).collect { view.dockThud() }
+    }
+    // Ayarlar › 3B mürekkep changes the same ink settings, over this note too: the canvas follows at
+    // once (the moving ink starts or stops, drying and cooling take the new times).
+    LaunchedEffect(state) {
+        snapshotFlow { listOf(state.animations, state.batterySaver, state.dryDuration, state.coolDuration) }
+            .drop(1)
+            .collect { state.onInkChange?.invoke() }
     }
     // What stands along the bottom (the page badge, the lasso's bar) moves up over a bar there.
     val bottomClearance = if (edge == PaletteEdge.BOTTOM) PenBarMargin + PenBarHeight + 8.dp else 0.dp
@@ -369,6 +378,10 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
                     state.animations = it
                     menuOpen = false
                 }
+                MenuSwitch(stringResource(R.string.editor_battery_saver), BatteryHalfGlyph, state.batterySaver) {
+                    state.batterySaver = it
+                    menuOpen = false
+                }
                 if (onSettings != null) {
                     HorizontalDivider(color = z.rule)
                     DropdownMenuItem(
@@ -427,6 +440,42 @@ internal fun EditorBar(title: String, onBack: () -> Unit, actions: @Composable R
         )
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(1.dp).background(z.rule))
     }
+}
+
+/** The iPad's battery.50: a battery on its side, half full, in a 24-unit box. */
+internal val BatteryHalfGlyph: ImageVector by lazy {
+    ImageVector.Builder("BatteryHalf", 24.dp, 24.dp, 24f, 24f)
+        .path(stroke = SolidColor(Color.Black), strokeLineWidth = 1.5f) {
+            // The case.
+            moveTo(5f, 7.25f)
+            horizontalLineTo(17f)
+            arcTo(2.75f, 2.75f, 0f, false, true, 19.75f, 10f)
+            verticalLineTo(14f)
+            arcTo(2.75f, 2.75f, 0f, false, true, 17f, 16.75f)
+            horizontalLineTo(5f)
+            arcTo(2.75f, 2.75f, 0f, false, true, 2.25f, 14f)
+            verticalLineTo(10f)
+            arcTo(2.75f, 2.75f, 0f, false, true, 5f, 7.25f)
+            close()
+        }
+        .path(fill = SolidColor(Color.Black)) {
+            // The cap.
+            moveTo(21f, 10.25f)
+            arcTo(1f, 1f, 0f, false, true, 22f, 11.25f)
+            verticalLineTo(12.75f)
+            arcTo(1f, 1f, 0f, false, true, 21f, 13.75f)
+            close()
+            // Half the charge.
+            moveTo(5.25f, 9.25f)
+            horizontalLineTo(11f)
+            verticalLineTo(14.75f)
+            horizontalLineTo(5.25f)
+            arcTo(1f, 1f, 0f, false, true, 4.25f, 13.75f)
+            verticalLineTo(10.25f)
+            arcTo(1f, 1f, 0f, false, true, 5.25f, 9.25f)
+            close()
+        }
+        .build()
 }
 
 /** A switch in a menu, as iPadOS draws one: a check before it while it is on, its symbol after it. */

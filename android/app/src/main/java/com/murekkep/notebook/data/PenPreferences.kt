@@ -8,13 +8,17 @@ import com.murekkep.notebook.ui.PaletteEdge
 
 // What the user last chose for each pen (the pen part of AppSettings on iPad): its color, its width,
 // the pen in the hand, the starred pens and the pens picked last (the bar's pens), the custom colours
-// picked lately; the ink's settings the canvas and the renderer follow (animations, a held pen
-// straightening its stroke, the drying and cooling times, the grass's flowers, the nib's angle); and
-// where the pen bar stands. Kept between sessions in SharedPreferences.
+// picked lately; the ink's settings the canvas and the renderer follow ([ink]: animations, the
+// battery saver, a held pen straightening its stroke, the drying and cooling times, the grass's
+// flowers, the nib's angle); and where the pen bar stands. Kept between sessions in
+// SharedPreferences.
 
 class PenPreferences(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("pens", Context.MODE_PRIVATE)
+
+    /** The ink's settings, the app's one set: every editor and Ayarlar share it. */
+    val ink = InkSettings(prefs)
 
     /** The pen's remembered color, or null when it was never changed. */
     fun color(brush: Brush): InkColor? {
@@ -62,38 +66,6 @@ class PenPreferences(context: Context) {
     fun setRecentColors(colors: List<InkColor>) {
         prefs.edit().putString("recentColors", colors.joinToString(",") { pack(it).toString() }).apply()
     }
-
-    // The ink's settings, with the iPad's defaults and bounds (AppSettings.init).
-
-    /** The moving inks move (Diğer › Animasyonlar, and each animated pen's own switch). */
-    var animations: Boolean
-        get() = prefs.getBoolean("animations", true)
-        set(value) = prefs.edit().putBoolean("animations", value).apply()
-
-    /** A pen resting at the end of a stroke straightens it into a shape (Bekleyince şekli düzelt). */
-    var straightLine: Boolean
-        get() = prefs.getBoolean("straightLine", true)
-        set(value) = prefs.edit().putBoolean("straightLine", value).apply()
-
-    /** Seconds wet ink takes to dry. */
-    var dryDuration: Float
-        get() = prefs.getFloat("dryDuration", 4f).coerceIn(1f, 20f)
-        set(value) = prefs.edit().putFloat("dryDuration", value).apply()
-
-    /** Seconds lava takes to cool. */
-    var coolDuration: Float
-        get() = prefs.getFloat("lavaCoolDuration", 6f).coerceIn(2f, 20f)
-        set(value) = prefs.edit().putFloat("lavaCoolDuration", value).apply()
-
-    /** The grass's flowers: 0 none, 1 some, 2 lots. */
-    var flowerLevel: Int
-        get() = prefs.getInt("flowerLevel", 1).coerceIn(0, 2)
-        set(value) = prefs.edit().putInt("flowerLevel", value).apply()
-
-    /** The calligraphy nib's angle in degrees, 0...180. */
-    var nibAngle: Float
-        get() = prefs.getFloat("nibAngle", 38f).coerceIn(0f, 180f)
-        set(value) = prefs.edit().putFloat("nibAngle", value).apply()
 
     // The pen bar.
 
