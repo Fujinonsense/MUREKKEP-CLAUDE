@@ -119,6 +119,15 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 **In the Android edition:**
 - library (new, rename, delete, search, sections, favourites, covers) and settings (the language,
   the theme, the pen, the 3D ink);
+- courses (Kurslar, `ui/CoursePane.kt`, `ui/SectionEditor.kt`, `data/Sections.kt`): the sidebar's
+  Kurslar with its + and a row for each course (its symbol in its colour, how many notes it holds;
+  PDFs and photos dropped on it go into it; a long press: PDF ya da fotoğraf ekle, Yeni defter,
+  Düzenle, Dersi sil); the editor (name, the iPad's 18 symbols, its 8 colours); a course's pane (its
+  counts, PDF ya da fotoğraf ekle, Yeni not, Diğer › Dersi düzenle / Dersi sil, Kaynaklar /
+  Defterler); a note's Derse taşı (Dersten çıkar, Yeni ders…); a search finds courses by name, with
+  their notes; deleting a course asks first and leaves its notes in the library. Kept as on the iPad:
+  `sections.json` at the library's root, read entry by entry (an entry it cannot read is written
+  back as it was), each note's course in its record under `sectionID`;
 - PDFs: import (files, photos as one PDF, drag and drop) and Paylaş as a PDF, an imported PDF with
   its own pages;
 - notebook pages, pinch and fling; a notebook's template changed from Diğer;
@@ -167,7 +176,15 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - a two-finger turn starts settled on the 15° step the instrument rests on: it clicks when it comes
   back to that step or reaches another, not as it starts (the iPad's clicks at once); the angle over
   a turning instrument and the reading beside a pen along it stand in the dark capsule of the
-  canvas's other measurements, where the iPad's bubbles are accent blue.
+  canvas's other measurements, where the iPad's bubbles are accent blue;
+- a course's header puts "PDF ya da fotoğraf ekle" and "Yeni not" under its name when the pane is
+  too narrow for both beside it (a phone, a tablet upright with the sidebar), where the iPad's would
+  squeeze the name away; a search's course capsules wrap onto more lines;
+- a course has no Stüdyo tab, no overviews and no "Video özeti yap" (Android has no Studio), and its
+  texts say nothing of them or of the assistant: the counts are "2 kaynak · 1 defter", the drop zone
+  reads "Ders notları, slaytlar, kitap bölümleri.", an empty Kaynaklar "Henüz kaynak yok.", deleting
+  a course "…içindeki defterler ve PDF'ler kütüphanede kalır.", and the editor has no note about the
+  assistant's "Tüm bölüm".
 
 **Not ported yet:**
 - Araçlar's typed text (Metin), the engineering toolbox (Mühendislik) and the page angle (Sayfa açısı);

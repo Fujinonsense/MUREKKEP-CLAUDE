@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Collections
@@ -39,6 +40,8 @@ import kotlin.math.max
 // each with its own record, so one damaged record never empties the list. Saves wait for a pause in
 // writing (1.2 s, as on iPad), take their snapshot on the main thread and write it on the IO
 // dispatcher; the screen asks for a save at once when it leaves or the app goes to the background.
+// The courses are the iPad's sections.json next to the folders (data/Sections.kt), each note's
+// course in its own record; the library owns both, so a save of an open note keeps its course.
 
 class NotebookStore private constructor(context: Context) {
     private val app: Context = context.applicationContext
@@ -66,6 +69,14 @@ class NotebookStore private constructor(context: Context) {
     /** Every notebook, newest first. Observable from Compose. */
     var notebooks by mutableStateOf<List<NotebookMeta>>(emptyList())
         private set
+
+    /** The courses, in the order they were made (the iPad's sections). Observable from Compose. */
+    var sections by mutableStateOf<List<NoteSection>>(emptyList())
+        private set
+
+    /** The entries of sections.json this build could not read, written back with the courses (read and
+     *  written under [writeLock]). */
+    private var unreadableSections: List<Any> = emptyList()
 
     /** The folders have been read once. */
     var loaded by mutableStateOf(false)
@@ -104,7 +115,12 @@ class NotebookStore private constructor(context: Context) {
 
     fun thumbFile(id: String): File = File(folder(id), "thumb.jpg")
 
+    /** The courses, at the library's root as on iPad (beside the folders, which the scan reads alone). */
+    fun sectionsFile(): File = File(root, "sections.json")
+
     fun notebook(id: String): NotebookMeta? = notebooks.firstOrNull { it.id == id }
+
+    fun section(id: String?): NoteSection? = if (id == null) null else sections.firstOrNull { it.id == id }
 
     // MARK: Library
 
@@ -114,10 +130,14 @@ class NotebookStore private constructor(context: Context) {
      *  read the disk, and then that notebook's saves would find no record and write nothing. */
     suspend fun load() {
         val load = firstLoad ?: scope.async {
-            val scanned = withContext(Dispatchers.IO) { scan() }
+            val (scanned, read) = withContext(Dispatchers.IO) { scan() to readSections() }
             // Notebooks made while the disk was read stay, with their records from memory.
             val known = notebooks.mapTo(HashSet()) { it.id }
             notebooks = (notebooks + scanned.filter { it.id !in known }).sortedByDescending { it.modified }
+            // So do courses, after the ones on disk.
+            val onDisk = read.items.mapTo(HashSet()) { it.id }
+            sections = read.items + sections.filter { it.id !in onDisk }
+            synchronized(writeLock) { unreadableSections = read.unreadable }
             loaded = true
             drawMissingCovers(scanned)
         }.also { firstLoad = it }
@@ -175,8 +195,23 @@ class NotebookStore private constructor(context: Context) {
         }
     }
 
-    /** A new notebook at the top of the library; its folder is written off the main thread. */
-    fun create(title: String, paper: PaperStyle = PaperStyle.LINED): NotebookMeta {
+    /** sections.json as it is on disk; none when there is no file. A file that is not a list at all
+     *  is copied aside first, as its next save replaces it (load in LibraryStore.swift). */
+    private fun readSections(): SectionList {
+        val file = sectionsFile()
+        if (!file.isFile) return SectionList.EMPTY
+        val read = try {
+            SectionList.decode(file.readText())
+        } catch (e: Exception) {
+            null
+        }
+        if (read == null) FileBackup.keep(file)
+        return read ?: SectionList.EMPTY
+    }
+
+    /** A new notebook at the top of the library, in [section] (a course's id) or in none; its folder
+     *  is written off the main thread. */
+    fun create(title: String, paper: PaperStyle = PaperStyle.LINED, section: String? = null): NotebookMeta {
         val now = System.currentTimeMillis()
         val meta = NotebookMeta(
             id = UUID.randomUUID().toString(),
@@ -185,16 +220,17 @@ class NotebookStore private constructor(context: Context) {
             modified = now,
             pageCount = 1,
             paper = paper,
+            sectionId = section,
         )
         notebooks = listOf(meta) + notebooks
         scope.launch(Dispatchers.IO) { writeMeta(meta) }
         return meta
     }
 
-    /** Copies the PDF behind `uri` into a new note at the top of the library, with a picture of its
-     *  first page. Null when Android cannot read it (damaged, or locked with a password); then
-     *  nothing is left behind. */
-    suspend fun importPdf(uri: Uri): NotebookMeta? {
+    /** Copies the PDF behind `uri` into a new note at the top of the library, in [section] (a
+     *  course's id) or in none, with a picture of its first page. Null when Android cannot read it
+     *  (damaged, or locked with a password); then nothing is left behind. */
+    suspend fun importPdf(uri: Uri, section: String? = null): NotebookMeta? {
         val id = UUID.randomUUID().toString()
         val dir = folder(id)
         val pageCount = withContext(Dispatchers.IO) {
@@ -234,6 +270,7 @@ class NotebookStore private constructor(context: Context) {
             pageCount = pageCount,
             paper = PaperStyle.PLAIN,
             kind = NoteKind.PDF,
+            sectionId = section,
         )
         notebooks = listOf(meta) + notebooks
         scope.launch(Dispatchers.IO) { writeMeta(meta) }
@@ -277,6 +314,59 @@ class NotebookStore private constructor(context: Context) {
     fun setBookmarks(id: String, pages: List<Int>) {
         val updated = update(id) { it.copy(bookmarks = pages) } ?: return
         scope.launch(Dispatchers.IO) { writeMeta(updated) }
+    }
+
+    // MARK: Courses
+
+    /** A new course at the end of the list (createSection on iPad). */
+    fun createSection(name: String, symbol: String, colorIndex: Int): NoteSection {
+        val section = NoteSection.make(name.trim(), symbol, colorIndex)
+        sections = sections + section
+        persistSections()
+        return section
+    }
+
+    /** A course's new name, symbol or colour; nothing when the course is gone. */
+    fun updateSection(section: NoteSection) {
+        val i = sections.indexOfFirst { it.id == section.id }
+        if (i < 0) return
+        sections = sections.toMutableList().also { it[i] = section }
+        persistSections()
+    }
+
+    /** Removes the course; its notes stay in the library, in no course (deleteSection on iPad). */
+    fun deleteSection(id: String) {
+        sections = sections.filter { it.id != id }
+        val freed = notebooks.filter { it.sectionId == id }
+        if (freed.isNotEmpty()) {
+            notebooks = notebooks.map { if (it.sectionId == id) it.copy(sectionId = null) else it }
+            scope.launch(Dispatchers.IO) { for (meta in freed) writeMeta(meta) }
+        }
+        persistSections()
+    }
+
+    /** Files a note under a course, or under none (move on iPad). */
+    fun move(noteId: String, sectionId: String?) {
+        val updated = update(noteId) { it.copy(sectionId = sectionId) } ?: return
+        scope.launch(Dispatchers.IO) { writeMeta(updated) }
+    }
+
+    /** Writes sections.json with the newest courses and the entries kept from the file. Only after
+     *  the first read of the disk, so a course made before it never writes over the ones there. A
+     *  file that cannot be written (a full disk) stays as it was, as the iPad's `try?` leaves it. */
+    private fun persistSections() {
+        scope.launch {
+            load()
+            withContext(Dispatchers.IO) {
+                synchronized(writeLock) {
+                    try {
+                        writeAtomically(sectionsFile(), SectionList(sections, unreadableSections).encode().toByteArray())
+                    } catch (e: IOException) {
+                        // The next change of a course writes the list again.
+                    }
+                }
+            }
+        }
     }
 
     /** Removes the notebook and its folder; a pending save of it is dropped. */
@@ -479,12 +569,17 @@ class NotebookStore private constructor(context: Context) {
         }
     }
 
-    /** Writes the newest record of the notebook (the list's, which may be newer than `meta`). */
+    /** Writes the newest record of the notebook (the list's, which may be newer than `meta`). A record
+     *  that cannot be written (a full disk) stays as it was, as the iPad's `try?` leaves its index. */
     private fun writeMeta(meta: NotebookMeta) {
         synchronized(writeLock) {
             val latest = notebooks.firstOrNull { it.id == meta.id } ?: meta
             folder(meta.id).mkdirs()
-            writeAtomically(metaFile(meta.id), latest.toJson().toString(2).toByteArray())
+            try {
+                writeAtomically(metaFile(meta.id), latest.toJson().toString(2).toByteArray())
+            } catch (e: IOException) {
+                // The library in memory has the change; the note's next change writes it again.
+            }
         }
     }
 

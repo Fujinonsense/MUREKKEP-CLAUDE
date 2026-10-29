@@ -2,6 +2,7 @@
 
 package com.murekkep.notebook.ui
 
+import android.app.Activity
 import android.content.res.Resources
 import android.graphics.BitmapFactory
 import android.icu.text.RelativeDateTimeFormatter
@@ -74,6 +75,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
@@ -98,6 +100,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -166,6 +169,7 @@ import com.murekkep.notebook.R
 import com.murekkep.notebook.data.LibraryImport
 import com.murekkep.notebook.data.LibraryPreferences
 import com.murekkep.notebook.data.NoteKind
+import com.murekkep.notebook.data.NoteSection
 import com.murekkep.notebook.data.NotebookMeta
 import com.murekkep.notebook.data.NotebookStore
 import kotlinx.coroutines.Dispatchers
@@ -186,9 +190,10 @@ import kotlin.math.sin
 // which scrolls as one: the section's title with "PDF içe aktar" and "Yeni not", Hepsi / Defterler /
 // PDF'ler on Tüm notlar, the order, the PDFs' drop zone, and the notes as the covers of their first
 // pages with the title and "3 sayfa, dün" under them. A search shows its results over every note.
-// A long press on a note opens its menu (favourite, rename, delete; deleting asks first). PDFs and
-// photos can be dropped in from other apps. Under 600 dp the sidebar folds into a drawer. The
-// section, the filter and the order come back after a relaunch.
+// A long press on a note opens its menu (favourite, rename, move to a course, delete; deleting asks
+// first). PDFs and photos can be dropped in from other apps. Under 600 dp the sidebar folds into a
+// drawer. The section (or the course), the filter and the order come back after a relaunch. The
+// courses, their pane, their editor and their menus are CoursePane.kt and SectionEditor.kt.
 //
 // The pane's list stands in BoxWithConstraints (its width picks the covers' columns), which composes
 // its content apart from the pane: that content takes everything from observed state
@@ -223,7 +228,10 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
     val context = LocalContext.current
     val prefs = remember(context) { LibraryPreferences(context) }
     val importer = remember(context) { LibraryImport.get(context) }
-    var section by rememberSaveable { mutableStateOf(prefs.section) }
+    // Where the library is: a list of the sidebar, or a course (which keeps Tüm notlar under it).
+    var section by rememberSaveable { mutableStateOf(prefs.place.section) }
+    var course by rememberSaveable { mutableStateOf(prefs.place.course) }
+    var courseTab by rememberSaveable { mutableStateOf(prefs.courseTab) }
     var filter by rememberSaveable { mutableStateOf(prefs.filter) }
     var sort by rememberSaveable { mutableStateOf(prefs.sort) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -232,6 +240,12 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
     var deleting by remember { mutableStateOf<NotebookMeta?>(null) }
     var askingSource by remember { mutableStateOf(false) }
     var choosingTemplate by remember { mutableStateOf(false) }
+    // The course the next import or new notebook goes into (null: none), kept while the system's picker is up.
+    var importCourse by rememberSaveable { mutableStateOf<String?>(null) }
+    var templateCourse by rememberSaveable { mutableStateOf<String?>(null) }
+    var creatingCourse by remember { mutableStateOf(false) }
+    var editingCourse by remember { mutableStateOf<NoteSection?>(null) }
+    var deletingCourse by remember { mutableStateOf<NoteSection?>(null) }
     val scope = rememberCoroutineScope()
 
     // An import from the buttons opens the one note it brought in while the library is here.
@@ -241,20 +255,35 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
         onDispose { importer.onOpen = null }
     }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) importer.importFiles(uris)
+        if (uris.isNotEmpty()) importer.importFiles(uris, importCourse)
     }
     val pickPhotos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PHOTOS)) { uris ->
-        if (uris.isNotEmpty()) importer.importPhotos(uris)
+        if (uris.isNotEmpty()) importer.importPhotos(uris, importCourse)
     }
     val titlePrefix = stringResource(R.string.notebook_default_title)
     val notes = store.notebooks
-    val shown = remember(notes, section, filter, sort, query) {
-        if (query.isNotBlank()) LibraryRules.searched(notes, query) else LibraryRules.shown(notes, section, filter, sort)
+    val sections = store.sections
+    // The course on screen. One that is gone (deleted, or its file lost) leaves Tüm notlar, as on
+    // iPad; until the disk is read the pane waits rather than show Tüm notlar for a moment.
+    val shownCourse = course?.let { id -> sections.firstOrNull { it.id == id } }
+    val waiting = course != null && shownCourse == null && !store.loaded
+    val shown = remember(notes, sections, section, filter, sort, query) {
+        if (query.isNotBlank()) LibraryRules.searched(notes, query, sections = sections) else LibraryRules.shown(notes, section, filter, sort)
     }
+    val foundCourses = remember(sections, query) { LibraryRules.searchedCourses(sections, query) }
+    val counts = remember(notes) { LibraryRules.courseCounts(notes) }
     // What the sidebar and the pane ask for, the same in both layouts.
+    val goTo: (LibraryPlace) -> Unit = { place ->
+        section = place.section
+        course = place.course
+        prefs.place = place
+    }
     val pickSection: (LibrarySection) -> Unit = {
-        section = it
-        prefs.section = it
+        goTo(LibraryPlace(it))
+        query = ""
+    }
+    val pickCourse: (NoteSection) -> Unit = {
+        goTo(LibraryPlace.course(it.id))
         query = ""
     }
     val pickFilter: (LibraryFilter) -> Unit = {
@@ -265,17 +294,39 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
         sort = it
         prefs.sort = it
     }
+    val pickTab: (CourseTab) -> Unit = {
+        courseTab = it
+        prefs.courseTab = it
+    }
     val actions = remember(onOpen, store) {
         NoteActions(
             open = onOpen,
             rename = { renaming = it },
             delete = { deleting = it },
             star = { store.toggleStarred(it.id) },
+            move = { meta, id -> store.move(meta.id, id) },
+            newCourse = { creatingCourse = true },
         )
     }
-    val onNew = { choosingTemplate = true }
-    val onImport = { askingSource = true }
+    val onNew: (String?) -> Unit = {
+        templateCourse = it
+        choosingTemplate = true
+    }
+    val onImport: (String?) -> Unit = {
+        importCourse = it
+        askingSource = true
+    }
     val onDrop: (List<Uri>, () -> Unit) -> Unit = { uris, release -> importer.importDropped(uris, release) }
+    val courseActions = remember(store, importer) {
+        CourseActions(
+            create = { creatingCourse = true },
+            edit = { editingCourse = it },
+            delete = { deletingCourse = it },
+            import = { onImport(it) },
+            newNotebook = { onNew(it) },
+            drop = { uris, id, release -> importer.importDropped(uris, release, id) },
+        )
+    }
 
     val appTheme = LocalAppTheme.current.shown
     val picture = rememberBackdropPicture(appTheme.picture)
@@ -291,6 +342,49 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
         measured.size.takeIf { it != IntSize.Zero }?.let { with(density) { DpSize(it.width.toDp(), it.height.toDp()) } }
             ?: DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
     }
+    // The pane beside the sidebar, the same in both layouts: a search's results, a course, or the
+    // notes of a list. [onToggle] shows the sidebar while it is away.
+    val pane: @Composable (Modifier, (() -> Unit)?) -> Unit = { modifier, onToggle ->
+        val q = query.trim()
+        when {
+            q.isEmpty() && shownCourse != null -> CoursePane(
+                store = store,
+                section = shownCourse,
+                tab = courseTab,
+                onTab = pickTab,
+                phone = phone,
+                importing = importer.running > 0,
+                onToggle = onToggle,
+                notes = actions,
+                actions = courseActions,
+                modifier = modifier,
+            )
+            q.isEmpty() && waiting -> Box(modifier.fillMaxSize())
+            else -> NotesArea(
+                store = store,
+                notes = shown,
+                courses = if (q.isEmpty()) emptyList() else foundCourses,
+                loaded = store.loaded,
+                section = section,
+                filter = filter,
+                sort = sort,
+                query = q,
+                phone = phone,
+                importing = importer.running > 0,
+                onToggle = onToggle,
+                onFilter = pickFilter,
+                onSort = pickSort,
+                onNew = { onNew(null) },
+                onImport = { onImport(null) },
+                onCourse = pickCourse,
+                actions = actions,
+                onDrop = onDrop,
+                modifier = modifier,
+            )
+        }
+    }
+    // The list picked in the sidebar: none while a course is on screen (or is being read).
+    val pickedSection = if (shownCourse != null || waiting) null else section
     // The sidebar and the notes in the picture's look; "Yeni defter" and the dialogs below keep the system's.
     LibraryLook {
         val z = Zen.colors
@@ -302,36 +396,19 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
                     if (sidebarShown) {
                         Sidebar(
                             notes = notes,
-                            section = section,
+                            section = pickedSection,
                             query = query,
                             onQuery = { query = it },
                             onSection = pickSection,
                             onSettings = onSettings,
                             onHide = { sidebarShown = false },
                             ground = { SidebarGround(picture, full(), inDrawer = false) },
+                            courses = { CourseList(sections, counts, shownCourse?.id, pickCourse, courseActions, loaded = store.loaded) },
                             modifier = Modifier.width(SidebarWidth).fillMaxHeight(),
                         )
                         Box(Modifier.width(1.dp).fillMaxHeight().background(z.rule))
                     }
-                    NotesArea(
-                        store = store,
-                        notes = shown,
-                        loaded = store.loaded,
-                        section = section,
-                        filter = filter,
-                        sort = sort,
-                        query = query.trim(),
-                        phone = phone,
-                        importing = importer.running > 0,
-                        onToggle = if (sidebarShown) null else ({ sidebarShown = true }),
-                        onFilter = pickFilter,
-                        onSort = pickSort,
-                        onNew = onNew,
-                        onImport = onImport,
-                        actions = actions,
-                        onDrop = onDrop,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
+                    pane(Modifier.weight(1f).fillMaxHeight(), if (sidebarShown) null else ({ sidebarShown = true }))
                 }
             } else {
                 val drawer = rememberDrawerState(DrawerValue.Closed)
@@ -348,7 +425,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
                         ) {
                             Sidebar(
                                 notes = notes,
-                                section = section,
+                                section = pickedSection,
                                 query = query,
                                 onQuery = { query = it },
                                 onSection = {
@@ -358,28 +435,17 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
                                 onSettings = onSettings,
                                 onHide = { scope.launch { drawer.close() } },
                                 ground = { SidebarGround(picture, full(), inDrawer = true) },
+                                courses = {
+                                    CourseList(sections, counts, shownCourse?.id, { picked ->
+                                        pickCourse(picked)
+                                        scope.launch { drawer.close() }
+                                    }, courseActions, loaded = store.loaded)
+                                },
                             )
                         }
                     },
                 ) {
-                    NotesArea(
-                        store = store,
-                        notes = shown,
-                        loaded = store.loaded,
-                        section = section,
-                        filter = filter,
-                        sort = sort,
-                        query = query.trim(),
-                        phone = phone,
-                        importing = importer.running > 0,
-                        onToggle = { scope.launch { drawer.open() } },
-                        onFilter = pickFilter,
-                        onSort = pickSort,
-                        onNew = onNew,
-                        onImport = onImport,
-                        actions = actions,
-                        onDrop = onDrop,
-                    )
+                    pane(Modifier, { scope.launch { drawer.open() } })
                 }
             }
             importer.photoProgress?.let { progress ->
@@ -394,7 +460,32 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
             onDismiss = { choosingTemplate = false },
             onPick = { paper ->
                 choosingTemplate = false
-                onOpen(store.create(newNotebookTitle(titlePrefix), paper))
+                // A notebook made in a course is named after it (createNotebook on iPad).
+                val target = store.section(templateCourse)
+                onOpen(store.create(newNotebookTitle(target?.name ?: titlePrefix), paper, target?.id))
+            },
+        )
+    }
+    if (creatingCourse) {
+        SectionEditor(section = null, newColorIndex = sections.size, onDismiss = { creatingCourse = false }) { name, symbol, color ->
+            creatingCourse = false
+            // The new course opens, as on iPad (the search, if any, stays over it).
+            goTo(LibraryPlace.course(store.createSection(name, symbol, color).id))
+        }
+    }
+    editingCourse?.let { editing ->
+        SectionEditor(section = editing, newColorIndex = editing.colorIndex, onDismiss = { editingCourse = null }) { name, symbol, color ->
+            editingCourse = null
+            store.section(editing.id)?.let { store.updateSection(it.copy(name = name, symbol = symbol, colorIndex = color)) }
+        }
+    }
+    deletingCourse?.let { doomed ->
+        DeleteCourseDialog(
+            onDismiss = { deletingCourse = null },
+            onDelete = {
+                deletingCourse = null
+                store.deleteSection(doomed.id)
+                if (course == doomed.id) goTo(LibraryPlace(LibrarySection.ALL))
             },
         )
     }
@@ -441,12 +532,15 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
     }
 }
 
-/** What a note's card does: a tap opens it; its menu stars it, renames it or deletes it. */
-private class NoteActions(
+/** What a note's card does: a tap opens it; its menu stars it, renames it, moves it to a course (or
+ *  out of one, or into a new one: the editor) or deletes it. */
+internal class NoteActions(
     val open: (NotebookMeta) -> Unit,
     val rename: (NotebookMeta) -> Unit,
     val delete: (NotebookMeta) -> Unit,
     val star: (NotebookMeta) -> Unit,
+    val move: (NotebookMeta, String?) -> Unit,
+    val newCourse: () -> Unit,
 )
 
 /** The library's size once it is laid out, read only by what needs it (the sidebar's blurred picture). */
@@ -540,17 +634,19 @@ private fun SidebarGround(picture: ImageBitmap?, full: DpSize, inDrawer: Boolean
 
 // MARK: The sidebar
 
-/** The sidebar: its upper part scrolls (the wordmark, search, the sections), Ayarlar stays under a hairline at the bottom. */
+/** The sidebar: its upper part scrolls (the wordmark, search, the sections, the [courses]), Ayarlar
+ *  stays under a hairline at the bottom. [section] is the list picked, null while a course is. */
 @Composable
 private fun Sidebar(
     notes: List<NotebookMeta>,
-    section: LibrarySection,
+    section: LibrarySection?,
     query: String,
     onQuery: (String) -> Unit,
     onSection: (LibrarySection) -> Unit,
     onSettings: () -> Unit,
     onHide: () -> Unit,
     ground: @Composable () -> Unit,
+    courses: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val z = Zen.colors
@@ -586,6 +682,7 @@ private fun Sidebar(
                     NavRow(Icons.Outlined.Book, stringResource(R.string.library_notebooks), notebooks, section == LibrarySection.NOTEBOOKS) { onSection(LibrarySection.NOTEBOOKS) }
                     NavRow(Icons.Outlined.Description, stringResource(R.string.library_pdfs), pdfs, section == LibrarySection.PDFS) { onSection(LibrarySection.PDFS) }
                 }
+                courses()
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(z.rule))
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -596,7 +693,7 @@ private fun Sidebar(
 }
 
 /** The sidebar's glyph (the mockup's and the iPad's sidebar.left): a rounded window with a column on its left. */
-private val SidebarGlyph: ImageVector by lazy {
+internal val SidebarGlyph: ImageVector by lazy {
     ImageVector.Builder("Sidebar", 24.dp, 24.dp, 24f, 24f).path(
         stroke = SolidColor(Color.Black),
         strokeLineWidth = 1.6f,
@@ -639,28 +736,46 @@ private val StarSlashGlyph: ImageVector by lazy {
     }.build()
 }
 
-/** A row of the sidebar: its glyph, its name and, for a section that holds any, how many notes. */
+/**
+ * A row of the sidebar: its glyph (in ink, or in a course's own [tint]), its name and, for a section
+ * that holds any, how many notes. While files are dragged over it ([targeted]) it looks picked, in
+ * an accent outline. A course's row opens its menu on a long press ([onLongClick]).
+ */
 @Composable
-private fun NavRow(icon: ImageVector, title: String, count: Int?, selected: Boolean, onClick: () -> Unit) {
+internal fun NavRow(
+    icon: ImageVector,
+    title: String,
+    count: Int?,
+    selected: Boolean,
+    tint: Color? = null,
+    targeted: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val z = Zen.colors
+    val shape = RoundedCornerShape(Zen.control)
+    val on = selected || targeted
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .height(40.dp)
-            .clip(RoundedCornerShape(Zen.control))
-            .background(if (selected) z.paper3 else Color.Transparent)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clip(shape)
+            .background(if (on) z.paper3 else Color.Transparent)
+            .then(if (targeted) Modifier.border(1.5.dp, z.accent, shape) else Modifier)
+            .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick, onLongClickLabel = longClickLabel)
             .semantics { this.selected = selected }
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = if (selected) z.ink else z.ink2, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = tint ?: if (on) z.ink else z.ink2, modifier = Modifier.size(20.dp))
         Text(
             title,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) z.ink else z.ink2,
+            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (on) z.ink else z.ink2,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -732,12 +847,14 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
  * scrolling column of the header, the filter and order, the drop zone, and the covers in rows of
  * the iPad's adaptive grid, start-aligned. The column runs under the status bar, as the iPad's
  * scroll view does, and 40 dp from the pane's sides (16 on a [phone]). Over a Pro theme's picture
- * the notes stand on a wash that scrolls with them ([notesWash]); the header keeps the picture.
+ * the notes stand on a wash that scrolls with them ([notesWash]); the header keeps the picture. A
+ * search shows the [courses] it found ("Dersler", which [onCourse] opens) over the notes.
  */
 @Composable
 private fun NotesArea(
     store: NotebookStore,
     notes: List<NotebookMeta>,
+    courses: List<NoteSection>,
     loaded: Boolean,
     section: LibrarySection,
     filter: LibraryFilter,
@@ -750,52 +867,17 @@ private fun NotesArea(
     onSort: (LibrarySort) -> Unit,
     onNew: () -> Unit,
     onImport: () -> Unit,
+    onCourse: (NoteSection) -> Unit,
     actions: NoteActions,
     onDrop: (List<Uri>, () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val searching = query.isNotEmpty()
-    val side = if (phone) 16.dp else 40.dp
-    var dropping by remember { mutableStateOf(false) }
-    val activity = LocalActivity.current
-    val dropper by rememberUpdatedState(onDrop)
-    val target = remember(activity) {
-        object : DragAndDropTarget {
-            override fun onEntered(event: DragAndDropEvent) {
-                dropping = true
-            }
-
-            override fun onExited(event: DragAndDropEvent) {
-                dropping = false
-            }
-
-            override fun onEnded(event: DragAndDropEvent) {
-                dropping = false
-            }
-
-            override fun onDrop(event: DragAndDropEvent): Boolean {
-                dropping = false
-                val drag = event.toAndroidDragEvent()
-                val clip = drag.clipData ?: return false
-                val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
-                if (uris.isEmpty()) return false
-                // Another app's files can be read only while the drop's permissions are held.
-                val permissions = activity?.requestDragAndDropPermissions(drag)
-                dropper(uris) { permissions?.release() }
-                return true
-            }
-        }
-    }
-    val layoutDirection = LocalLayoutDirection.current
-    val safe = WindowInsets.safeDrawing.asPaddingValues()
-    val top = safe.calculateTopPadding()
-    val bottom = safe.calculateBottomPadding()
-    // The start edge is the sidebar's, unless the sidebar is away.
-    val start = if (onToggle != null) safe.calculateStartPadding(layoutDirection) else 0.dp
-    val end = safe.calculateEndPadding(layoutDirection)
+    val drop = rememberFileDrop(onDrop)
     // Each section, and the search, keeps its own place in the list.
     val list = key(section, searching) { rememberLazyListState() }
     val ordered = !searching && section != LibrarySection.RECENT
+    val insets = paneInsets(phone, sidebarAway = onToggle != null)
     // The pane's width picks the covers' columns, so the list stands in BoxWithConstraints, which
     // composes its content apart from this function: that content never heard of new parameters
     // from out here (a section picked in the sidebar left the old one on screen until something
@@ -804,15 +886,17 @@ private fun NotesArea(
     val pane = rememberUpdatedState(
         PaneContent(
             list = list,
-            padding = PaddingValues(start = start + side, end = end + side, top = top + 28.dp, bottom = bottom + 40.dp),
+            padding = insets.padding,
             // The notes start after the header and the order: the wash begins with them.
             washFrom = if (ordered) 2 else 1,
             wash = notesWashColor(LocalAppTheme.current.shown),
-            overlay = if (section != LibrarySection.PDFS) PaddingValues(start = start + 16.dp, end = end + 16.dp, top = top + 16.dp, bottom = bottom + 16.dp) else null,
+            overlay = if (section != LibrarySection.PDFS) insets.overlay else null,
         ) { cardWidth, columns ->
             item(key = "header") {
                 if (searching) {
-                    PaneHeader("“$query”", pluralStringResource(R.plurals.search_results, notes.size, notes.size), onToggle) {}
+                    // Every row found counts, the courses too (SearchPane on iPad).
+                    val found = notes.size + courses.size
+                    PaneHeader("“$query”", pluralStringResource(R.plurals.search_results, found, found), onToggle) {}
                 } else {
                     PaneHeader(stringResource(section.titleRes), null, onToggle) {
                         ZenButton(stringResource(if (importing) R.string.importing_pdf else R.string.import_pdf), filled = false, enabled = !importing, onClick = onImport)
@@ -824,49 +908,61 @@ private fun NotesArea(
                 item(key = "order") { OrderRow(section, filter, sort, onFilter, onSort) }
             }
             if (!searching && section == LibrarySection.PDFS) {
-                item(key = "drop") { DropZone(dropping, onImport) }
+                item(key = "drop") { DropZone(drop.hovering, onImport) }
+            }
+            if (courses.isNotEmpty()) {
+                item(key = "courses-title") { SearchTitle(stringResource(R.string.search_courses)) }
+                item(key = "courses") { CourseChips(courses, onCourse) }
             }
             when {
-                notes.isEmpty() -> if (loaded) item(key = "empty") { EmptyNotes(section, query) }
+                notes.isEmpty() -> if (loaded && courses.isEmpty()) item(key = "empty") { EmptyNotes(section, query) }
                 else -> {
                     if (searching) {
-                        item(key = "notes") {
-                            Text(stringResource(R.string.notes), style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), color = Zen.colors.ink)
-                        }
+                        item(key = "notes") { SearchTitle(stringResource(R.string.notes)) }
                     }
-                    items(notes.chunked(columns), key = { "row:" + it.first().id }) { row ->
-                        Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(CARD_SPACING.dp)) {
-                            for (meta in row) {
-                                key(meta.id) {
-                                    NoteCard(
-                                        meta = meta,
-                                        cover = store.thumbFile(meta.id),
-                                        coverVersion = store.coverVersion,
-                                        actions = actions,
-                                        modifier = Modifier.width(cardWidth),
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    noteRows(notes, columns, cardWidth, store, actions)
                 }
             }
         },
     )
-    BoxWithConstraints(
-        modifier
-            .fillMaxSize()
-            .then(
-                if (searching) {
-                    Modifier
-                } else {
-                    Modifier.dragAndDropTarget(
-                        shouldStartDragAndDrop = { event -> event.mimeTypes().any { it == "application/pdf" || it.startsWith("image/") } },
-                        target = target,
+    PaneColumn(pane, if (searching) null else drop, modifier)
+}
+
+/** A search's group title ("Dersler", "Notlar"), the iPad's SectionTitle. */
+@Composable
+private fun SearchTitle(title: String) {
+    Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), color = Zen.colors.ink)
+}
+
+/** The notes as rows of [columns] covers [cardWidth] wide, 28 dp apart (NoteGrid on iPad). */
+internal fun LazyListScope.noteRows(notes: List<NotebookMeta>, columns: Int, cardWidth: Dp, store: NotebookStore, actions: NoteActions) {
+    items(notes.chunked(columns), key = { "row:" + it.first().id }) { row ->
+        Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(CARD_SPACING.dp)) {
+            for (meta in row) {
+                key(meta.id) {
+                    NoteCard(
+                        meta = meta,
+                        cover = store.thumbFile(meta.id),
+                        coverVersion = store.coverVersion,
+                        sections = store.sections,
+                        actions = actions,
+                        modifier = Modifier.width(cardWidth),
                     )
-                },
-            ),
-    ) {
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A pane's one scrolling column (the notes', a course's): the list [pane] describes, in
+ * BoxWithConstraints, whose width picks the covers' columns; PDFs and photos dropped on it go to
+ * [drop] (null: none are taken), with the drop overlay over it while they hover where the pane asks
+ * for one.
+ */
+@Composable
+internal fun PaneColumn(pane: State<PaneContent>, drop: FileDrop?, modifier: Modifier) {
+    BoxWithConstraints(modifier.fillMaxSize().then(if (drop == null) Modifier else Modifier.fileDropTarget(drop))) {
         val content = pane.value
         // In dp at the density in force: a display-size change keeps the pixels, not the dp.
         val width = with(LocalDensity.current) { constraints.maxWidth.toDp() }
@@ -882,25 +978,97 @@ private fun NotesArea(
         ) { content.items(this, cardWidth, columns) }
         // A drag over any section but PDF'ler (whose drop zone lights up instead).
         val overlay = content.overlay
-        if (dropping && overlay != null) {
+        if (drop != null && drop.hovering && overlay != null) {
             DropOverlay(Modifier.matchParentSize().padding(overlay))
         }
     }
 }
 
 /**
- * What the notes pane's list shows, handed into its BoxWithConstraints as state: the list's place,
- * its padding (the insets and the pane's sides), where the wash under the notes begins and its
- * colour, the drop overlay's padding (null where the drop zone lights up instead) and the items,
- * given the covers' width and how many stand in a row.
+ * What a pane's list shows, handed into its BoxWithConstraints as state: the list's place, its
+ * padding (the insets and the pane's sides), where the wash under the notes begins and its colour,
+ * the drop overlay's padding (null where the drop zone lights up instead) and the items, given the
+ * covers' width and how many stand in a row.
  */
-private class PaneContent(
+internal class PaneContent(
     val list: LazyListState,
     val padding: PaddingValues,
     val washFrom: Int,
     val wash: Color?,
     val overlay: PaddingValues?,
     val items: LazyListScope.(cardWidth: Dp, columns: Int) -> Unit,
+)
+
+/** A pane's list padding and its drop overlay's. */
+internal class PaneInsets(val padding: PaddingValues, val overlay: PaddingValues)
+
+/** The list runs under the status bar, 28 dp below it, 40 dp from the pane's sides (16 on a
+ *  [phone]); the start edge is the sidebar's unless it is away. The overlay keeps 16 dp inside the
+ *  safe area. */
+@Composable
+internal fun paneInsets(phone: Boolean, sidebarAway: Boolean): PaneInsets {
+    val side = if (phone) 16.dp else 40.dp
+    val layoutDirection = LocalLayoutDirection.current
+    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    val top = safe.calculateTopPadding()
+    val bottom = safe.calculateBottomPadding()
+    val start = if (sidebarAway) safe.calculateStartPadding(layoutDirection) else 0.dp
+    val end = safe.calculateEndPadding(layoutDirection)
+    return PaneInsets(
+        padding = PaddingValues(start = start + side, end = end + side, top = top + 28.dp, bottom = bottom + 40.dp),
+        overlay = PaddingValues(start = start + 16.dp, end = end + 16.dp, top = top + 16.dp, bottom = bottom + 16.dp),
+    )
+}
+
+/**
+ * PDFs and photos dragged in from another app over a pane or a course's row: whether they hover
+ * ([hovering]), and the drop, handed to [handler] with the release of the right to read them, which
+ * another app's files need until they are copied.
+ */
+internal class FileDrop(
+    private val activity: Activity?,
+    private val handler: State<(List<Uri>, () -> Unit) -> Unit>,
+) : DragAndDropTarget {
+    var hovering by mutableStateOf(false)
+        private set
+
+    override fun onEntered(event: DragAndDropEvent) {
+        hovering = true
+    }
+
+    override fun onExited(event: DragAndDropEvent) {
+        hovering = false
+    }
+
+    override fun onEnded(event: DragAndDropEvent) {
+        hovering = false
+    }
+
+    override fun onDrop(event: DragAndDropEvent): Boolean {
+        hovering = false
+        val drag = event.toAndroidDragEvent()
+        val clip = drag.clipData ?: return false
+        val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+        if (uris.isEmpty()) return false
+        // Another app's files can be read only while the drop's permissions are held.
+        val permissions = activity?.requestDragAndDropPermissions(drag)
+        handler.value(uris) { permissions?.release() }
+        return true
+    }
+}
+
+/** A drop target handing what is dropped to [onDrop], its newest version. */
+@Composable
+internal fun rememberFileDrop(onDrop: (List<Uri>, () -> Unit) -> Unit): FileDrop {
+    val activity = LocalActivity.current
+    val handler = rememberUpdatedState(onDrop)
+    return remember(activity) { FileDrop(activity, handler) }
+}
+
+/** Takes the PDFs and photos [drop] is for. */
+internal fun Modifier.fileDropTarget(drop: FileDrop): Modifier = dragAndDropTarget(
+    shouldStartDragAndDrop = { event -> event.mimeTypes().any { it == "application/pdf" || it.startsWith("image/") } },
+    target = drop,
 )
 
 /** Where the wash under the notes begins: just above the first row, in the 24 dp gap over it. */
@@ -914,7 +1082,7 @@ private val WashFade = 40.dp
  * the warm paper at 88 % over a light picture, black at 65 % over a dark one. Black and white, and
  * the ruled Defter theme, have no picture and no wash.
  */
-private fun notesWashColor(theme: AppTheme): Color? = when {
+internal fun notesWashColor(theme: AppTheme): Color? = when {
     theme.picture == null -> null
     theme.darkLook == true -> Color.Black.copy(alpha = 0.65f)
     else -> PaperWarm.copy(alpha = 0.88f)
@@ -993,38 +1161,44 @@ private fun OrderRow(section: LibrarySection, filter: LibraryFilter, sort: Libra
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (section == LibrarySection.ALL) {
-            FilterSegments(filter, onFilter, Modifier.weight(1f, fill = false).widthIn(max = 320.dp))
+            LibrarySegments(
+                labels = LibraryFilter.entries.map { stringResource(it.titleRes) },
+                selected = filter.ordinal,
+                onSelect = { onFilter(LibraryFilter.entries[it]) },
+                label = stringResource(R.string.filter_label),
+                modifier = Modifier.weight(1f, fill = false).widthIn(max = 320.dp),
+            )
         }
         SortMenu(sort, onSort, Modifier.padding(start = 12.dp))
     }
 }
 
 /**
- * The filter as the iPad's segmented picker: a paper-3 track, the picked segment on paper with a
+ * The library's segmented pickers, as the iPad's (the filter of Tüm notlar, a course's Kaynaklar /
+ * Defterler): a paper-3 track named [label] for TalkBack, the picked segment on paper with a
  * hairline, the labels at the picker's 13 sp. The segments are equal while every label fits in an
  * equal share; on a phone, where one would be cut, each takes its label's width
  * ([LibraryRules.segmentWidths]).
  */
 @Composable
-private fun FilterSegments(filter: LibraryFilter, onFilter: (LibraryFilter) -> Unit, modifier: Modifier) {
+internal fun LibrarySegments(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, label: String, modifier: Modifier) {
     val z = Zen.colors
-    val label = stringResource(R.string.filter_label)
     Layout(
         content = {
-            for (option in LibraryFilter.entries) {
-                val on = option == filter
+            labels.forEachIndexed { i, title ->
+                val on = i == selected
                 Box(
                     Modifier
                         .height(32.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (on) z.paper else Color.Transparent)
                         .then(if (on) Modifier.border(1.dp, z.rule, RoundedCornerShape(8.dp)) else Modifier)
-                        .selectable(selected = on, role = Role.Tab) { onFilter(option) }
+                        .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                         .padding(horizontal = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        stringResource(option.titleRes),
+                        title,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (on) z.ink else z.ink2,
@@ -1165,9 +1339,15 @@ private fun EmptyState(icon: ImageVector, title: String, text: String) {
 
 // MARK: Dropping and importing
 
-/** PDF'ler's dashed box to drop PDFs on, with a button for the picker; it lights up in the accent while a drag hovers. */
+/** PDF'ler's dashed box to drop PDFs on (a course's, with its own [title] and [detail]), with a
+ *  button for the picker; it lights up in the accent while a drag hovers. */
 @Composable
-private fun DropZone(targeted: Boolean, onPick: () -> Unit) {
+internal fun DropZone(
+    targeted: Boolean,
+    onPick: () -> Unit,
+    title: String = stringResource(R.string.drop_title),
+    detail: String = stringResource(R.string.drop_detail),
+) {
     val z = Zen.colors
     val edge = if (targeted) z.accent else z.rule
     Row(
@@ -1189,12 +1369,12 @@ private fun DropZone(targeted: Boolean, onPick: () -> Unit) {
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
-                stringResource(if (targeted) R.string.drop_release else R.string.drop_title),
+                if (targeted) stringResource(R.string.drop_release) else title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = z.ink,
             )
-            Text(stringResource(R.string.drop_detail), style = MaterialTheme.typography.bodyMedium, color = z.muted)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = z.muted)
         }
         ZenButton(stringResource(R.string.drop_choose), filled = false, onClick = onPick)
     }
@@ -1303,6 +1483,7 @@ private fun NoteCard(
     meta: NotebookMeta,
     cover: File,
     coverVersion: Int,
+    sections: List<NoteSection>,
     actions: NoteActions,
     modifier: Modifier,
 ) {
@@ -1357,6 +1538,8 @@ private fun NoteCard(
             }
             NoteMenu(
                 starred = meta.starred,
+                course = meta.sectionId,
+                sections = sections,
                 expanded = menuOpen,
                 onDismiss = { menuOpen = false },
                 onStar = {
@@ -1366,6 +1549,14 @@ private fun NoteCard(
                 onRename = {
                     menuOpen = false
                     actions.rename(meta)
+                },
+                onMove = {
+                    menuOpen = false
+                    actions.move(meta, it)
+                },
+                onNewCourse = {
+                    menuOpen = false
+                    actions.newCourse()
                 },
                 onDelete = {
                     menuOpen = false
@@ -1377,29 +1568,59 @@ private fun NoteCard(
 }
 
 /** A note's menu (NoteMenu on iPad): Favorilere ekle (or Favorilerden çıkar) with its star,
- *  Yeniden adlandır with its pencil, then Sil in red with its bin. */
+ *  Yeniden adlandır with its pencil, Derse taşı with its folder (its courses open in the menu's
+ *  place, [MoveToCourseItems]), then Sil in red with its bin. The iPad's "Bundan özet yap" needs
+ *  the Studio, which Android does not have. */
 @Composable
-private fun NoteMenu(starred: Boolean, expanded: Boolean, onDismiss: () -> Unit, onStar: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun NoteMenu(
+    starred: Boolean,
+    course: String?,
+    sections: List<NoteSection>,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onStar: () -> Unit,
+    onRename: () -> Unit,
+    onMove: (String?) -> Unit,
+    onNewCourse: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val error = MaterialTheme.colorScheme.error
+    // Each opening starts on the menu itself.
+    var moving by remember(expanded) { mutableStateOf(false) }
     ZenMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text(stringResource(if (starred) R.string.remove_favorite else R.string.add_favorite)) },
-            trailingIcon = { Icon(if (starred) StarSlashGlyph else Icons.Outlined.StarOutline, contentDescription = null, modifier = Modifier.size(20.dp)) },
-            onClick = onStar,
-        )
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.rename)) },
-            trailingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(20.dp)) },
-            onClick = onRename,
-        )
-        HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Zen.colors.rule)
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.delete)) },
-            trailingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(20.dp)) },
-            onClick = onDelete,
-            colors = MenuDefaults.itemColors(textColor = error, trailingIconColor = error),
-        )
+        if (moving) {
+            MoveToCourseItems(course, sections, onBack = { moving = false }, onMove = onMove, onNewCourse = onNewCourse)
+        } else {
+            NoteMenuItems(starred, error, onStar, onRename, onMoving = { moving = true }, onDelete)
+        }
     }
+}
+
+/** The menu's own items (see [NoteMenu]). */
+@Composable
+private fun NoteMenuItems(starred: Boolean, error: Color, onStar: () -> Unit, onRename: () -> Unit, onMoving: () -> Unit, onDelete: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(stringResource(if (starred) R.string.remove_favorite else R.string.add_favorite)) },
+        trailingIcon = { Icon(if (starred) StarSlashGlyph else Icons.Outlined.StarOutline, contentDescription = null, modifier = Modifier.size(20.dp)) },
+        onClick = onStar,
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.rename)) },
+        trailingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(20.dp)) },
+        onClick = onRename,
+    )
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.course_move)) },
+        trailingIcon = { Icon(Icons.Outlined.Folder, contentDescription = null, modifier = Modifier.size(20.dp)) },
+        onClick = onMoving,
+    )
+    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = Zen.colors.rule)
+    DropdownMenuItem(
+        text = { Text(stringResource(R.string.delete)) },
+        trailingIcon = { Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(20.dp)) },
+        onClick = onDelete,
+        colors = MenuDefaults.itemColors(textColor = error, trailingIconColor = error),
+    )
 }
 
 /**

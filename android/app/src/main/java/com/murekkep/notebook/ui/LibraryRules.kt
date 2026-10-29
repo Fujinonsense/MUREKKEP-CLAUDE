@@ -1,6 +1,7 @@
 package com.murekkep.notebook.ui
 
 import com.murekkep.notebook.data.NoteKind
+import com.murekkep.notebook.data.NoteSection
 import com.murekkep.notebook.data.NotebookMeta
 import java.text.Collator
 import java.time.Instant
@@ -11,9 +12,9 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
-// The library's pure rules (NotesPane, SearchPane and NoteCard on iPad): which notes a section
-// shows, in what order, what a search finds, how the covers fill a row, how wide the filter's
-// segments are, and what a cover's line says ("3 sayfa, dün").
+// The library's pure rules (NotesPane, SearchPane, CoursePane and NoteCard on iPad): which notes a
+// section or a course shows, in what order, what a search finds, how the covers fill a row, how
+// wide the filter's segments are, and what a cover's line says ("3 sayfa, dün").
 
 /** The sidebar's sections; raw values are the iPad's `library.place`. */
 enum class LibrarySection(val raw: String) {
@@ -25,6 +26,40 @@ enum class LibrarySection(val raw: String) {
 
     companion object {
         fun fromRaw(raw: String?): LibrarySection = entries.firstOrNull { it.raw == raw } ?: ALL
+    }
+}
+
+/**
+ * Where the library is (LibraryPlace on iPad): a list of the sidebar, or a course by its id. The raw
+ * value is the iPad's `library.place`: the list's, or "course:" and the course's id. A course keeps
+ * Tüm notlar under it, where the iPad goes when the course is gone.
+ */
+data class LibraryPlace(val section: LibrarySection, val course: String? = null) {
+    val raw: String get() = if (course != null) COURSE_PREFIX + course else section.raw
+
+    companion object {
+        private const val COURSE_PREFIX = "course:"
+
+        fun course(id: String) = LibraryPlace(LibrarySection.ALL, id)
+
+        /** A course's place when [raw] names a UUID after "course:", else the list's (Tüm notlar for
+         *  anything unknown, a "course:" without a UUID too, as on iPad). */
+        fun fromRaw(raw: String?): LibraryPlace {
+            val id = raw?.takeIf { it.startsWith(COURSE_PREFIX) }?.let { NoteSection.normalizedId(it.removePrefix(COURSE_PREFIX)) }
+            return if (id != null) course(id) else LibraryPlace(LibrarySection.fromRaw(raw))
+        }
+    }
+}
+
+/** A course's tabs, Kaynaklar and Defterler (CoursePane on iPad, whose Stüdyo Android does not
+ *  have); raw values are the iPad's `course.tab`. */
+enum class CourseTab(val raw: String) {
+    SOURCES("sources"),
+    NOTEBOOKS("notebooks");
+
+    companion object {
+        /** An unknown tab (the iPad's "studio") reads as Kaynaklar. */
+        fun fromRaw(raw: String?): CourseTab = entries.firstOrNull { it.raw == raw } ?: SOURCES
     }
 }
 
@@ -82,13 +117,34 @@ object LibraryRules {
             )
         }
 
-    /** What a search finds: every note whose title holds the query, whatever its section, the last
-     *  changed first. */
-    fun searched(notes: List<NotebookMeta>, query: String, locale: Locale = Locale.getDefault()): List<NotebookMeta> {
+    /** What a search finds: every note whose title holds the query, or whose course's name does
+     *  (SearchPane on iPad), whatever its section, the last changed first. */
+    fun searched(
+        notes: List<NotebookMeta>,
+        query: String,
+        locale: Locale = Locale.getDefault(),
+        sections: List<NoteSection> = emptyList(),
+    ): List<NotebookMeta> {
         val q = query.trim().lowercase(locale)
         if (q.isEmpty()) return emptyList()
-        return sorted(notes.filter { q in it.title.lowercase(locale) }, LibrarySort.MODIFIED)
+        val courses = searchedCourses(sections, query, locale).mapTo(HashSet()) { it.id }
+        return sorted(notes.filter { q in it.title.lowercase(locale) || it.sectionId in courses }, LibrarySort.MODIFIED)
     }
+
+    /** The courses a search finds: those whose name holds the query, in the sidebar's order. */
+    fun searchedCourses(sections: List<NoteSection>, query: String, locale: Locale = Locale.getDefault()): List<NoteSection> {
+        val q = query.trim().lowercase(locale)
+        if (q.isEmpty()) return emptyList()
+        return sections.filter { q in it.name.lowercase(locale) }
+    }
+
+    /** A course's notes, the last changed first (the order the iPad's store keeps them in). */
+    fun courseNotes(notes: List<NotebookMeta>, course: String): List<NotebookMeta> =
+        notes.filter { it.sectionId == course }.sortedByDescending { it.modified }
+
+    /** How many notes each course holds, by its id (the sidebar's counts). */
+    fun courseCounts(notes: List<NotebookMeta>): Map<String, Int> =
+        notes.mapNotNull { it.sectionId }.groupingBy { it }.eachCount()
 
     fun sorted(notes: List<NotebookMeta>, sort: LibrarySort, locale: Locale = Locale.getDefault()): List<NotebookMeta> = when (sort) {
         LibrarySort.MODIFIED -> notes.sortedByDescending { it.modified }

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kurslar, iPad'deki gibi (LibraryView, LibraryPanes, Sections.swift) -->
+    <string name="courses_title">Kurslar</string>
+    <string name="course_new">Yeni ders</string>
+    <string name="course_new_more">Yeni ders…</string>
+    <string name="course_first">İlk dersini ekle</string>
+    <string name="course_row_edit">Düzenle</string>
+    <string name="course_edit">Dersi düzenle</string>
+    <string name="course_delete_keep">Dersi sil (içindekiler kalır)</string>
+    <string name="course_delete">Dersi sil</string>
+    <string name="course_delete_title">Ders silinsin mi?</string>
+    <!-- iPad'inki "defterler, PDF'ler ve özetler" der: Android'de Stüdyo özeti yok. -->
+    <string name="course_delete_message">Yalnızca ders klasörü kaldırılır; içindeki defterler ve PDF\'ler kütüphanede kalır.</string>
+    <string name="course_move">Derse taşı</string>
+    <string name="course_remove">Dersten çıkar</string>
+    <string name="course_tab_label">Bölüm</string>
+    <string name="course_sources">Kaynaklar</string>
+    <plurals name="course_source_count">
+        <item quantity="other">%d kaynak</item>
+    </plurals>
+    <plurals name="course_notebook_count">
+        <item quantity="other">%d defter</item>
+    </plurals>
+    <string name="course_drop_title">Bu dersin PDF\'lerini buraya sürükle</string>
+    <!-- iPad'inki asistanı ve stüdyoyu da anar; ikisi de Android'de yok. -->
+    <string name="course_drop_detail">Ders notları, slaytlar, kitap bölümleri.</string>
+    <string name="course_no_sources">Henüz kaynak yok.</string>
+    <string name="course_no_notebooks">Bu derste henüz defter yok.</string>
+    <string name="search_courses">Dersler</string>
+
+    <!-- SectionEditor -->
+    <string name="section_new_title">Yeni bölüm</string>
+    <string name="section_edit_title">Bölümü düzenle</string>
+    <string name="section_name_hint">Bölüm adı (ör. Calculus, Anatomi)</string>
+    <string name="section_symbol">Simge</string>
+    <string name="section_create">Oluştur</string>
+    <!-- TalkBack'in simgelere (NoteSection.SYMBOLS sırasıyla) ve renklere dediği -->
+    <string-array name="section_symbol_names">
+        <item>Fonksiyon</item>
+        <item>Karekök</item>
+        <item>Atom</item>
+        <item>Deney şişesi</item>
+        <item>İlk yardım çantası</item>
+        <item>Kalp</item>
+        <item>Beyin</item>
+        <item>Dişliler</item>
+        <item>Şimşek</item>
+        <item>Sütunlar</item>
+        <item>Dünya</item>
+        <item>Grafik</item>
+        <item>Kitap</item>
+        <item>Ders kitabı</item>
+        <item>Nota</item>
+        <item>Palet</item>
+        <item>Dizüstü bilgisayar</item>
+        <item>Yaprak</item>
+    </string-array>
+    <string-array name="section_color_names">
+        <item>Mavi</item>
+        <item>Mor</item>
+        <item>Turkuaz</item>
+        <item>Yeşil</item>
+        <item>Turuncu</item>
+        <item>Kırmızı</item>
+        <item>Pembe</item>
+        <item>Gri</item>
+    </string-array>
+</resources>
