@@ -103,12 +103,16 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
   - Listeler ve Kurslar (bugünkü gibi); altta sabit blok: rule çizgisi, Stüdyo, Sesler, Ayarlar.
 - Tarihler (hafta kartının tarih satırı, notun altyazısındaki "11 saat önce") cihazın değil
   uygulamanın dilinde yazılır.
-- Notların tarafında karartma yok: notların örtüsü kalktı, Ebru'nun görsel örtüsü 0,20'den 0,10'a
-  indi (büyük başlık 3:1'i rahat geçer). Pro tema görselinde görselin üstüne doğrudan gelecek her
-  şey kendi levhasında durur, görsel aralarında canlı kalır. Levha: paper %92, 1 rule, gölge
-  0 2 12 siyah %12 (gece %30). Kart levhası (not kapağı ve altyazısı, Stüdyo özet kartı, boş
-  durumlar en çok 440 genişlik): köşe 14, iç boşluk 10; içindeki kapak ya da afiş köşe 10. Özet
-  kartının başlığı levhada iki satırlık yer tutar, bir sıradaki levhalar aynı boyda hizalanır. Yazı levhası (bölüm başlıkları, başlık
+- Notların tarafında karartma yok: notların örtüsü kalktı. Koyu görsellerin örtüsü yalnızca büyük
+  başlığın gerektirdiği kadar: Ebru 0,20'den, Manyetik sıvı 0,15'ten, Işık izi 0,12'den 0,10'a indi
+  (başlık alanının %95'i kenar çubuğu açıkken en az 4,7:1, 17:1 ve 10:1; büyük yazıya 3:1 yeter).
+  Erimiş altın 0,18'de, Buzlu cam 0,28'de kalır: altın, turuncu ve pembe başlığı bu örtülerde bile
+  yer yer 3:1'in altına düşürür, daha azı daha da düşürür. Açık görsellerin örtüsü değişmedi. Pro
+  tema görselinde görselin üstüne doğrudan gelecek her şey kendi levhasında durur, görsel
+  aralarında canlı kalır. Levha: paper %92, 1 rule, gölge 0 2 12 siyah %12 (gece %30). Kart
+  levhası (not kapağı ve altyazısı, Stüdyo özet kartı, boş durumlar en çok 440 genişlik): köşe 14,
+  iç boşluk 10; içindeki kapak ya da afiş köşe 10. Özet kartının başlığı levhada iki satırlık yer
+  tutar, bir sıradaki levhalar aynı boyda hizalanır. Yazı levhası (bölüm başlıkları, başlık
   altındaki gri satır, dersin sayı satırı, boş satırlar): köşe 10, iç boşluk 12 × 6. Bırakma
   kutusu kesikli kenarını korur, levhanın kâğıdı ve gölgesi üstünde durur. Başlık, iki düğme,
   seçici ve sıralama görselin üstünde kalır. Siyah beyazda levha yok.

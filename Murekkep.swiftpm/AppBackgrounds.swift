@@ -115,20 +115,21 @@ enum AppBackground: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// How much paper (or, on a dark picture, night) lies over the picture so the library reads on
-    /// it: with these, light text (#F2F3F5) or ink (#141414) reaches 4.5:1 over the darkest or
-    /// brightest part of the sidebar and the title area. The bright reeded glass takes the most, so
-    /// light text stays clear on its orange and pink. Marbling keeps only what its big title needs
-    /// (the sidebar has its own surface, the notes their plates): at 0.10 the title keeps 12.8:1
-    /// over 95 % of its area in landscape and 4.7:1 in portrait, past the 3:1 of large text.
+    /// How much paper (or, on a dark picture, night) lies over the picture. The sidebar has its own
+    /// surface and the notes their plates, so only the pane's big title stands on the picture (light
+    /// text #F2F3F5 on a dark one, ink #141414 on a light one; large text needs 3:1), and a dark
+    /// picture keeps only the wash its title needs. Measured over the title's area as the library
+    /// draws it (scaledToFill, the sidebar shown, 12.9- and 11-inch iPads both ways), 95 % of it
+    /// keeps at least 4.7:1 on Marbling, 17:1 on Ferro and 10:1 on Light paint at 0.10. Molten gold
+    /// and the reeded glass keep 0.18 and 0.28: their gold, orange and pink leave part of the title
+    /// under 3:1 even so, and less would only lower it. The light pictures' washes are as before.
     var wash: Double {
         switch self {
         case .reeded: return 0.28
         case .molten: return 0.18
         case .silk: return 0.16
-        case .ferro: return 0.15
-        case .lightPaint, .lavi: return 0.12
-        case .ebru, .glass, .paperWave, .holo, .pearl, .hokka, .lapis, .cini, .varak: return 0.10
+        case .lavi: return 0.12
+        case .ebru, .ferro, .lightPaint, .glass, .paperWave, .holo, .pearl, .hokka, .lapis, .cini, .varak: return 0.10
         case .orbs: return 0.08
         default: return 0
         }
