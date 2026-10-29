@@ -15,11 +15,15 @@ There is no Android SDK on the development PC; builds run on Codemagic:
    `app-release.aab` (unsigned bundle for Google Play) and `android-build.log`.
 
 Sign the bundle for Play with the upload key (kept outside git in `%USERPROFILE%\.murekkep-android\`,
-password in `upload-password.txt` there):
+password in `upload-password.txt` there). SHA-256, as the Android build tools sign; JDK 21's
+jarsigner would pick SHA-384 for this 4096-bit key:
 
 ```
-jarsigner -keystore %USERPROFILE%\.murekkep-android\upload.jks app-release.aab upload
+jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore %USERPROFILE%\.murekkep-android\upload.jks -signedjar app-release-signed.aab app-release.aab upload
 ```
+
+The first signed bundle (build 220f361) is in `Downloads\Murekkep-android\2026-10-29\` on the
+development PC, next to the debug APK.
 
 ## Android pens
 
