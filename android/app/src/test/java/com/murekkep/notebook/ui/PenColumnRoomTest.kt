@@ -13,9 +13,9 @@ class PenColumnRoomTest {
         val state = EditorState()
         // The four pens used first and the eraser: 5 slots of 30, 4 gaps of 4, 4 + 4 at the ends.
         val tray = 5 * 30 + 4 * 4 + 8
-        // Grip, undo, redo, every pen, colour, lasso, shapes, Sayfa ekle, three dividers, the fold,
-        // the bar's padding and its gaps, then the gap to the tray.
-        val rest = 10 * 2 + 16 + 44 * 7 + 13 * 3 + 26 + 2 * 11 + 2
+        // Grip, undo, redo, every pen, colour, lasso, shapes, Araçlar, Sayfa ekle, three dividers, the
+        // fold, the bar's padding and its gaps, then the gap to the tray.
+        val rest = 10 * 2 + 16 + 44 * 8 + 13 * 3 + 26 + 2 * 12 + 2
         assertEquals((rest + tray).dp, penColumnLength(state))
         // A favourite adds a slot and the hairline between the favourites and the pens used last.
         state.toggleFavorite(Brush.LAVA)

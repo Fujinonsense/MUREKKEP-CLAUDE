@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Araçlar: kalem çubuğunun araç menüsü (iPad'in toolsMenu'sü) -->
+    <string name="tools_menu">Araçlar</string>
+    <string name="tools_instruments">Cetvel, gönye ve iletki</string>
+    <string name="instrument_ruler">Cetvel</string>
+    <string name="instrument_set_square_45">Gönye 45°</string>
+    <string name="instrument_set_square_3060">Gönye 30°/60°</string>
+    <string name="instrument_protractor">İletki (açıölçer)</string>
+    <string name="instrument_set_angle">Açıyı ayarla</string>
+    <string name="instrument_remove">Kaldır</string>
+    <string name="tools_compass">Pergel</string>
+</resources>

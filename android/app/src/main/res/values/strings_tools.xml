@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Araçlar: the pen bar's tools menu (the iPad's toolsMenu) -->
+    <string name="tools_menu">Tools</string>
+    <string name="tools_instruments">Ruler, set square and protractor</string>
+    <string name="instrument_ruler">Ruler</string>
+    <string name="instrument_set_square_45">Set square 45°</string>
+    <string name="instrument_set_square_3060">Set square 30°/60°</string>
+    <string name="instrument_protractor">Protractor</string>
+    <string name="instrument_set_angle">Set angle</string>
+    <string name="instrument_remove">Remove</string>
+    <string name="tools_compass">Compass</string>
+</resources>
