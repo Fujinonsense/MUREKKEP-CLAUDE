@@ -9,6 +9,8 @@
 # 2026-10-29: scrolling a page of moving 3D ink, build 235's display loop against the new one; frames a
 # second and CPU/GPU ms per frame in scroll3d*-en.json ("frames") (run 6ae27d49).
 # Then six full pages scrolled through: build 235's page meshes (made on the main thread, shadows over
-# every stroke) against the new ones (made off it, shadows over the raised ink only).
-scrolldenseold-en
-scrolldense-en
+# every stroke) against the new ones (made off it, shadows over the raised ink only) (run 6ae2866c).
+# Then a full page erased (whole strokes, then the partial eraser): the page rebuilt for each change
+# against the kept meshes; both should end on the same picture.
+erasedenseold-en
+erasedense-en

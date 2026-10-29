@@ -1029,6 +1029,52 @@ def dense_check(lang, old):
     return s
 
 
+def eraser_path(x0, x1, y0, rows, gap, speed=380.0, step=3.0):
+    """One eraser drag over a page: across and back `rows` times, at a hand's pace (points a second)."""
+    corners = []
+    for k in range(rows):
+        y = y0 + k * gap
+        corners += [(x0, y), (x1, y)] if k % 2 == 0 else [(x1, y), (x0, y)]
+    samples, t, prev = [], 0.0, None
+    for (ax, ay), (bx, by) in zip(corners, corners[1:]):
+        n = max(1, int(math.hypot(bx - ax, by - ay) / step))
+        for i in range(n):
+            x, y = ax + (bx - ax) * i / n, ay + (by - ay) * i / n
+            if prev:
+                t += math.hypot(x - prev[0], y - prev[1]) / speed
+            samples.append([round(t, 4), round(x, 2), round(y, 2), 0.5])
+            prev = (x, y)
+    return samples
+
+
+def erase_check(lang, old):
+    """Not an ad: a full page (1200 scribbled pen strokes and 150 of gold, inks that do not move) erased
+    by whole strokes, then cut by the partial eraser, each drag measured. `old` asks for the earlier
+    builds' way: the whole page rebuilt for each change. Both runs should end on the same picture."""
+    s = Script()
+    if old:
+        s.launch = ["-DemoOldInkMesh", "YES"]
+    s.add("note", title="Erase", paper="lined", seconds=1.2)
+    s.add("fill", page=0, brush="pen", color=[0.12, 0.13, 0.18], width=2.2, count=1200, index=1)
+    s.add("fill", page=0, brush="gold", color=[0.93, 0.72, 0.25], width=5, count=150, index=2)
+    s.add("wait", seconds=2.0)
+    s.add("eraser", name="stroke", width=18)
+    s.add("write", page=0, strokes=[eraser_path(70, 520, 130, 6, 34)], measure=True)
+    s.add("wait", seconds=0.8)
+    s.add("eraser", name="partial", width=18)
+    s.add("write", page=0, strokes=[eraser_path(70, 520, 470, 6, 34)], measure=True)
+    s.add("wait", seconds=1.0)
+    return s
+
+
+def scene_erasedense(lang):
+    return erase_check(lang, old=False)
+
+
+def scene_erasedenseold(lang):
+    return erase_check(lang, old=True)
+
+
 def scene_scrolldense(lang):
     return dense_check(lang, old=False)
 
@@ -1043,7 +1089,8 @@ SCENE_MAKERS = {"notes": scene_notes, "textpen": scene_textpen, "inks": scene_in
                 "shapes": scene_shapes, "photo": scene_photo, "search": scene_search, "dots": scene_dots,
                 "tilt": scene_tilt, "xox": scene_xox, "sudoku": scene_sudoku,
                 "scroll3d": scene_scroll3d, "scroll3dold": scene_scroll3dold,
-                "scrolldense": scene_scrolldense, "scrolldenseold": scene_scrolldenseold}
+                "scrolldense": scene_scrolldense, "scrolldenseold": scene_scrolldenseold,
+                "erasedense": scene_erasedense, "erasedenseold": scene_erasedenseold}
 
 
 # MARK: - Previews

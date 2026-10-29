@@ -27,9 +27,10 @@ final class DemoStage {
     /// The check of scrolling (scene scroll3dold): build 235's display loop, which kept a page with
     /// moving ink at the ink's 30 fps while it scrolled.
     static var oldScrollLoop: Bool { UserDefaults.standard.bool(forKey: "DemoOldScrollLoop") }
-    /// The check of dense pages (scene scrolldenseold): build 235's page meshes, made on the main
-    /// thread as a page came near the screen, and shadow passes over every stroke. Read by the
-    /// renderer, which is not tied to the main actor.
+    /// The check of dense pages (scenes scrolldenseold, erasedenseold): build 235's page meshes, made
+    /// on the main thread as a page came near the screen, shadow passes over every stroke, and the
+    /// whole page rebuilt for each stroke the eraser takes. Read by the renderer, which is not tied
+    /// to the main actor.
     nonisolated static var oldInkMesh: Bool { UserDefaults.standard.bool(forKey: "DemoOldInkMesh") }
 
     /// The games on screen, registered as they appear.
@@ -87,6 +88,8 @@ private struct DemoStep: Decodable {
     var by: Double?
     /// How many scribbled strokes a fill puts on the page.
     var count: Int?
+    /// The step's frames are measured, as a scroll's are (the check of erasing).
+    var measure: Bool?
     /// How much slower than a hand the strokes are played (the edit speeds them up as much); the
     /// samples' own timestamps stay a hand's.
     var pace: Double?
@@ -143,7 +146,16 @@ private final class DemoPlayer {
         case "textpen":
             pickPen(step, textPen: true)
         case "write":
+            if step.measure == true { DemoFrames.shared.begin() }
             await write(step)
+            if step.measure == true { frameReports.append(DemoFrames.shared.end()) }
+        case "eraser":
+            // The eraser in a mode ("stroke" or "partial") and size; "write" then drags it.
+            if let editor = canvas?.model {
+                if let mode = EraserMode(rawValue: step.name ?? "") { editor.eraserMode = mode }
+                if let size = step.width { editor.eraserSize = size }
+                editor.tool = .eraser
+            }
         case "wait":
             await pause(step.seconds ?? 1)
         case "games":

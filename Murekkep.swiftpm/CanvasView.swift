@@ -2608,6 +2608,17 @@ extension CanvasView {
         switch gestureTool {
         case .brush, .textPen:
             break
+        case .eraser:
+            // As touchBegan's eraser does (the check of erasing a full page).
+            let o = pageOrigin(page)
+            let p = CGPoint(x: o.x + sample.location.x, y: o.y + sample.location.y)
+            eraserPage = page
+            lastEraserPoint = p
+            model.beginErase(page: page)
+            erase(from: p, to: p)
+            refreshLoop()
+            setNeedsRender()
+            return
         default:
             return
         }
@@ -2628,6 +2639,15 @@ extension CanvasView {
     }
 
     func demoPenMoved(_ samples: [InputSample]) {
+        if let page = eraserPage {
+            let o = pageOrigin(page)
+            for s in samples {
+                let p = CGPoint(x: o.x + s.location.x, y: o.y + s.location.y)
+                erase(from: lastEraserPoint ?? p, to: p)
+                lastEraserPoint = p
+            }
+            return
+        }
         guard var b = builder, var active = activeStroke else { return }
         for s in samples {
             b.add(s)
@@ -2643,6 +2663,11 @@ extension CanvasView {
 
     func demoPenUp(_ samples: [InputSample]) {
         cancelHold()
+        if eraserPage != nil {
+            demoPenMoved(samples)
+            finishErasing()
+            return
+        }
         guard var b = builder, let active = activeStroke else { return }
         for s in samples {
             b.add(s)
