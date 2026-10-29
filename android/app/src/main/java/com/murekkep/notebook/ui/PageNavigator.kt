@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -182,8 +184,12 @@ private val OutlineIndent = 20.dp
 @Composable
 internal fun PageNavigator(state: EditorState, maxWidth: Dp, maxHeight: Dp, onDismiss: () -> Unit) {
     val density = LocalDensity.current
-    val provider = remember(density) {
-        with(density) { AboveAnchor(NavigatorShadowPad.roundToPx(), PopoverGap.roundToPx(), PopoverMargin.roundToPx()) }
+    // What stands at the window's sides: a navigation bar in landscape, a cutout.
+    val direction = LocalLayoutDirection.current
+    val leftInset = WindowInsets.safeDrawing.getLeft(density, direction)
+    val rightInset = WindowInsets.safeDrawing.getRight(density, direction)
+    val provider = remember(density, leftInset, rightInset) {
+        with(density) { AboveAnchor(NavigatorShadowPad.roundToPx(), PopoverGap.roundToPx(), PopoverMargin.roundToPx(), leftInset, rightInset) }
     }
     // Not clipped to the screen: the shadow's margin may run past its edge while the card stays inside.
     Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
@@ -563,12 +569,21 @@ private fun View.bookmarkTick() {
 }
 
 /** Puts the navigator [gap] above its anchor, centred on it and kept inside the window by [margin]
- *  (the iPad's popover, its arrow on the badge); [pad] is its shadow's margin. */
-private class AboveAnchor(private val pad: Int, private val gap: Int, private val margin: Int) : PopupPositionProvider {
+ *  (the iPad's popover, its arrow on the badge); [pad] is its shadow's margin. The popup's window
+ *  runs under the system bars (as ZenMenu found of the navigation bar below a menu), so the card
+ *  also stays clear of [leftInset] and [rightInset], a navigation bar or a cutout at a side. */
+internal class AboveAnchor(
+    private val pad: Int,
+    private val gap: Int,
+    private val margin: Int,
+    private val leftInset: Int,
+    private val rightInset: Int,
+) : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         val w = popupContentSize.width - 2 * pad
         val h = popupContentSize.height - 2 * pad
-        val x = (anchorBounds.center.x - w / 2).coerceIn(margin, max(margin, windowSize.width - w - margin))
+        val left = leftInset + margin
+        val x = (anchorBounds.center.x - w / 2).coerceIn(left, max(left, windowSize.width - rightInset - w - margin))
         val y = (anchorBounds.top - gap - h).coerceIn(margin, max(margin, windowSize.height - h - margin))
         return IntOffset(x - pad, y - pad)
     }
