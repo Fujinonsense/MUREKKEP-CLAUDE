@@ -104,7 +104,6 @@ import com.murekkep.notebook.canvas.Clearance
 import com.murekkep.notebook.canvas.HoverRing
 import com.murekkep.notebook.canvas.InkCanvasView
 import com.murekkep.notebook.data.LoadProblem
-import com.murekkep.notebook.ui.games.BreakCorner
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
@@ -284,7 +283,7 @@ fun EditorScreen(
                 PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset + badgeShift, bottom = bottomInset + 8.dp + bottomClearance))
                 SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter))
                 // The break corner (ui/games): its tile at the bottom left, its games' panel over the page above it.
-                BreakCorner(edge, bottomClearance, maxWidth, maxHeight)
+                com.murekkep.notebook.ui.games.BreakCorner(edge, bottomClearance, maxWidth, maxHeight)
             }
         }
         if (settingsOpen && settings != null) {
