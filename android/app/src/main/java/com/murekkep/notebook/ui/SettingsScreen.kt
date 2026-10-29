@@ -64,14 +64,15 @@ import com.murekkep.notebook.R
 // explains them. While Pro is locked (the Play build, until Play Billing) a Pro tile wears the Pro
 // badge and a tap on it says Pro is coming.
 
+/** Ayarlar; [onBack] closes the sheet ("Bitti", Back). */
 @Composable
-fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, onDone: () -> Unit) {
+fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, onBack: () -> Unit) {
     var proSoon by remember { mutableStateOf(false) }
     ZenSheet(
         title = stringResource(R.string.settings),
         ground = Zen.colors.paper3,
-        onDismiss = onDone,
-        trailing = { SheetButton(stringResource(R.string.done), bold = true, onClick = onDone) },
+        onDismiss = onBack,
+        trailing = { SheetButton(stringResource(R.string.done), bold = true, onClick = onBack) },
     ) {
         Column(
             Modifier

@@ -109,7 +109,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                 )
             }
             if (settingsOpen) {
-                SettingsScreen(theme = theme, onTheme = onTheme, onDone = { settingsOpen = false })
+                SettingsScreen(theme = theme, onTheme = onTheme, onBack = { settingsOpen = false })
             }
         }
         return
