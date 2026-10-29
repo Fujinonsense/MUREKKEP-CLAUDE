@@ -175,7 +175,7 @@ fun SelectionBar(state: EditorState, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SelectionAction(stringResource(R.string.delete), Icons.Outlined.Delete, if (z.dark) SystemRedDark else SystemRed) {
+        SelectionAction(stringResource(R.string.delete), Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
             state.deleteSelection()
         }
         SelectionAction(stringResource(R.string.duplicate), Icons.Outlined.LibraryAdd) { state.duplicateSelection() }
@@ -184,10 +184,6 @@ fun SelectionBar(state: EditorState, modifier: Modifier = Modifier) {
         SelectionAction(stringResource(R.string.done), Icons.Filled.Check) { state.clearSelection() }
     }
 }
-
-/** The system's red by day and at night: the iPad's destructive button. */
-private val SystemRed = Color(0xFFFF3B30)
-private val SystemRedDark = Color(0xFFFF453A)
 
 /** An action of the selection bar: an 18 dp icon over its 11 sp name, in ink (delete in red). */
 @Composable

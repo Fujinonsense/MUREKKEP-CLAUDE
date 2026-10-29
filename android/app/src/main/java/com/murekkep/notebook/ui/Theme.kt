@@ -147,6 +147,9 @@ private fun materialScheme(z: ZenColors): ColorScheme {
         outline = z.rule,
         outlineVariant = z.rule,
         scrim = Color.Black,
+        // What deletes (Sil) is the system's red, as the iPad's destructive buttons, by day and at night.
+        error = if (z.dark) Color(0xFFFF453A) else Color(0xFFFF3B30),
+        onError = Color.White,
     )
 }
 
