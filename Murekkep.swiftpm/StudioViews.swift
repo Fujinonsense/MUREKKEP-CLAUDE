@@ -672,10 +672,12 @@ struct OverviewCard: View {
                 .padding(8)
             }
             .shadow(color: Theme.shadow.opacity(0.14), radius: 10, y: 5)
+            // On a picture the title keeps room for its two lines, so the plates of one row are
+            // one height and line up (the grid centres its cells).
             Text(overview.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: onPicture)
                 .multilineTextAlignment(.leading)
             Text("\(overview.options.format.title(for: overview.kind)) · \(overview.created.formatted(date: .abbreviated, time: .omitted))")
                 .font(.caption)

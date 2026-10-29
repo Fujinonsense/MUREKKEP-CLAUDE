@@ -107,7 +107,8 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
   indi (büyük başlık 3:1'i rahat geçer). Pro tema görselinde görselin üstüne doğrudan gelecek her
   şey kendi levhasında durur, görsel aralarında canlı kalır. Levha: paper %92, 1 rule, gölge
   0 2 12 siyah %12 (gece %30). Kart levhası (not kapağı ve altyazısı, Stüdyo özet kartı, boş
-  durumlar en çok 440 genişlik): köşe 14, iç boşluk 10. Yazı levhası (bölüm başlıkları, başlık
+  durumlar en çok 440 genişlik): köşe 14, iç boşluk 10; içindeki kapak ya da afiş köşe 10. Özet
+  kartının başlığı levhada iki satırlık yer tutar, bir sıradaki levhalar aynı boyda hizalanır. Yazı levhası (bölüm başlıkları, başlık
   altındaki gri satır, dersin sayı satırı, boş satırlar): köşe 10, iç boşluk 12 × 6. Bırakma
   kutusu kesikli kenarını korur, levhanın kâğıdı ve gölgesi üstünde durur. Başlık, iki düğme,
   seçici ve sıralama görselin üstünde kalır. Siyah beyazda levha yok.
