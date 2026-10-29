@@ -1,5 +1,6 @@
 package com.murekkep.notebook
 
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -36,10 +37,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val store = NotebookStore.get(this)
+        // The emulator check (DemoInk): debuggable builds only.
+        val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val demo = debuggable && savedInstanceState == null && intent?.getStringExtra(DemoInk.EXTRA) != null
         setContent {
             MurekkepTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MurekkepApp(store)
+                    MurekkepApp(store, demo)
                 }
             }
         }
@@ -48,9 +52,19 @@ class MainActivity : ComponentActivity() {
 
 /** The library, and the editor over it while a notebook is open: plain state, no navigation library. */
 @Composable
-private fun MurekkepApp(store: NotebookStore) {
+private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var editor by remember { mutableStateOf<EditorState?>(null) }
+    if (demo) {
+        LaunchedEffect(Unit) {
+            if (!store.loaded) store.refresh()
+            val meta = store.create("Demo")
+            val state = store.open(meta)
+            DemoInk.fill(state)
+            editor = state
+            openId = meta.id
+        }
+    }
     val id = openId
     if (id == null) {
         LibraryScreen(store = store, onOpen = { openId = it.id })
@@ -65,6 +79,8 @@ private fun MurekkepApp(store: NotebookStore) {
     BackHandler(onBack = close)
 
     LaunchedEffect(id) {
+        // Already open (the demo hands its notebook over open).
+        if (editor?.notebookId == id) return@LaunchedEffect
         if (!store.loaded) store.refresh()
         val meta = store.notebook(id)
         if (meta == null) {

@@ -122,6 +122,18 @@ def build():
                 "artifacts": ["android/app/build/outputs/apk/debug/*.apk",
                               "android/app/build/outputs/bundle/release/*.aab", "android-build.log"],
             },
+            # The Android edition on the machine's emulator: the debug APK opens a page with a line of
+            # every pen (DemoInk), a stylus line is drawn over it with the input command, and the
+            # screenshots and the log come back. Started by hand on the android branch.
+            "android-check": {
+                "name": "Murekkep Android Emulator (ekran)",
+                "instance_type": "mac_mini_m2",
+                "max_build_duration": 30,
+                "environment": {"java": "17"},
+                "scripts": [script("Android Derle (debug)", ANDROID_DEBUG),
+                            script("Emulatorde Ac", ANDROID_EMULATOR)],
+                "artifacts": ["android-*.png", "android-*.txt", "android-*.log"],
+            },
         }
     }
 
@@ -175,6 +187,49 @@ if ! gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug bundleRelea
   exit 1
 fi
 grep -E "tests completed|BUILD SUCCESSFUL" ../android-build.log | tail -3
+"""
+
+
+ANDROID_DEBUG = ANDROID_BUILD.replace("testDebugUnitTest assembleDebug bundleRelease", "assembleDebug")
+
+ANDROID_EMULATOR = """\
+SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+export PATH="$SDK/emulator:$SDK/platform-tools:$PATH"
+emulator -list-avds | tee android-avds.txt
+AVD=$(head -1 android-avds.txt)
+if [ -z "$AVD" ]; then
+  echo "::error::no Android emulator image on this machine"
+  exit 1
+fi
+nohup emulator -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect \\
+  > android-emulator.log 2>&1 &
+BOOTED=no
+for i in $(seq 1 150); do
+  if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; then BOOTED=yes; break; fi
+  sleep 2
+done
+if [ "$BOOTED" != yes ]; then
+  tail -40 android-emulator.log
+  echo "::error::the emulator did not boot"
+  exit 1
+fi
+adb shell getprop ro.build.version.sdk
+SIZE=$(adb shell wm size | tail -1 | sed 's/.*: //' | tr -d '\\r')
+echo "screen $SIZE"
+W=${SIZE%x*}
+H=${SIZE#*x}
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb logcat -c
+adb shell am start -n com.murekkep.notebook/.MainActivity --es murekkep.demo pens
+sleep 15
+adb exec-out screencap -p > android-demo.png
+# A pen line under the demo rows, from the input command's stylus source (as an S Pen sends it).
+Y=$((H * 7 / 10))
+adb shell input stylus swipe $((W / 5)) $Y $((W * 4 / 5)) $((Y + 40)) 900 || adb shell input swipe $((W / 5)) $Y $((W * 4 / 5)) $((Y + 40)) 900
+sleep 4
+adb exec-out screencap -p > android-stylus.png
+adb logcat -d -v time > android-logcat.txt
+grep -E "MurekkepInk|AndroidRuntime|FATAL|murekkep" android-logcat.txt | head -80 || true
 """
 
 
