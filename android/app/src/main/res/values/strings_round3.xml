@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Favourites in the library (the iPad's Favoriler) -->
+    <string name="library_favorites">Favorites</string>
+    <string name="empty_favorites_title">No favorites</string>
+    <string name="empty_favorites_text">Touch and hold a note and choose “Add to favorites”.</string>
+    <!-- TalkBack's word for the star after a favourite's title -->
+    <string name="favorite">Favorite</string>
+</resources>

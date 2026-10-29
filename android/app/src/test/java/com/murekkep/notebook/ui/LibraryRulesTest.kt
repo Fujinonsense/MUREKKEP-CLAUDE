@@ -49,6 +49,18 @@ class LibraryRulesTest {
     }
 
     @Test
+    fun favoritesAreTheStarredNotesInTheOrderPicked() {
+        val notes = listOf(
+            note("Türev", modified = 5).copy(starred = true), note("Hücre", modified = 3),
+            note("Kitap", kind = NoteKind.PDF, modified = 4).copy(starred = true),
+        )
+        // Notebooks and PDFs alike, whatever the filter of Tüm notlar says.
+        assertEquals(listOf("Türev", "Kitap"), LibraryRules.shown(notes, LibrarySection.FAVORITES, LibraryFilter.NOTEBOOKS, LibrarySort.MODIFIED).map { it.title })
+        assertEquals(listOf("Kitap", "Türev"), LibraryRules.shown(notes, LibrarySection.FAVORITES, LibraryFilter.ALL, LibrarySort.TITLE).map { it.title })
+        assertEquals(LibrarySection.FAVORITES, LibrarySection.fromRaw("favorites"))
+    }
+
+    @Test
     fun recentIsTheFortyLastChanged() {
         val notes = (1..50).map { note("n$it", modified = it.toLong()) }
         // Neither the filter nor the order touches it.

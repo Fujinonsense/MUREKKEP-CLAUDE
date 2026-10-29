@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +47,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -62,6 +66,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
@@ -73,6 +78,7 @@ import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,6 +122,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
@@ -129,13 +136,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -148,6 +159,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.murekkep.notebook.R
@@ -163,23 +175,35 @@ import java.io.File
 import java.text.DateFormat
 import java.time.ZoneId
 import java.util.Date
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 
 // The library, the spec's home (LibraryView and LibraryPanes on iPad): a sidebar on paper-2 (the
 // "Mürekkep" wordmark with the button that hides the sidebar, search, Tüm notlar, Son açılanlar,
-// Defterler, PDF'ler with their counts, Ayarlar pinned under them) and the notes pane, which
-// scrolls as one: the section's title with "PDF içe aktar" and "Yeni not", Hepsi / Defterler /
+// Favoriler, Defterler, PDF'ler with their counts, Ayarlar pinned under them) and the notes pane,
+// which scrolls as one: the section's title with "PDF içe aktar" and "Yeni not", Hepsi / Defterler /
 // PDF'ler on Tüm notlar, the order, the PDFs' drop zone, and the notes as the covers of their first
 // pages with the title and "3 sayfa, dün" under them. A search shows its results over every note.
-// A long press on a note opens its menu (rename, delete; deleting asks first). PDFs and photos can
-// be dropped in from other apps. Under 600 dp the sidebar folds into a drawer. The section, the
-// filter and the order come back after a relaunch.
+// A long press on a note opens its menu (favourite, rename, delete; deleting asks first). PDFs and
+// photos can be dropped in from other apps. Under 600 dp the sidebar folds into a drawer. The
+// section, the filter and the order come back after a relaunch.
+//
+// The pane's list stands in BoxWithConstraints (its width picks the covers' columns), which composes
+// its content apart from the pane: that content takes everything from observed state
+// ([PaneContent]). It once took the pane's parameters straight, and a row picked in the sidebar moved
+// only the sidebar's highlight until something inside the pane redrew it (LibraryScreenTest).
 
 /** The sidebar's width, the mockup's 288 points. */
 private val SidebarWidth = 288.dp
 
 /** Under this width the sidebar is a drawer. */
 private val WideLayout = 600.dp
+
+/** Under this window width (a phone) the pane keeps 16 dp at its sides, where the iPad's 40 would
+ *  leave its header no room; every width an iPad has keeps the iPad's 40. */
+private val PhoneWidth = 480.dp
 
 /** The covers' columns: 190 to 260 dp wide, 28 apart (NoteGrid on iPad). */
 private const val CARD_MIN = 190f
@@ -226,74 +250,90 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
     val shown = remember(notes, section, filter, sort, query) {
         if (query.isNotBlank()) LibraryRules.searched(notes, query) else LibraryRules.shown(notes, section, filter, sort)
     }
+    // What the sidebar and the pane ask for, the same in both layouts.
+    val pickSection: (LibrarySection) -> Unit = {
+        section = it
+        prefs.section = it
+        query = ""
+    }
+    val pickFilter: (LibraryFilter) -> Unit = {
+        filter = it
+        prefs.filter = it
+    }
+    val pickSort: (LibrarySort) -> Unit = {
+        sort = it
+        prefs.sort = it
+    }
+    val actions = remember(onOpen, store) {
+        NoteActions(
+            open = onOpen,
+            rename = { renaming = it },
+            delete = { deleting = it },
+            star = { store.toggleStarred(it.id) },
+        )
+    }
+    val onNew = { choosingTemplate = true }
+    val onImport = { askingSource = true }
+    val onDrop: (List<Uri>, () -> Unit) -> Unit = { uris, release -> importer.importDropped(uris, release) }
 
     val appTheme = LocalAppTheme.current.shown
     val picture = rememberBackdropPicture(appTheme.picture)
+    // Wide or narrow by the window's width, which a turn, a split screen and a display-size change
+    // all change (BoxWithConstraints missed a display-size change: its pixels stay the same).
+    val configuration = LocalConfiguration.current
+    val wide = configuration.screenWidthDp.dp >= WideLayout
+    val phone = configuration.screenWidthDp.dp < PhoneWidth
+    // The library's own size, for the blurred picture behind the sidebar: the window's until it is laid out.
+    val measured = remember { MeasuredSize() }
+    val density = LocalDensity.current
+    val full = {
+        measured.size.takeIf { it != IntSize.Zero }?.let { with(density) { DpSize(it.width.toDp(), it.height.toDp()) } }
+            ?: DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
+    }
     // The sidebar and the notes in the picture's look; "Yeni defter" and the dialogs below keep the system's.
     LibraryLook {
         val z = Zen.colors
-        BoxWithConstraints(Modifier.fillMaxSize().background(z.paper)) {
-            val full = DpSize(maxWidth, maxHeight)
+        Box(Modifier.fillMaxSize().background(z.paper).onSizeChanged { measured.size = it }) {
             // A Pro theme's picture (or the ruled paper) lies behind the sidebar and the notes.
             Backdrop(appTheme, picture)
-            val sidebar: @Composable (inDrawer: Boolean, onPicked: () -> Unit, onHide: () -> Unit) -> Unit = { inDrawer, onPicked, onHide ->
-                Sidebar(
-                    notes = notes,
-                    section = section,
-                    query = query,
-                    onQuery = { query = it },
-                    onSection = {
-                        section = it
-                        prefs.section = it
-                        query = ""
-                        onPicked()
-                    },
-                    onSettings = onSettings,
-                    onHide = onHide,
-                    ground = { SidebarGround(picture, full, inDrawer) },
-                )
-            }
-            val main: @Composable (narrow: Boolean, onToggle: (() -> Unit)?) -> Unit = { narrow, onToggle ->
-                NotesArea(
-                    store = store,
-                    notes = shown,
-                    loaded = store.loaded,
-                    section = section,
-                    filter = filter,
-                    sort = sort,
-                    query = query.trim(),
-                    narrow = narrow,
-                    importing = importer.running > 0,
-                    onToggle = onToggle,
-                    onFilter = {
-                        filter = it
-                        prefs.filter = it
-                    },
-                    onSort = {
-                        sort = it
-                        prefs.sort = it
-                    },
-                    onNew = { choosingTemplate = true },
-                    onImport = { askingSource = true },
-                    onOpen = onOpen,
-                    onRename = { renaming = it },
-                    onDelete = { deleting = it },
-                    onDrop = { uris, release -> importer.importDropped(uris, release) },
-                )
-            }
-            if (maxWidth >= WideLayout) {
+            if (wide) {
                 Row(Modifier.fillMaxSize()) {
                     if (sidebarShown) {
-                        Box(Modifier.width(SidebarWidth).fillMaxHeight()) { sidebar(false, {}, { sidebarShown = false }) }
+                        Sidebar(
+                            notes = notes,
+                            section = section,
+                            query = query,
+                            onQuery = { query = it },
+                            onSection = pickSection,
+                            onSettings = onSettings,
+                            onHide = { sidebarShown = false },
+                            ground = { SidebarGround(picture, full(), inDrawer = false) },
+                            modifier = Modifier.width(SidebarWidth).fillMaxHeight(),
+                        )
                         Box(Modifier.width(1.dp).fillMaxHeight().background(z.rule))
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        main(false, if (sidebarShown) null else ({ sidebarShown = true }))
-                    }
+                    NotesArea(
+                        store = store,
+                        notes = shown,
+                        loaded = store.loaded,
+                        section = section,
+                        filter = filter,
+                        sort = sort,
+                        query = query.trim(),
+                        phone = phone,
+                        importing = importer.running > 0,
+                        onToggle = if (sidebarShown) null else ({ sidebarShown = true }),
+                        onFilter = pickFilter,
+                        onSort = pickSort,
+                        onNew = onNew,
+                        onImport = onImport,
+                        actions = actions,
+                        onDrop = onDrop,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
                 }
             } else {
                 val drawer = rememberDrawerState(DrawerValue.Closed)
-                val close: () -> Unit = { scope.launch { drawer.close() } }
                 ModalNavigationDrawer(
                     drawerState = drawer,
                     drawerContent = {
@@ -305,11 +345,40 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
                             windowInsets = WindowInsets(0),
                             modifier = Modifier.width(SidebarWidth),
                         ) {
-                            sidebar(true, close, close)
+                            Sidebar(
+                                notes = notes,
+                                section = section,
+                                query = query,
+                                onQuery = { query = it },
+                                onSection = {
+                                    pickSection(it)
+                                    scope.launch { drawer.close() }
+                                },
+                                onSettings = onSettings,
+                                onHide = { scope.launch { drawer.close() } },
+                                ground = { SidebarGround(picture, full(), inDrawer = true) },
+                            )
                         }
                     },
                 ) {
-                    main(true) { scope.launch { drawer.open() } }
+                    NotesArea(
+                        store = store,
+                        notes = shown,
+                        loaded = store.loaded,
+                        section = section,
+                        filter = filter,
+                        sort = sort,
+                        query = query.trim(),
+                        phone = phone,
+                        importing = importer.running > 0,
+                        onToggle = { scope.launch { drawer.open() } },
+                        onFilter = pickFilter,
+                        onSort = pickSort,
+                        onNew = onNew,
+                        onImport = onImport,
+                        actions = actions,
+                        onDrop = onDrop,
+                    )
                 }
             }
             importer.photoProgress?.let { progress ->
@@ -369,6 +438,19 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
             },
         )
     }
+}
+
+/** What a note's card does: a tap opens it; its menu stars it, renames it or deletes it. */
+private class NoteActions(
+    val open: (NotebookMeta) -> Unit,
+    val rename: (NotebookMeta) -> Unit,
+    val delete: (NotebookMeta) -> Unit,
+    val star: (NotebookMeta) -> Unit,
+)
+
+/** The library's size once it is laid out, read only by what needs it (the sidebar's blurred picture). */
+private class MeasuredSize {
+    var size by mutableStateOf(IntSize.Zero)
 }
 
 /** "Note" and the moment, as the iPad names a new notebook. */
@@ -468,10 +550,11 @@ private fun Sidebar(
     onSettings: () -> Unit,
     onHide: () -> Unit,
     ground: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val z = Zen.colors
     val (all, notebooks, pdfs) = LibraryRules.counts(notes)
-    Box(Modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize()) {
         ground()
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Start + WindowInsetsSides.Bottom))) {
             Column(
@@ -498,6 +581,7 @@ private fun Sidebar(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     NavRow(Icons.Outlined.GridView, stringResource(R.string.library_all_notes), all, section == LibrarySection.ALL) { onSection(LibrarySection.ALL) }
                     NavRow(Icons.Outlined.Schedule, stringResource(R.string.library_recent), null, section == LibrarySection.RECENT) { onSection(LibrarySection.RECENT) }
+                    NavRow(Icons.Outlined.StarOutline, stringResource(R.string.library_favorites), null, section == LibrarySection.FAVORITES) { onSection(LibrarySection.FAVORITES) }
                     NavRow(Icons.Outlined.Book, stringResource(R.string.library_notebooks), notebooks, section == LibrarySection.NOTEBOOKS) { onSection(LibrarySection.NOTEBOOKS) }
                     NavRow(Icons.Outlined.Description, stringResource(R.string.library_pdfs), pdfs, section == LibrarySection.PDFS) { onSection(LibrarySection.PDFS) }
                 }
@@ -530,6 +614,27 @@ private val SidebarGlyph: ImageVector by lazy {
         close()
         moveTo(9.5f, 5f)
         verticalLineTo(19f)
+    }.build()
+}
+
+/** The iPad's star.slash for "Favorilerden çıkar": a star's outline crossed out. */
+private val StarSlashGlyph: ImageVector by lazy {
+    ImageVector.Builder("StarSlash", 24.dp, 24.dp, 24f, 24f).path(
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 1.6f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        for (i in 0 until 10) {
+            val angle = (-90.0 + i * 36.0) * PI / 180.0
+            val r = if (i % 2 == 0) 9.2f else 3.9f
+            val x = 12f + r * cos(angle).toFloat()
+            val y = 12.8f + r * sin(angle).toFloat()
+            if (i == 0) moveTo(x, y) else lineTo(x, y)
+        }
+        close()
+        moveTo(3.5f, 3.5f)
+        lineTo(20.5f, 20.5f)
     }.build()
 }
 
@@ -624,7 +729,9 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
 /**
  * The notes pane (NotesPane on iPad), or a search's results over every note (SearchPane): one
  * scrolling column of the header, the filter and order, the drop zone, and the covers in rows of
- * the iPad's adaptive grid, start-aligned.
+ * the iPad's adaptive grid, start-aligned. The column runs under the status bar, as the iPad's
+ * scroll view does, and 40 dp from the pane's sides (16 on a [phone]). Over a Pro theme's picture
+ * the notes stand on a wash that scrolls with them ([notesWash]); the header keeps the picture.
  */
 @Composable
 private fun NotesArea(
@@ -635,20 +742,19 @@ private fun NotesArea(
     filter: LibraryFilter,
     sort: LibrarySort,
     query: String,
-    narrow: Boolean,
+    phone: Boolean,
     importing: Boolean,
     onToggle: (() -> Unit)?,
     onFilter: (LibraryFilter) -> Unit,
     onSort: (LibrarySort) -> Unit,
     onNew: () -> Unit,
     onImport: () -> Unit,
-    onOpen: (NotebookMeta) -> Unit,
-    onRename: (NotebookMeta) -> Unit,
-    onDelete: (NotebookMeta) -> Unit,
+    actions: NoteActions,
     onDrop: (List<Uri>, () -> Unit) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val searching = query.isNotEmpty()
-    val side = if (narrow) 16.dp else 40.dp
+    val side = if (phone) 16.dp else 40.dp
     var dropping by remember { mutableStateOf(false) }
     val activity = LocalActivity.current
     val dropper by rememberUpdatedState(onDrop)
@@ -679,46 +785,41 @@ private fun NotesArea(
             }
         }
     }
-    val bottom = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
+    val layoutDirection = LocalLayoutDirection.current
+    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    val top = safe.calculateTopPadding()
+    val bottom = safe.calculateBottomPadding()
+    // The start edge is the sidebar's, unless the sidebar is away.
+    val start = if (onToggle != null) safe.calculateStartPadding(layoutDirection) else 0.dp
+    val end = safe.calculateEndPadding(layoutDirection)
     // Each section, and the search, keeps its own place in the list.
     val list = key(section, searching) { rememberLazyListState() }
-    // The start edge is the sidebar's, unless the sidebar is away.
-    val edges = if (onToggle != null) WindowInsetsSides.Top + WindowInsetsSides.Horizontal else WindowInsetsSides.Top + WindowInsetsSides.End
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(edges))
-            .then(
-                if (searching) {
-                    Modifier
-                } else {
-                    Modifier.dragAndDropTarget(
-                        shouldStartDragAndDrop = { event -> event.mimeTypes().any { it == "application/pdf" || it.startsWith("image/") } },
-                        target = target,
-                    )
-                },
-            ),
-    ) {
-        val (columns, width) = LibraryRules.adaptiveColumns((maxWidth - side * 2).value, CARD_MIN, CARD_MAX, CARD_SPACING)
-        val cardWidth = (width - 0.5f).dp
-        val rows = remember(notes, columns) { notes.chunked(columns) }
-        LazyColumn(
-            state = list,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = side, end = side, top = if (narrow) 12.dp else 28.dp, bottom = bottom + 40.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
+    val ordered = !searching && section != LibrarySection.RECENT
+    // The pane's width picks the covers' columns, so the list stands in BoxWithConstraints, which
+    // composes its content apart from this function: that content never heard of new parameters
+    // from out here (a section picked in the sidebar left the old one on screen until something
+    // inside the pane redrew it, LibraryScreenTest). It reads everything from this state instead,
+    // which it observes as it observes any state.
+    val pane = rememberUpdatedState(
+        PaneContent(
+            list = list,
+            padding = PaddingValues(start = start + side, end = end + side, top = top + 28.dp, bottom = bottom + 40.dp),
+            // The notes start after the header and the order: the wash begins with them.
+            washFrom = if (ordered) 2 else 1,
+            wash = notesWashColor(LocalAppTheme.current.shown),
+            overlay = if (section != LibrarySection.PDFS) PaddingValues(start = start + 16.dp, end = end + 16.dp, top = top + 16.dp, bottom = bottom + 16.dp) else null,
+        ) { cardWidth, columns ->
             item(key = "header") {
                 if (searching) {
-                    PaneHeader("“$query”", pluralStringResource(R.plurals.search_results, notes.size, notes.size), narrow, onToggle) {}
+                    PaneHeader("“$query”", pluralStringResource(R.plurals.search_results, notes.size, notes.size), onToggle) {}
                 } else {
-                    PaneHeader(stringResource(section.titleRes), null, narrow, onToggle) {
+                    PaneHeader(stringResource(section.titleRes), null, onToggle) {
                         ZenButton(stringResource(if (importing) R.string.importing_pdf else R.string.import_pdf), filled = false, enabled = !importing, onClick = onImport)
                         ZenButton(stringResource(R.string.new_notebook), filled = true, onClick = onNew)
                     }
                 }
             }
-            if (!searching && section != LibrarySection.RECENT) {
+            if (ordered) {
                 item(key = "order") { OrderRow(section, filter, sort, onFilter, onSort) }
             }
             if (!searching && section == LibrarySection.PDFS) {
@@ -732,7 +833,7 @@ private fun NotesArea(
                             Text(stringResource(R.string.notes), style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), color = Zen.colors.ink)
                         }
                     }
-                    items(rows, key = { "row:" + it.first().id }) { row ->
+                    items(notes.chunked(columns), key = { "row:" + it.first().id }) { row ->
                         Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(CARD_SPACING.dp)) {
                             for (meta in row) {
                                 key(meta.id) {
@@ -740,9 +841,7 @@ private fun NotesArea(
                                         meta = meta,
                                         cover = store.thumbFile(meta.id),
                                         coverVersion = store.coverVersion,
-                                        onOpen = { onOpen(meta) },
-                                        onRename = { onRename(meta) },
-                                        onDelete = { onDelete(meta) },
+                                        actions = actions,
                                         modifier = Modifier.width(cardWidth),
                                     )
                                 }
@@ -751,27 +850,109 @@ private fun NotesArea(
                     }
                 }
             }
-        }
+        },
+    )
+    BoxWithConstraints(
+        modifier
+            .fillMaxSize()
+            .then(
+                if (searching) {
+                    Modifier
+                } else {
+                    Modifier.dragAndDropTarget(
+                        shouldStartDragAndDrop = { event -> event.mimeTypes().any { it == "application/pdf" || it.startsWith("image/") } },
+                        target = target,
+                    )
+                },
+            ),
+    ) {
+        val content = pane.value
+        // In dp at the density in force: a display-size change keeps the pixels, not the dp.
+        val width = with(LocalDensity.current) { constraints.maxWidth.toDp() }
+        val layoutDirection = LocalLayoutDirection.current
+        val room = width - content.padding.calculateStartPadding(layoutDirection) - content.padding.calculateEndPadding(layoutDirection)
+        val (columns, cell) = LibraryRules.adaptiveColumns(room.value, CARD_MIN, CARD_MAX, CARD_SPACING)
+        val cardWidth = (cell - 0.5f).dp
+        LazyColumn(
+            state = content.list,
+            modifier = Modifier.fillMaxSize().notesWash(content.wash, content.list, content.washFrom),
+            contentPadding = content.padding,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) { content.items(this, cardWidth, columns) }
         // A drag over any section but PDF'ler (whose drop zone lights up instead).
-        if (dropping && section != LibrarySection.PDFS) {
-            DropOverlay(Modifier.matchParentSize().padding(16.dp))
+        val overlay = content.overlay
+        if (dropping && overlay != null) {
+            DropOverlay(Modifier.matchParentSize().padding(overlay))
         }
     }
 }
+
+/**
+ * What the notes pane's list shows, handed into its BoxWithConstraints as state: the list's place,
+ * its padding (the insets and the pane's sides), where the wash under the notes begins and its
+ * colour, the drop overlay's padding (null where the drop zone lights up instead) and the items,
+ * given the covers' width and how many stand in a row.
+ */
+private class PaneContent(
+    val list: LazyListState,
+    val padding: PaddingValues,
+    val washFrom: Int,
+    val wash: Color?,
+    val overlay: PaddingValues?,
+    val items: LazyListScope.(cardWidth: Dp, columns: Int) -> Unit,
+)
+
+/** Where the wash under the notes begins: just above the first row, in the 24 dp gap over it. */
+private val WashLead = 12.dp
+
+/** How far the wash's top edge fades in. */
+private val WashFade = 40.dp
+
+/**
+ * The wash the notes stand on over a Pro theme's picture, so the captions read on any part of it:
+ * the warm paper at 88 % over a light picture, black at 65 % over a dark one. Black and white, and
+ * the ruled Defter theme, have no picture and no wash.
+ */
+private fun notesWashColor(theme: AppTheme): Color? = when {
+    theme.picture == null -> null
+    theme.darkLook == true -> Color.Black.copy(alpha = 0.65f)
+    else -> PaperWarm.copy(alpha = 0.88f)
+}
+
+/**
+ * Lays [color] behind the list's items from [firstWashed] on: the pane's full width, from just
+ * above that item (fading in over [WashFade]) to the bottom of the pane however few notes there
+ * are, scrolling with the items. Above it the header keeps the picture.
+ */
+private fun Modifier.notesWash(color: Color?, list: LazyListState, firstWashed: Int): Modifier =
+    if (color == null) this else drawBehind {
+        val info = list.layoutInfo
+        val first = info.visibleItemsInfo.firstOrNull { it.index >= firstWashed } ?: return@drawBehind
+        val fade = WashFade.toPx()
+        // An item's offset counts from the end of the list's top padding.
+        val top = if (first.index == firstWashed) first.offset - info.viewportStartOffset - WashLead.toPx() else -fade
+        drawRect(
+            Brush.verticalGradient(listOf(color.copy(alpha = 0f), color), startY = top, endY = top + fade),
+            topLeft = Offset(0f, top),
+            size = Size(size.width, fade),
+        )
+        drawRect(color, topLeft = Offset(0f, top + fade), size = Size(size.width, max(0f, size.height - top - fade)))
+    }
 
 private val LibrarySection.titleRes: Int
     get() = when (this) {
         LibrarySection.ALL -> R.string.library_all_notes
         LibrarySection.RECENT -> R.string.library_recent
+        LibrarySection.FAVORITES -> R.string.library_favorites
         LibrarySection.NOTEBOOKS -> R.string.library_notebooks
         LibrarySection.PDFS -> R.string.library_pdfs
     }
 
-/** The big title, the sidebar's button while the sidebar is away, and the pane's buttons on the
- *  right. A title too long for its room shrinks to 70 % before it is cut, as the iPad's
- *  minimumScaleFactor(0.7) does. */
+/** The big title (34 sp at every width, as the iPad's largeTitle), the sidebar's button while the
+ *  sidebar is away, and the pane's buttons on the right. A title too long for its room shrinks to
+ *  70 % before it is cut, as the iPad's minimumScaleFactor(0.7) does. */
 @Composable
-private fun PaneHeader(title: String, subtitle: String?, narrow: Boolean, onToggle: (() -> Unit)?, trailing: @Composable RowScope.() -> Unit) {
+private fun PaneHeader(title: String, subtitle: String?, onToggle: (() -> Unit)?, trailing: @Composable RowScope.() -> Unit) {
     val z = Zen.colors
     Row(
         Modifier.fillMaxWidth(),
@@ -784,13 +965,15 @@ private fun PaneHeader(title: String, subtitle: String?, narrow: Boolean, onTogg
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            val style = if (narrow) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge
+            val style = MaterialTheme.typography.headlineLarge
             BasicText(
                 title,
                 style = style.copy(color = z.ink),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.7f, maxFontSize = style.fontSize, stepSize = 1.sp),
+                // The pane's title is a heading for TalkBack, as the iPad's large title is a header.
+                modifier = Modifier.semantics { heading() },
             )
             if (subtitle != null) {
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = z.muted, maxLines = 2)
@@ -953,6 +1136,7 @@ private val LibrarySort.titleRes: Int
 private fun EmptyNotes(section: LibrarySection, query: String) {
     when {
         query.isNotEmpty() -> EmptyState(Icons.Outlined.Search, stringResource(R.string.search_empty, query), stringResource(R.string.search_empty_hint))
+        section == LibrarySection.FAVORITES -> EmptyState(Icons.Outlined.StarOutline, stringResource(R.string.empty_favorites_title), stringResource(R.string.empty_favorites_text))
         section == LibrarySection.NOTEBOOKS -> EmptyState(Icons.Outlined.Book, stringResource(R.string.empty_notebooks_title), stringResource(R.string.empty_notebooks_text))
         section == LibrarySection.PDFS -> EmptyState(Icons.Outlined.Description, stringResource(R.string.empty_pdfs_title), stringResource(R.string.empty_pdfs_text))
         else -> EmptyState(Icons.Outlined.EditNote, stringResource(R.string.library_empty_title), stringResource(R.string.empty_home_text))
@@ -1107,15 +1291,14 @@ private fun PhotoProgressBanner(progress: LibraryImport.PhotoProgress, modifier:
 
 // MARK: A note's cover
 
-/** A note on the shelf: its first page as the 3:4 cover, the title on one line, "3 sayfa, dün"; a long press opens its menu. */
+/** A note on the shelf: its first page as the 3:4 cover, the title on one line (a small star after
+ *  it when it is a favourite), "3 sayfa, dün"; a long press opens its menu. */
 @Composable
 private fun NoteCard(
     meta: NotebookMeta,
     cover: File,
     coverVersion: Int,
-    onOpen: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
+    actions: NoteActions,
     modifier: Modifier,
 ) {
     val z = Zen.colors
@@ -1135,7 +1318,7 @@ private fun NoteCard(
     Column(
         modifier
             .clip(shape)
-            .combinedClickable(onClick = onOpen, role = Role.Button, onLongClickLabel = more, onLongClick = { menuOpen = true }),
+            .combinedClickable(onClick = { actions.open(meta) }, role = Role.Button, onLongClickLabel = more, onLongClick = { menuOpen = true }),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
@@ -1151,30 +1334,54 @@ private fun NoteCard(
         // The menu opens under the title.
         Box {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(meta.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp), color = z.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        meta.title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                        color = z.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (meta.starred) {
+                        // The iPad's star.fill in caption2, muted; TalkBack says "Favori".
+                        Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.favorite), tint = z.muted, modifier = Modifier.size(12.dp))
+                    }
+                }
                 Text(line, style = MaterialTheme.typography.bodySmall, color = z.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             NoteMenu(
+                starred = meta.starred,
                 expanded = menuOpen,
                 onDismiss = { menuOpen = false },
+                onStar = {
+                    menuOpen = false
+                    actions.star(meta)
+                },
                 onRename = {
                     menuOpen = false
-                    onRename()
+                    actions.rename(meta)
                 },
                 onDelete = {
                     menuOpen = false
-                    onDelete()
+                    actions.delete(meta)
                 },
             )
         }
     }
 }
 
-/** A note's menu (NoteMenu on iPad): Yeniden adlandır with its pencil, then Sil in red with its bin. */
+/** A note's menu (NoteMenu on iPad): Favorilere ekle (or Favorilerden çıkar) with its star,
+ *  Yeniden adlandır with its pencil, then Sil in red with its bin. */
 @Composable
-private fun NoteMenu(expanded: Boolean, onDismiss: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun NoteMenu(starred: Boolean, expanded: Boolean, onDismiss: () -> Unit, onStar: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     val error = MaterialTheme.colorScheme.error
     ZenMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(stringResource(if (starred) R.string.remove_favorite else R.string.add_favorite)) },
+            trailingIcon = { Icon(if (starred) StarSlashGlyph else Icons.Outlined.StarOutline, contentDescription = null, modifier = Modifier.size(20.dp)) },
+            onClick = onStar,
+        )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.rename)) },
             trailingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(20.dp)) },

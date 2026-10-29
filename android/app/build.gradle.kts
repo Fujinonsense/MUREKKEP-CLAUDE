@@ -37,6 +37,8 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // The Compose screens' tests run on Robolectric with the app's own strings.
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -63,4 +65,10 @@ dependencies {
         exclude(group = "org.bouncycastle")
     }
     testImplementation("junit:junit:4.13.2")
+    // The library's screen in a test (LibraryScreenTest): Compose's test rule on Robolectric, and the
+    // empty activity it hosts the screen in.
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

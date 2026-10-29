@@ -19,6 +19,7 @@ import kotlin.math.min
 enum class LibrarySection(val raw: String) {
     ALL("home"),
     RECENT("recent"),
+    FAVORITES("favorites"),
     NOTEBOOKS("notebooks"),
     PDFS("pdfs");
 
@@ -64,10 +65,11 @@ object LibraryRules {
     fun pagesShown(pageCount: Int): Int = max(1, pageCount)
 
     /** The notes of a section in the section's order: Tüm notlar through its filter, Son açılanlar
-     *  the last [RECENT_COUNT] changed. */
+     *  the last [RECENT_COUNT] changed, Favoriler the starred ones. */
     fun shown(notes: List<NotebookMeta>, section: LibrarySection, filter: LibraryFilter, sort: LibrarySort): List<NotebookMeta> =
         when (section) {
             LibrarySection.RECENT -> notes.sortedByDescending { it.modified }.take(RECENT_COUNT)
+            LibrarySection.FAVORITES -> sorted(notes.filter { it.starred }, sort)
             LibrarySection.NOTEBOOKS -> sorted(notes.filter { it.kind == NoteKind.NOTEBOOK }, sort)
             LibrarySection.PDFS -> sorted(notes.filter { it.kind == NoteKind.PDF }, sort)
             LibrarySection.ALL -> sorted(

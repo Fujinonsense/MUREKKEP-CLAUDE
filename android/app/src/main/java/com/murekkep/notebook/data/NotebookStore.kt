@@ -259,6 +259,13 @@ class NotebookStore private constructor(context: Context) {
         scope.launch(Dispatchers.IO) { writeMeta(updated) }
     }
 
+    /** Stars a note in the library, or takes its star away (the iPad's toggleFavorite). The library
+     *  owns the star: a save of the open note keeps it, as it keeps the title. */
+    fun toggleStarred(id: String) {
+        val updated = update(id) { it.copy(starred = !it.starred) } ?: return
+        scope.launch(Dispatchers.IO) { writeMeta(updated) }
+    }
+
     /** Removes the notebook and its folder; a pending save of it is dropped. */
     fun delete(id: String) {
         saveJobs.remove(id)?.cancel()

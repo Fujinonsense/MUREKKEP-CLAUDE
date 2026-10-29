@@ -60,6 +60,8 @@ data class NotebookMeta(
     val kind: NoteKind = NoteKind.NOTEBOOK,
     /** When the note was last opened in the editor (the library's "Son açılanlar"); its last change until then. */
     val opened: Long = modified,
+    /** Starred in the library (the iPad's NoteMeta.starred, kept under its key "isFavorite"). */
+    val starred: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -70,6 +72,7 @@ data class NotebookMeta(
         .put("pageCount", pageCount)
         .put("paper", paper.raw)
         .put("kind", kind.raw)
+        .put("isFavorite", starred)
 
     companion object {
         /** The record in a folder named `id`; missing or odd fields take sensible defaults. */
@@ -86,6 +89,8 @@ data class NotebookMeta(
                 paper = PaperStyle.fromRaw(json.optString("paper", "")),
                 kind = NoteKind.fromRaw(json.optString("kind", "")),
                 opened = parseTime(json.opt("opened")) ?: modified,
+                // Missing in older records: not starred.
+                starred = json.optBoolean("isFavorite", false),
             )
         }
 

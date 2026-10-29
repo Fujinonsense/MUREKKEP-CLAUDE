@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kütüphanede favoriler (iPad'in Favoriler'i) -->
+    <string name="library_favorites">Favoriler</string>
+    <string name="empty_favorites_title">Favori yok</string>
+    <string name="empty_favorites_text">Bir notu basılı tutup “Favorilere ekle”yi seç.</string>
+    <!-- TalkBack'in favori bir notun adından sonraki yıldıza dediği -->
+    <string name="favorite">Favori</string>
+</resources>
