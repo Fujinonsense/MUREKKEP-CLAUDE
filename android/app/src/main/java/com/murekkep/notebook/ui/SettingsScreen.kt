@@ -288,7 +288,8 @@ private fun SettingSwitch(icon: ImageVector, title: String, checked: Boolean, on
 /** A line that says the value, with a slider under it ([label] names the slider for TalkBack). */
 @Composable
 private fun SettingSlider(line: String, label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
+    // The iPad's VStack: the line, 8 dp, the 30 dp slider, in a row of the list.
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(line, style = MaterialTheme.typography.bodyLarge, color = Zen.colors.ink)
         ZenSlider(value, onChange, range, label)
     }

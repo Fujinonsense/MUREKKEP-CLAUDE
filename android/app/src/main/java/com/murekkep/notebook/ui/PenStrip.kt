@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -78,9 +79,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -106,7 +112,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -857,30 +862,62 @@ internal fun LabelRow(label: String, value: String? = null) {
     }
 }
 
-/** A thin slider in the accent on a rule track (the iPad's Slider takes the app's tint). */
+/** UISlider's height, and its knob's. */
+private val SliderHeight = 30.dp
+private val KnobSize = 27.dp
+
+/**
+ * The iPad's slider: the accent on a thin track up to a white knob with a soft shadow (white at
+ * night too, as iOS draws it), the rule's grey after it, 30 dp tall as UISlider rather than
+ * Material's 48, so a label sits 8 dp over it as in the iPad's rows.
+ */
 @Composable
 fun ZenSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, label: String, modifier: Modifier = Modifier) {
     val z = Zen.colors
     val colors = SliderDefaults.colors(
-        thumbColor = z.accent, activeTrackColor = z.accent, inactiveTrackColor = z.rule,
+        thumbColor = Color.White, activeTrackColor = z.accent, inactiveTrackColor = z.rule,
         activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
     )
     val interaction = remember { MutableInteractionSource() }
-    Slider(
-        value = value,
-        onValueChange = onChange,
-        valueRange = range,
-        colors = colors,
-        interactionSource = interaction,
-        thumb = { SliderDefaults.Thumb(interactionSource = interaction, colors = colors, thumbSize = DpSize(20.dp, 20.dp)) },
-        track = { sliderState ->
-            SliderDefaults.Track(
-                sliderState = sliderState, colors = colors, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp,
-                drawStopIndicator = null, modifier = Modifier.height(4.dp),
-            )
-        },
-        modifier = modifier.fillMaxWidth().semantics { contentDescription = label },
-    )
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            colors = colors,
+            interactionSource = interaction,
+            thumb = { SliderKnob() },
+            track = { sliderState ->
+                SliderDefaults.Track(
+                    sliderState = sliderState, colors = colors, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp,
+                    drawStopIndicator = null, modifier = Modifier.height(4.dp),
+                )
+            },
+            modifier = modifier.fillMaxWidth().height(SliderHeight).semantics { contentDescription = label },
+        )
+    }
+}
+
+/** The slider's knob: a white disc over two soft shadows (UISlider's thumb). */
+@Composable
+private fun SliderKnob() {
+    Box(Modifier.size(KnobSize).knobShadow().background(Color.White, CircleShape))
+}
+
+/** A round knob's shadow: a wide soft one 3 dp down and a tight one under its edge. */
+private fun Modifier.knobShadow(): Modifier {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return shadow(3.dp, CircleShape)
+    return drawBehind {
+        val r = size.minDimension / 2f
+        drawIntoCanvas { canvas ->
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            paint.color = android.graphics.Color.WHITE
+            paint.setShadowLayer(4.dp.toPx(), 0f, 3.dp.toPx(), Color.Black.copy(alpha = 0.16f).toArgb())
+            canvas.nativeCanvas.drawCircle(center.x, center.y, r, paint)
+            paint.setShadowLayer(0.75.dp.toPx(), 0f, 0.5.dp.toPx(), Color.Black.copy(alpha = 0.10f).toArgb())
+            canvas.nativeCanvas.drawCircle(center.x, center.y, r, paint)
+        }
+    }
 }
 
 /** The system's light grey fill (a switch's off track, a stepper), lighter than the card at night too. */
@@ -981,11 +1018,11 @@ private fun EraserSettings(state: EditorState) {
         onSelect = { state.eraserMode = if (it == 0) EraserMode.STROKE else EraserMode.PARTIAL },
         modifier = Modifier.fillMaxWidth(),
     )
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabelRow(stringResource(R.string.eraser_size), state.eraserSize.roundToInt().toString())
         ZenSlider(state.eraserSize, { state.eraserSize = it }, 6f..60f, stringResource(R.string.eraser_size))
     }
-    Text(stringResource(R.string.eraser_help), style = MaterialTheme.typography.bodySmall, color = z.muted)
+    Text(stringResource(R.string.eraser_help), style = Caption, color = z.muted)
 }
 
 // MARK: The shape tool's settings

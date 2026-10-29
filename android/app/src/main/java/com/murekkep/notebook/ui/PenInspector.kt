@@ -50,6 +50,10 @@ import kotlin.math.roundToInt
 private val Subheadline: TextStyle
     @Composable get() = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)
 
+/** The iPad's caption (12 pt): the popovers' notes (a pen's, the eraser's help, the shapes'). */
+internal val Caption: TextStyle
+    @Composable get() = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp)
+
 @Composable
 internal fun PenSettings(state: EditorState, brush: Brush) {
     val z = Zen.colors
@@ -74,7 +78,7 @@ internal fun PenSettings(state: EditorState, brush: Brush) {
         LabelRow(stringResource(R.string.color))
         ColorGrid(state, brush)
     }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabelRow(stringResource(R.string.pen_width), width.roundToInt().toString())
         ZenSlider(width, { state.setWidth(brush, it) }, brush.widthRange, stringResource(R.string.pen_width))
     }
@@ -87,7 +91,7 @@ internal fun PenSettings(state: EditorState, brush: Brush) {
 private fun PenOptions(state: EditorState, brush: Brush) {
     when (brush) {
         Brush.CALLIGRAPHY -> {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val title = stringResource(R.string.pen_nib_angle)
                 LabelRow(title, "${state.nibAngle.roundToInt()}°")
                 ZenSlider(state.nibAngle, { state.nibAngle = it.roundToInt().toFloat() }, 0f..180f, title)
@@ -111,14 +115,14 @@ private fun PenOptions(state: EditorState, brush: Brush) {
             InspectorSwitch(stringResource(R.string.pen_sway_in_wind), state.animations) { state.animations = it }
         }
         Brush.WET -> {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val title = stringResource(R.string.pen_drying_time)
                 LabelRow(title, stringResource(R.string.pen_seconds, state.dryDuration.roundToInt()))
                 ZenSlider(state.dryDuration.coerceIn(1f, 15f), { state.dryDuration = it.roundToInt().toFloat() }, 1f..15f, title)
             }
         }
         Brush.LAVA -> {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val title = stringResource(R.string.pen_cooling_time)
                 LabelRow(title, stringResource(R.string.pen_seconds, state.coolDuration.roundToInt()))
                 ZenSlider(state.coolDuration, { state.coolDuration = it.roundToInt().toFloat() }, 2f..20f, title)
@@ -146,10 +150,10 @@ private fun InspectorSwitch(title: String, checked: Boolean, onChange: (Boolean)
     }
 }
 
-/** A sentence about the pen, in the muted small text. */
+/** A sentence about the pen, muted, in the iPad's caption. */
 @Composable
 private fun InspectorNote(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = Zen.colors.muted)
+    Text(text, style = Caption, color = Zen.colors.muted)
 }
 
 /**
