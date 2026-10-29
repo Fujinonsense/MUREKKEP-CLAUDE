@@ -35,7 +35,7 @@
     <string name="pen_panel_title">Pens</string>
     <string name="pen_panel_hint">Tap the heart: that pen always stays in the notebook\'s pen bar.</string>
     <string name="pen_panel_shelf">Shelf</string>
-    <string name="pen_shelf_favorites">Favourites</string>
+    <string name="pen_shelf_favorites">Favorites</string>
     <string name="pen_shelf_writing">Writing</string>
     <string name="pen_shelf_paint">Paint</string>
     <string name="pen_shelf_nature">Nature</string>

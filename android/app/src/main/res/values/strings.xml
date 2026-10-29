@@ -55,8 +55,8 @@
     <string name="all_pens">All pens</string>
     <string name="color_and_width">Color and thickness</string>
     <string name="color">Color</string>
-    <string name="add_favorite">Add to favourites</string>
-    <string name="remove_favorite">Remove from favourites</string>
+    <string name="add_favorite">Add to favorites</string>
+    <string name="remove_favorite">Remove from favorites</string>
     <string name="pen_settings">%1$s settings</string>
     <string name="eraser_settings">Eraser settings</string>
     <string name="shape_settings">Shape settings</string>
