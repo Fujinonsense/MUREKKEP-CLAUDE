@@ -907,6 +907,15 @@ private struct EngineStatus: View {
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityHint(hint)
+    }
+
+    /// The orange dot in words, for VoiceOver: what the brain is missing.
+    private var hint: String {
+        if ready { return "" }
+        return settings.engine == .claude
+            ? Loc.t("Claude için Ayarlar'dan API anahtarı ekle ya da başka bir motor seç.")
+            : Loc.t("Yerel sunucu adresi girilmemiş (Ayarlar > Yerel sunucu). Şimdilik çevrimdışı çekirdekle yanıtlıyorum.")
     }
 
     private var label: String {
