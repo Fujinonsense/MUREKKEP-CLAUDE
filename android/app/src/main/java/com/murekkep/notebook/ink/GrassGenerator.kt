@@ -78,6 +78,10 @@ object GrassGenerator {
     fun seed(level: Int, random: Float): Float =
         max(0, min(2, level)).toFloat() + min(max(random, 0f), 0.999f)
 
+    /** A new stroke's seed (CanvasView and StrokeText on iPad): grass carries the flower level in it,
+     *  every other pen a plain random. */
+    fun strokeSeed(brush: Brush, level: Int, random: Float): Float = if (brush == Brush.GRASS) seed(level, random) else random
+
     private class FlowerKind(
         val petal: Vec3,
         val core: Vec3,

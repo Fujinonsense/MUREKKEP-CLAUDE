@@ -166,6 +166,25 @@ class GrassGeneratorTest {
     }
 
     @Test
+    fun newGrassStrokesCarryTheFlowerLevelOtherPensAPlainRandom() {
+        // The iPad's default "Az" (1): Android's grass stroke seeds were plain randoms below 1, level 0.
+        assertEquals(1, GrassGenerator.flowerLevel(GrassGenerator.strokeSeed(Brush.GRASS, 1, 0.37f)))
+        assertEquals(1.37f, GrassGenerator.strokeSeed(Brush.GRASS, 1, 0.37f), 1e-6f)
+        assertEquals(2, GrassGenerator.flowerLevel(GrassGenerator.strokeSeed(Brush.GRASS, 2, 0.5f)))
+        assertEquals(0.37f, GrassGenerator.strokeSeed(Brush.BLOOM, 2, 0.37f), 0f)
+        assertEquals(0.37f, GrassGenerator.strokeSeed(Brush.PEN, 1, 0.37f), 0f)
+    }
+
+    @Test
+    fun shapesDrawnWithTheGrassPenFlowerToo() {
+        val paths = listOf(listOf(Vec2(0f, 0f), Vec2(100f, 0f)))
+        val grass = PenPaths.strokes(paths, Brush.GRASS, InkColor.hex(0x3F9B2F), 10f, 0.0, flowerLevel = 2)
+        assertEquals(2, GrassGenerator.flowerLevel(grass.single().seed))
+        val pen = PenPaths.strokes(paths, Brush.PEN, InkColor.hex(0x1C1C1E), 2f, 0.0, flowerLevel = 2)
+        assertTrue(pen.single().seed < 1f)
+    }
+
+    @Test
     fun nothingGrowsFromNothing() {
         assertTrue(GrassGenerator.field(emptyList(), 8f, turquoise, 0.5f).blades.isEmpty())
         assertTrue(GrassGenerator.blooms(waterLine, 0f, turquoise, 0.5f).blades.isEmpty())

@@ -13,6 +13,7 @@ import com.murekkep.notebook.ink.InkEraser
 import com.murekkep.notebook.ink.InkSelection
 import com.murekkep.notebook.ink.Lasso
 import com.murekkep.notebook.ink.EditableShape
+import com.murekkep.notebook.ink.GrassGenerator
 import com.murekkep.notebook.ink.PageInk
 import com.murekkep.notebook.ink.PenPaths
 import com.murekkep.notebook.ink.Pt
@@ -28,7 +29,9 @@ import com.murekkep.notebook.render.PageLayout
 import com.murekkep.notebook.render.PageSize
 import java.io.File
 import kotlin.math.hypot
+import kotlin.properties.ReadWriteProperty
 import kotlin.random.Random
+import kotlin.reflect.KProperty
 
 // Ink, tools and undo for one open notebook: the part of Murekkep.swiftpm/EditorModel.swift the
 // Android edition has (pens, the eraser, the lasso, held shapes and the shape tool, undo, the blank
@@ -172,10 +175,58 @@ class EditorState(
         prefs?.setRecentBrushes(list)
     }
 
+    /** The custom colours picked lately, newest first: the colour grid's second row. */
+    var recentColors: List<InkColor> by mutableStateOf(prefs?.recentColors() ?: emptyList())
+        private set
+
+    /** Keeps a custom colour (one not among the pen's six) at the front of the recent ones; eight are
+     *  kept (AppSettings.rememberColor). */
+    fun rememberColor(color: InkColor) {
+        if (recentColors.firstOrNull() == color) return
+        recentColors = (listOf(color) + recentColors.filter { it != color }).take(8)
+        prefs?.setRecentColors(recentColors)
+    }
+
     var eraserMode by mutableStateOf(EraserMode.STROKE)
 
     /** The eraser's diameter in page points. */
     var eraserSize by mutableStateOf(DEFAULT_ERASER_SIZE)
+
+    // The ink's settings (AppSettings on iPad), kept in PenPreferences; the canvas hands them to the
+    // renderer and the stroke builder.
+
+    /** The moving inks move: the sea, the wind in the grass, lava's flow and embers. */
+    var animations: Boolean by kept(prefs?.animations ?: true) {
+        prefs?.animations = it
+        onInkChange?.invoke()
+    }
+
+    /** A pen resting at the end of a stroke straightens it into a clean shape. */
+    var straightLine: Boolean by kept(prefs?.straightLine ?: true) { prefs?.straightLine = it }
+
+    /** Seconds wet ink takes to dry. */
+    var dryDuration: Float by kept(prefs?.dryDuration ?: 4f) { prefs?.dryDuration = it }
+
+    /** Seconds lava takes to cool. */
+    var coolDuration: Float by kept(prefs?.coolDuration ?: 6f) { prefs?.coolDuration = it }
+
+    /** The grass's flowers: 0 none, 1 some, 2 lots; new grass strokes carry it in their seed. */
+    var flowerLevel: Int by kept(prefs?.flowerLevel ?: 1) { prefs?.flowerLevel = it }
+
+    /** The calligraphy nib's angle in degrees. */
+    var nibAngle: Float by kept(prefs?.nibAngle ?: 38f) { prefs?.nibAngle = it }
+
+    /** The edge the pen bar stands on. */
+    var paletteEdge: PaletteEdge by kept(prefs?.paletteEdge ?: PaletteEdge.BOTTOM) { prefs?.paletteEdge = it }
+
+    /** The pen bar folded. */
+    var paletteCollapsed: Boolean by kept(prefs?.paletteCollapsed ?: false) { prefs?.paletteCollapsed = it }
+
+    /** The pen panel's shelf used last ("" until one is picked). */
+    var penPanelShelf: String by kept(prefs?.penPanelShelf ?: "") { prefs?.penPanelShelf = it }
+
+    /** A new stroke's seed: grass carries the flower level in it. */
+    fun newSeed(brush: Brush): Float = GrassGenerator.strokeSeed(brush, flowerLevel, Random.nextFloat())
 
     /** The pen's side button or squeeze held: erases, and when let go returns to the tool it borrowed from. */
     var temporaryEraser: Boolean
@@ -544,7 +595,7 @@ class EditorState(
         val c = color(brush)
         val now = referenceNow()
         val restyled = strokes(sel.page).filter { it.id in sel.ids }.map { s ->
-            val seed = if (brush == Brush.GRASS) Random.nextFloat() else s.seed
+            val seed = if (brush == Brush.GRASS) newSeed(brush) else s.seed
             Stroke(brush, c, s.width, now, seed, s.points)
         }
         replaceStrokes(sel.page, removing = sel.ids, adding = restyled)
@@ -610,7 +661,8 @@ class EditorState(
     fun addShape(page: Int, from: Pt, to: Pt) {
         if (hypot(to.x - from.x, to.y - from.y) <= 2) return
         val brush = activeBrush
-        replaceStrokes(page, removing = emptySet(), adding = PenPaths.strokes(shapePaths(from, to), brush, color(brush), width(brush), referenceNow()))
+        val strokes = PenPaths.strokes(shapePaths(from, to), brush, color(brush), width(brush), referenceNow(), flowerLevel)
+        replaceStrokes(page, removing = emptySet(), adding = strokes)
     }
 
     // MARK: Undo
@@ -714,5 +766,18 @@ class EditorState(
     /** Asks the store to write the notebook now. */
     fun requestSave() {
         onSaveNow?.invoke()
+    }
+}
+
+/** A setting Compose observes, written through to the store when it changes. */
+private fun <T> kept(initial: T, save: (T) -> Unit): ReadWriteProperty<Any?, T> = object : ReadWriteProperty<Any?, T> {
+    private val state = mutableStateOf(initial)
+
+    override fun getValue(thisRef: Any?, property: KProperty<*>): T = state.value
+
+    override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+        if (state.value == value) return
+        state.value = value
+        save(value)
     }
 }

@@ -46,7 +46,6 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.random.Random
 
 // The iPad's CanvasView (Murekkep.swiftpm/CanvasView.swift) on Android: the pages, the pen and
 // the fingers. Android pens bring what the Apple Pencil does on iPad, mapped as follows:
@@ -214,7 +213,9 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             zoom = zoom,
             active = active,
             paperStyle = 1,
-            animate = true,
+            animate = state.animations,
+            dryDuration = state.dryDuration,
+            coolDuration = state.coolDuration,
             pdf = pdfTextures,
             fitScale = fitZoom,
             ground = ground,
@@ -551,7 +552,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             return
         }
         val brush: Brush = (state.tool as? Tool.Brush)?.brush ?: state.activeBrush
-        val b = StrokeBuilder(brush, state.color(brush), state.width(brush), Random.nextFloat())
+        val b = StrokeBuilder(brush, state.color(brush), state.width(brush), state.newSeed(brush))
+        b.nibAngle = state.nibAngle * PI.toFloat() / 180f
         strokeStart = referenceNow()
         active = ActiveStroke(page, brush, b.color, b.width, b.seed, emptyList(), strokeStart)
         b.add(sample(event, i, -1))
@@ -804,7 +806,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     /** Waits for the pen to rest: every move farther than 4 dp from where it rested starts the wait again. */
     private fun trackHold(vx: Float, vy: Float) {
         val b = builder ?: return
-        if (b.isStraight) return
+        if (b.isStraight || !state.straightLine) return
         if (!holdAnchorX.isNaN() && hypot(vx - holdAnchorX, vy - holdAnchorY) < 4f * resources.displayMetrics.density) return
         holdAnchorX = vx
         holdAnchorY = vy
