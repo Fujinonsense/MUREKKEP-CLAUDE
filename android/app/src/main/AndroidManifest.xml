@@ -11,6 +11,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:localeConfig="@xml/locales_config"
         android:resizeableActivity="true"
         android:theme="@style/Theme.Murekkep">
         <!-- Compose redraws for these changes itself, so the activity is not made again: the open

@@ -2,6 +2,7 @@
 
 package com.murekkep.notebook.ui
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -32,8 +34,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.outlined.Gesture
+import androidx.compose.material.icons.outlined.GpsFixed
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,6 +58,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -68,17 +77,23 @@ import kotlin.math.roundToInt
 
 // Ayarlar (the spec's "Ayarlar. Gruplu liste; Görünüm › Tema seçici", SettingsView on iPad): a
 // sheet over the library (or over a note, from Diğer) with "Bitti", holding a grouped list on
-// paper-3. Görünüm is a card with a "Tema" row naming the theme in force, then the themes' tiles,
-// black and white first; its footer explains them. While Pro is locked (the Play build, until Play
-// Billing) a Pro tile wears the Pro badge and a tap on it says Pro is coming. 3B mürekkep is the
-// iPad's ink section: the animations and the battery saver, the wet ink's drying and the lava's
-// cooling times, the flowers in the grass, and its footer; the same settings a pen's popover and
-// Diğer change ([InkSettings]), so a change here shows there at once and the other way round.
+// paper-3 in the iPad's order. Dil picks the app's language (AppLanguage.kt). Görünüm is a card
+// with a "Tema" row naming the theme in force, then the themes' tiles, black and white first; its
+// footer explains them. While Pro is locked (the Play build, until Play Billing) a Pro tile wears
+// the Pro badge and a tap on it says Pro is coming. Kalem is the iPad's Apple Pencil section with
+// what an Android pen does: drawing with the pen only, the hover preview, a held pen fixing its
+// shape. 3B mürekkep is the iPad's ink section: the animations and the battery saver, the wet
+// ink's drying and the lava's cooling times, the flowers in the grass, and its footer. Kalem and
+// 3B mürekkep are the same settings a pen's popover and Diğer change ([InkSettings]), so a change
+// here shows there at once and the other way round.
 
 /** Ayarlar over the ink settings [ink]; [onBack] closes the sheet ("Bitti", Back). */
 @Composable
 fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, ink: InkSettings, onBack: () -> Unit) {
     var proSoon by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    var language by remember { mutableStateOf(AppLanguages.current(context)) }
     ZenSheet(
         title = stringResource(R.string.settings),
         ground = Zen.colors.paper3,
@@ -92,6 +107,15 @@ fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, ink: InkSetting
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                 .padding(horizontal = 20.dp, vertical = 24.dp),
         ) {
+            Group(header = null, footer = stringResource(R.string.settings_language_footer)) {
+                LanguageRow(language) { picked ->
+                    if (picked != language) {
+                        language = picked
+                        activity?.let { AppLanguages.set(it, picked) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(GroupSpacing))
             val shown = theme.shown
             Group(
                 header = stringResource(R.string.settings_appearance),
@@ -104,6 +128,10 @@ fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, ink: InkSetting
                     }
                     ThemeTiles(shown) { option -> if (option.locked) proSoon = true else onTheme(option) }
                 }
+            }
+            Spacer(Modifier.height(GroupSpacing))
+            Group(header = stringResource(R.string.settings_pen), footer = stringResource(R.string.settings_pen_footer)) {
+                PenGroup(ink)
             }
             Spacer(Modifier.height(GroupSpacing))
             Group(header = stringResource(R.string.settings_ink), footer = stringResource(R.string.settings_ink_footer)) {
@@ -126,6 +154,79 @@ private val GroupSpacing = 32.dp
 
 /** Where a row's text starts after its glyph, and the hairline under it: the glyph's 28 dp and 12 dp past the card's 16. */
 private val GlyphRowInset = 56.dp
+
+/**
+ * Dil (the iPad's language picker, a menu): its globe and name, the language in force in the accent
+ * with the picker's chevrons; the menu offers the device's language, Türkçe and English, the one in
+ * force ticked.
+ */
+@Composable
+private fun LanguageRow(language: AppLanguage, onPick: (AppLanguage) -> Unit) {
+    val z = Zen.colors
+    var open by remember { mutableStateOf(false) }
+    val title = stringResource(R.string.settings_language)
+    val value = language.title()
+    Box {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = Zen.target)
+                .clickable(role = Role.DropdownList) { open = true }
+                .clearAndSetSemantics { contentDescription = "$title, $value" }
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterStart) {
+                Icon(Icons.Outlined.Language, contentDescription = null, tint = z.accent, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = z.ink, modifier = Modifier.weight(1f))
+            Text(value, style = MaterialTheme.typography.bodyLarge, color = z.accent, maxLines = 1)
+            Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = z.accent, modifier = Modifier.padding(start = 2.dp).size(18.dp))
+        }
+        ZenMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (option in AppLanguage.entries) {
+                DropdownMenuItem(
+                    text = { Text(option.title()) },
+                    leadingIcon = {
+                        if (option == language) {
+                            Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        } else {
+                            Spacer(Modifier.size(18.dp))
+                        }
+                    },
+                    onClick = {
+                        open = false
+                        onPick(option)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** A language's name in itself; the device's in the language on screen. */
+@Composable
+private fun AppLanguage.title(): String = when (this) {
+    AppLanguage.SYSTEM -> stringResource(R.string.settings_language_system)
+    AppLanguage.TURKISH -> "Türkçe"
+    AppLanguage.ENGLISH -> "English"
+}
+
+/**
+ * Kalem (the iPad's Apple Pencil section, with what an Android pen does): drawing with the pen
+ * only, the hover preview and a held pen fixing its shape, as switches with their glyphs.
+ */
+@Composable
+private fun PenGroup(ink: InkSettings) {
+    Column {
+        SettingSwitch(Icons.Outlined.Draw, stringResource(R.string.editor_pen_only), ink.penOnly) { ink.penOnly = it }
+        RowHairline(GlyphRowInset)
+        SettingSwitch(Icons.Outlined.GpsFixed, stringResource(R.string.settings_hover_preview), ink.hoverPreview) { ink.hoverPreview = it }
+        RowHairline(GlyphRowInset)
+        SettingSwitch(Icons.Outlined.Gesture, stringResource(R.string.settings_straighten_on_hold), ink.straightLine) { ink.straightLine = it }
+    }
+}
 
 /**
  * 3B mürekkep (the ink section of the iPad's SettingsView): Animasyonlar and Pil tasarrufu as
@@ -199,17 +300,20 @@ private fun RowHairline(start: Dp) {
     Box(Modifier.padding(start = start).fillMaxWidth().height(1.dp).background(Zen.colors.rule))
 }
 
-/** A group of the list: its header in muted text, its card of paper in a hairline, its footer under the card. */
+/** A group of the list: its header in muted text (Dil has none, as on the iPad), its card of paper
+ *  in a hairline, its footer under the card. */
 @Composable
-private fun Group(header: String, footer: String?, content: @Composable () -> Unit) {
+private fun Group(header: String?, footer: String?, content: @Composable () -> Unit) {
     val z = Zen.colors
     val shape = RoundedCornerShape(12.dp)
-    Text(
-        header,
-        style = MaterialTheme.typography.bodySmall,
-        color = z.muted,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-    )
+    if (header != null) {
+        Text(
+            header,
+            style = MaterialTheme.typography.bodySmall,
+            color = z.muted,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+        )
+    }
     Box(Modifier.fillMaxWidth().clip(shape).background(z.paper).border(1.dp, z.rule, shape)) {
         content()
     }

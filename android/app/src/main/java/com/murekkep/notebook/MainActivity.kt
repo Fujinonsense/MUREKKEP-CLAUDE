@@ -1,6 +1,8 @@
 package com.murekkep.notebook
 
+import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -38,6 +40,7 @@ import com.murekkep.notebook.data.AppearancePreferences
 import com.murekkep.notebook.data.NotebookStore
 import com.murekkep.notebook.export.PdfShare
 import com.murekkep.notebook.ui.ActivityBars
+import com.murekkep.notebook.ui.AppLanguages
 import com.murekkep.notebook.ui.AppTheme
 import com.murekkep.notebook.ui.EditorBar
 import com.murekkep.notebook.ui.EditorScreen
@@ -49,8 +52,25 @@ import com.murekkep.notebook.ui.Zen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        // Before Android 13, Ayarlar › Dil's language is laid over the activity's configuration.
+        AppLanguages.overrideFor(newBase)?.let { language ->
+            applyOverrideConfiguration(language)
+            Locale.setDefault(language.locales[0])
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // The pens' names and the dates follow the language on screen (a per-app language picked
+        // in Ayarlar comes as a change of locale, which this activity handles in place).
+        Locale.setDefault(resources.configuration.locales[0])
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
