@@ -1,5 +1,6 @@
 package com.murekkep.notebook.data
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -62,6 +63,9 @@ data class NotebookMeta(
     val opened: Long = modified,
     /** Starred in the library (the iPad's NoteMeta.starred, kept under its key "isFavorite"). */
     val starred: Boolean = false,
+    /** The pages marked with the ribbon (0-based, in order; the iPad's NoteMeta.bookmarks, left out
+     *  when there are none). */
+    val bookmarks: List<Int> = emptyList(),
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -73,6 +77,7 @@ data class NotebookMeta(
         .put("paper", paper.raw)
         .put("kind", kind.raw)
         .put("isFavorite", starred)
+        .also { if (bookmarks.isNotEmpty()) it.put("bookmarks", JSONArray(bookmarks)) }
 
     companion object {
         /** The record in a folder named `id`; missing or odd fields take sensible defaults. */
@@ -91,6 +96,7 @@ data class NotebookMeta(
                 opened = parseTime(json.opt("opened")) ?: modified,
                 // Missing in older records: not starred.
                 starred = json.optBoolean("isFavorite", false),
+                bookmarks = json.optJSONArray("bookmarks")?.let { a -> (0 until a.length()).mapNotNull { (a.opt(it) as? Number)?.toInt() } } ?: emptyList(),
             )
         }
 
