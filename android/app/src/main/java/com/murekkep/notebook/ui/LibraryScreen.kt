@@ -2,6 +2,7 @@
 
 package com.murekkep.notebook.ui
 
+import android.content.res.Resources
 import android.graphics.BitmapFactory
 import android.icu.text.RelativeDateTimeFormatter
 import android.net.Uri
@@ -125,7 +126,6 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -218,7 +218,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
     }
 
     val appTheme = LocalAppTheme.current.shown
-    val picture = appTheme.picture?.let { ImageBitmap.imageResource(it) }
+    val picture = rememberBackdropPicture(appTheme.picture)
     // The sidebar and the notes in the picture's look; "Yeni defter" and the dialogs below keep the system's.
     LibraryLook {
         val z = Zen.colors
@@ -368,6 +368,45 @@ private fun newNotebookTitle(prefix: String): String {
 }
 
 // MARK: The backdrop
+
+/** The theme's picture ([res]): at once when the library comes back from a note, else read off the main thread. */
+@Composable
+private fun rememberBackdropPicture(res: Int?): ImageBitmap? {
+    val resources = LocalContext.current.resources
+    val picture by produceState(res?.let { BackdropPictures.last(it) }, res) {
+        value = res?.let { BackdropPictures.last(it) ?: withContext(Dispatchers.IO) { BackdropPictures.load(resources, it) } }
+    }
+    return picture
+}
+
+/**
+ * The theme's picture (2048 px, 16 MB in memory), read once and kept for the process: the library
+ * leaves the composition while a note is open, and its picture is back in the first frame. Only
+ * the picture in use is kept.
+ */
+private object BackdropPictures {
+    private var res = 0
+    private var picture: ImageBitmap? = null
+
+    /** The picture of [res] if it is the one kept, without touching the disk (for the first frame). */
+    @Synchronized
+    fun last(res: Int): ImageBitmap? = if (res == this.res) picture else null
+
+    /** The picture of [res], from memory or read from the resources (off the main thread). */
+    fun load(resources: Resources, res: Int): ImageBitmap? {
+        last(res)?.let { return it }
+        val read = try {
+            BitmapFactory.decodeResource(resources, res)?.asImageBitmap()
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        synchronized(this) {
+            this.res = res
+            picture = read
+        }
+        return read
+    }
+}
 
 /** A picture theme's picture under its wash (night over a dark picture, warm paper over a light
  *  one), or the Defter theme's ruled paper; nothing in black and white. */
