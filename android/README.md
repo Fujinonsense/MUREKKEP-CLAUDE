@@ -91,8 +91,27 @@ check). Start the emulator with
 build started with `adb shell am start -n com.murekkep.notebook/.MainActivity --es murekkep.demo pens`
 opens a page with a wave in 21 pens.
 
+**The zen interface (2026-10-29, branch android-zen):** the screens follow
+`docs/superpowers/specs/2026-10-29-zen-arayuz-design.md`, the same design as the iPad's. The tokens
+(paper, ink, the greys at zero chroma, the ink blue only for what is selected) are `ui/Theme.kt`, light
+and dark after the system. The editor has a quiet top bar ("‹ Notlar", the title, Paylaş, Diğer) and
+a floating pen bar at the bottom centre: undo, redo | five pens (the favourites, then the pens used
+last, `ui/PenStripRule.kt`, the iPad's PenStrip rule) and the eraser standing in a tray, flat
+silhouettes in black and white (`ui/PenSilhouettes.kt`), the iPad's bodies (`ui/ToolArt.kt`) in a Pro
+theme | the ink's colour | lasso, shapes, every pen | add page. A second tap on the picked pen opens
+its settings in a popover (name, one sentence, the ink's real look drawn by FlatInk, colours, width,
+favourite); the eraser's and the shapes' settings open the same way; a long press stars a pen. The
+page badge "1 / 1" sits at the bottom right. Paylaş writes the note as a PDF (`export/PdfShare.kt`)
+and opens the system's share chooser through a FileProvider. The library has a sidebar (search, Tüm
+notlar, Son açılanlar, Defterler, PDF'ler, Ayarlar; a drawer under 600 dp) and the notes as the covers
+of their first pages (`thumb.jpg`, drawn at every save) with "3 sayfa, dün" under them. Ayarlar ›
+Görünüm › Tema offers black and white (free) and the Pro themes as picture tiles (`ui/AppTheme.kt`,
+the pictures in `res/drawable-nodpi`); without Play Billing a Pro tile says Pro is coming and the look
+stays black and white. Checked on the emulator in English and Turkish, light and dark, landscape and
+portrait, at font scale 1.3.
+
 **In the Android edition:**
-- library (new, rename, delete);
+- library (new, rename, delete, search, sections, covers) and settings (the theme);
 - notebook pages, pinch and fling;
 - all 23 pens with the iPad's shading, including 3D inks, shadows, grass blades and flowers;
 - highlighter, eraser (whole stroke and partial), undo/redo;
