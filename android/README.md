@@ -129,6 +129,12 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
   with handles to fix them afterwards;
 - the shape tool: line, arrow, double arrow, rectangle, ellipse, circle from the center, triangle,
   right triangle, regular polygon (3 to 12 sides), dashed or not;
+- Araçlar on the pen bar (between Şekiller and Sayfa ekle): the ruler, the 45° and 30°/60° set
+  squares and the protractor laid on the page, carried by a finger and turned by two (settling at
+  15°, the angle shown over them), Açıyı ayarla's round angles and Kaldır; a pen stroke started by
+  an edge runs along it, from the protractor's center along whole-degree rays, its length or angle
+  beside the pen. Pergel: a drag sets the center and the radius, then the pen draws arcs. The
+  geometry is held to the iPad's own Instruments.swift by `tools/instrumentcheck`;
 - pen preferences;
 - notebooks saved in the iPad's own ink format;
 - the pen features in the table above.
@@ -139,10 +145,13 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - Yalnızca kalemle çiz starts off: fingers draw until a pen has touched the screen, as many Android
   tablets have no pen (the iPad's starts on);
 - Ayarlar › Dil offers the device's language besides Türkçe and English, as Android's per-app
-  language does.
+  language does;
+- a finger left on an instrument after a two-finger turn carries it on (the iPad's holds it still
+  until every finger lifts), and a touch the system takes back (a palm) puts the instrument back
+  where it was, as it takes back a stroke.
 
 **Not ported yet:**
-- the compass, the ruler, set squares and protractor;
+- Araçlar's typed text (Metin), the engineering toolbox (Mühendislik) and the page angle (Sayfa açısı);
 - the shape tool's coordinate axes and dimension line, and plots (they write with the stroke font);
 - held drawings that become pictures (heart, face, organs) and their suggestions;
 - the lasso's "Convert to text" (it comes with the text pen);
