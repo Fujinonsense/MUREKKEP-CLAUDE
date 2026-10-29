@@ -42,7 +42,7 @@ PC; the folder of the newest build is named after its commit.
 | Eraser end (`TOOL_TYPE_ERASER`) | erases | — |
 | Pen hovering (`ACTION_HOVER_*`) | a ring with the line's width, red with the eraser's size while erasing (Ayarlar › Kalem › Havada önizleme) | Pencil hover preview |
 | Palm on the screen | ignored once a pen has been used, or always with Yalnızca kalemle çiz (Diğer, Ayarlar › Kalem); fingers move and zoom | Pencil-only drawing |
-| A touch the system cancels (`FLAG_CANCELED`) | takes its stroke back | — |
+| A touch the system cancels (`FLAG_CANCELED`) | takes its stroke back, or puts an instrument it carried back where it was | — |
 | Unbuffered pen events + motion prediction | every pen sample, the line a step ahead of the tip | coalesced and predicted touches |
 | 120 Hz panels | the highest refresh rate of the display | ProMotion |
 
@@ -96,9 +96,9 @@ opens a page with a wave in 21 pens.
 (paper, ink, the greys at zero chroma, the ink blue only for what is selected) are `ui/Theme.kt`, light
 and dark after the system. The editor has a quiet top bar ("‹ Notlar", the title, Paylaş, Diğer) and
 a floating pen bar at the bottom centre: undo, redo | five pens (the favourites, then the pens used
-last, `ui/PenStripRule.kt`, the iPad's PenStrip rule) and the eraser standing in a tray, flat
-silhouettes in black and white (`ui/PenSilhouettes.kt`), the iPad's bodies (`ui/ToolArt.kt`) in a Pro
-theme | the ink's colour | lasso, shapes, every pen | add page. A second tap on the picked pen opens
+last, `ui/PenStripRule.kt`, the iPad's PenStrip rule) and the eraser standing in a tray, flat silhouettes
+in black and white (`ui/PenSilhouettes.kt`), the iPad's bodies (`ui/ToolArt.kt`) in a Pro theme, then
+every pen | the ink's colour | lasso, shapes, Araçlar | add page. A second tap on the picked pen opens
 its settings in a popover (name, one sentence, the ink's real look drawn by FlatInk, colours, width,
 favourite); the eraser's and the shapes' settings open the same way; a long press stars a pen. The
 page badge "1 / 1" sits at the bottom right. Paylaş writes the note as a PDF (`export/PdfShare.kt`)
@@ -148,7 +148,12 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
   language does;
 - a finger left on an instrument after a two-finger turn carries it on (the iPad's holds it still
   until every finger lifts), and a touch the system takes back (a palm) puts the instrument back
-  where it was, as it takes back a stroke.
+  where it was, as it takes back a stroke; while the pen is down a finger that lands on an
+  instrument is left alone, as every finger is then (the iPad's takes the instrument);
+- a two-finger turn starts settled on the 15° step the instrument rests on: it clicks when it comes
+  back to that step or reaches another, not as it starts (the iPad's clicks at once); the angle over
+  a turning instrument and the reading beside a pen along it stand in the dark capsule of the
+  canvas's other measurements, where the iPad's bubbles are accent blue.
 
 **Not ported yet:**
 - Araçlar's typed text (Metin), the engineering toolbox (Mühendislik) and the page angle (Sayfa açısı);
