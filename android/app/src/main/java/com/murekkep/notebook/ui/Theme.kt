@@ -136,8 +136,9 @@ private fun materialScheme(z: ZenColors): ColorScheme {
         surfaceDim = z.paper3,
         surfaceContainerLowest = z.paper,
         surfaceContainerLow = z.paper2,
-        surfaceContainer = z.paper2,
-        surfaceContainerHigh = z.paper3,
+        // Menus and dialogs float, so they are paper (the spec's surfaces).
+        surfaceContainer = z.paper,
+        surfaceContainerHigh = z.paper,
         surfaceContainerHighest = z.paper3,
         inverseSurface = z.ink,
         inverseOnSurface = z.paper,
@@ -169,7 +170,8 @@ private val ZenShapes = Shapes(
     small = RoundedCornerShape(Zen.control),
     medium = RoundedCornerShape(Zen.popover),
     large = RoundedCornerShape(Zen.bar),
-    extraLarge = RoundedCornerShape(24.dp),
+    // Dialogs, which take a pop-up's 16 dp corners.
+    extraLarge = RoundedCornerShape(Zen.popover),
 )
 
 /**
