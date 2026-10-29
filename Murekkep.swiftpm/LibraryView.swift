@@ -658,13 +658,17 @@ struct LibrarySidebar: View {
         }
     }
 
+    /// "Mürekkep" with the brain that answers under it, and the button that hides the sidebar.
     private var brand: some View {
         HStack(spacing: 8) {
-            Text(Loc.t("Mürekkep"))
-                .font(.title2.weight(.bold))
-                .kerning(-0.4)
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Loc.t("Mürekkep"))
+                    .font(.title2.weight(.bold))
+                    .kerning(-0.4)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                EngineStatus()
+            }
             Spacer(minLength: 0)
             Button(action: actions.toggleSidebar) {
                 Image(systemName: "sidebar.left")
@@ -676,7 +680,7 @@ struct LibrarySidebar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Kenar çubuğunu gizle"))
         }
-        .frame(height: 44)
+        .frame(minHeight: 44)
         .padding(.leading, 8)
     }
 
@@ -835,6 +839,40 @@ struct LibrarySidebar: View {
                 Label(Loc.t("Dersi sil (içindekiler kalır)"), systemImage: "trash")
             }
         }
+    }
+}
+
+/// Under the wordmark, which brain answers the assistant, as before the zen redesign: "Cihazda yapay
+/// zekâ", "Yerel sunucu", "Çevrimdışı asistan" or "Claude · Sonnet 5.5". The 6-point dot is real
+/// status, so it keeps its colour: green when that brain can answer, orange when it cannot (Claude
+/// without its key). The downloaded model counts as on the device once it is ready; a view of its
+/// own, so only this line follows the download.
+private struct EngineStatus: View {
+    @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var brain = DeviceBrain.shared
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(ready ? Color.green : Color.orange)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var label: String {
+        if settings.engine == .claude { return "Claude · \(settings.model.title.replacingOccurrences(of: "Claude ", with: ""))" }
+        if brain.isReady || OnDeviceAI.isAvailable { return Loc.t("Cihazda yapay zekâ") }
+        if !settings.serverURL.isEmpty { return Loc.t("Yerel sunucu") }
+        return Loc.t("Çevrimdışı asistan")
+    }
+
+    private var ready: Bool {
+        settings.engine == .claude ? settings.hasAPIKey : true
     }
 }
 
