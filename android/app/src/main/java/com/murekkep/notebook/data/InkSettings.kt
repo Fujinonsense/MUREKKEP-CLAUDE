@@ -7,8 +7,9 @@ import kotlin.reflect.KProperty
 
 // The ink's settings (the ink part of AppSettings on iPad), one set for the app: the moving inks
 // moving, the battery saver's 30 frames a second, the drying and cooling times, the grass's
-// flowers, the nib's angle and a held pen straightening its stroke. A pen's popover, Diğer and
-// Ayarlar › 3B mürekkep read and write these same values, and they are Compose state, so a change
+// flowers, the nib's angle, a held pen straightening its stroke, drawing with the pen only and the
+// hover preview. A pen's popover, Diğer and Ayarlar (Kalem, 3B mürekkep) read and write these same
+// values, and they are Compose state, so a change
 // in one place shows in the others at once (Ayarlar opens over a note, too). Kept in the pens'
 // SharedPreferences under the iPad's keys, with its defaults and bounds; without them (the tests)
 // they last for the run.
@@ -22,6 +23,14 @@ class InkSettings(private val prefs: SharedPreferences? = null) {
 
     /** A pen resting at the end of a stroke straightens it into a shape (Bekleyince şekli düzelt). */
     var straightLine: Boolean by setting(prefs?.getBoolean("straightLine", true) ?: true) { putBoolean("straightLine", it) }
+
+    /** Fingers never draw, they only move and zoom the pages (Yalnızca kalemle çiz, the iPad's
+     *  pencilOnly). Off, a finger draws until a pen has touched the screen: tablets without a pen
+     *  are drawn on with a finger, so it starts off. */
+    var penOnly: Boolean by setting(prefs?.getBoolean("pencilOnly", false) ?: false) { putBoolean("pencilOnly", it) }
+
+    /** A pen hovering over the page shows the size of its line, or of the eraser (Havada önizleme). */
+    var hoverPreview: Boolean by setting(prefs?.getBoolean("hoverPreview", true) ?: true) { putBoolean("hoverPreview", it) }
 
     /** Seconds wet ink takes to dry (the sliders give 1 to 15). */
     var dryDuration: Float by setting((prefs?.getFloat("dryDuration", 4f) ?: 4f).coerceIn(1f, 20f)) { putFloat("dryDuration", it) }

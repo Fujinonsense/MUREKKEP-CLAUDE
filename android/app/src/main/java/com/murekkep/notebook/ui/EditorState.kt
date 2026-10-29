@@ -75,8 +75,8 @@ class EditorState(
     val pageSizes: List<PageSize>? = null,
     /** The PDF the pages are drawn on (its `source.pdf`), for the canvas and the export. */
     val pdfFile: File? = null,
-    /** The notebook's page template, for the export and the library's cover. */
-    val paper: PaperStyle = PaperStyle.LINED,
+    /** The notebook's page template as it opens. */
+    paper: PaperStyle = PaperStyle.LINED,
 ) {
     companion object {
         /** A4 in points. */
@@ -108,6 +108,22 @@ class EditorState(
 
     /** The notebook's title, for the top bar. */
     var title by mutableStateOf("")
+
+    /** The notebook's page template (every page's), for the canvas, the export and the library's
+     *  cover; Diğer › Şablonu değiştir changes it ([changePaper]). */
+    var paper: PaperStyle by mutableStateOf(paper)
+        private set
+
+    /** Changes the template of every page of a notebook (EditorModel.setPaper on iPad): the store
+     *  keeps it in the record at once, the page shows it, and the next save draws the cover on it.
+     *  Not for a PDF's own pages, nor while the note is read-only. */
+    fun changePaper(style: PaperStyle) {
+        if (isPdf || readOnly || paper == style) return
+        paper = style
+        onPaperChange?.invoke(style)
+        markDirty()
+        onInkChange?.invoke()
+    }
 
     var pageCount by mutableStateOf(1)
         private set
@@ -231,6 +247,13 @@ class EditorState(
             ink.straightLine = value
         }
 
+    /** Fingers only move and zoom the pages, even before a pen has touched the screen. */
+    var penOnly: Boolean
+        get() = ink.penOnly
+        set(value) {
+            ink.penOnly = value
+        }
+
     /** Seconds wet ink takes to dry; ink drying on the page follows a change at once. */
     var dryDuration: Float
         get() = ink.dryDuration
@@ -293,6 +316,9 @@ class EditorState(
 
     /** The store saves after a pause in writing. */
     var onDirty: (() -> Unit)? = null
+
+    /** The template changed: the store puts it in the notebook's record. */
+    var onPaperChange: ((PaperStyle) -> Unit)? = null
 
     /** The store saves at once (the screen is leaving, or the app goes to the background). */
     var onSaveNow: (() -> Unit)? = null

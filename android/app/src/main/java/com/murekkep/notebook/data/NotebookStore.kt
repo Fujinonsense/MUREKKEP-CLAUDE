@@ -266,6 +266,13 @@ class NotebookStore private constructor(context: Context) {
         scope.launch(Dispatchers.IO) { writeMeta(updated) }
     }
 
+    /** Puts a notebook on another page template (Diğer › Şablonu değiştir): its record at once; the
+     *  editor marks the ink changed, so the next save draws the cover on the new paper. */
+    fun setPaper(id: String, paper: PaperStyle) {
+        val updated = update(id) { it.copy(paper = paper) } ?: return
+        scope.launch(Dispatchers.IO) { writeMeta(updated) }
+    }
+
     /** Removes the notebook and its folder; a pending save of it is dropped. */
     fun delete(id: String) {
         saveJobs.remove(id)?.cancel()
@@ -350,6 +357,7 @@ class NotebookStore private constructor(context: Context) {
             paper = meta.paper,
         )
         state.title = meta.title
+        state.onPaperChange = { setPaper(meta.id, it) }
         state.onDirty = { scheduleSave(state) }
         state.onSaveNow = { saveNow(state) }
         return state

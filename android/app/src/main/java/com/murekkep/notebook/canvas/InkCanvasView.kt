@@ -420,6 +420,11 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
                 stylusSeen = true
+                // Ayarlar › Kalem › Havada önizleme turned off: no ring.
+                if (!state.ink.hoverPreview) {
+                    onHover?.invoke(null)
+                    return true
+                }
                 val erasing = state.tool is Tool.Eraser || tool == MotionEvent.TOOL_TYPE_ERASER ||
                     event.isButtonPressed(MotionEvent.BUTTON_STYLUS_PRIMARY) ||
                     event.isButtonPressed(MotionEvent.BUTTON_STYLUS_SECONDARY)
@@ -455,17 +460,18 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
                     }
                     return true
                 }
-                // A finger: draws only on a device whose pen has not been seen, and only alone; once a pen
-                // has been seen it can still take a recognized shape's handles.
+                // A finger: draws only on a device whose pen has not been seen, and only alone, unless
+                // Yalnızca kalemle çiz is on; it can still take a recognized shape's handles.
                 if (penPointer != -1 && penIsStylus) return true
                 val edit = state.shapeEdit
-                if (stylusSeen && edit != null && event.pointerCount == 1 && penPointer == -1 && !navigating &&
+                val fingerDraws = !stylusSeen && !state.ink.penOnly
+                if (!fingerDraws && edit != null && event.pointerCount == 1 && penPointer == -1 && !navigating &&
                     shapeHandle(Vec2(docX(event.getX(index)), docY(event.getY(index))), edit, FINGER_REACH) != null
                 ) {
                     penDown(event, index, stylus = false)
                     return true
                 }
-                if (!stylusSeen && event.pointerCount == 1 && penPointer == -1 && !navigating) {
+                if (fingerDraws && event.pointerCount == 1 && penPointer == -1 && !navigating) {
                     penDown(event, index, stylus = false)
                     return true
                 }

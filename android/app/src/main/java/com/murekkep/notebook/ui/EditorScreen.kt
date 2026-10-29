@@ -38,7 +38,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.Gesture
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Settings
@@ -205,9 +207,10 @@ fun EditorScreen(
     }
 
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var templatesOpen by rememberSaveable { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().background(z.paper3)) {
-            EditorTopBar(state, onBack, onShare, onSettings = settings?.let { { settingsOpen = true } })
+            EditorTopBar(state, onBack, onShare, onTemplates = { templatesOpen = true }, onSettings = settings?.let { { settingsOpen = true } })
             BoxWithConstraints(
                 Modifier
                     .weight(1f)
@@ -280,6 +283,18 @@ fun EditorScreen(
             BackHandler { settingsOpen = false }
             // Over the note, as the iPad's sheet: nothing reaches the page beneath.
             Box(Modifier.fillMaxSize().pointerInput(Unit) {}) { settings { settingsOpen = false } }
+        }
+        // "Şablonu değiştir": the templates with the notebook's own marked; a pick puts every page on it.
+        if (templatesOpen) {
+            TemplateSheet(
+                title = stringResource(R.string.change_template_title),
+                current = state.paper,
+                onDismiss = { templatesOpen = false },
+                onPick = {
+                    templatesOpen = false
+                    state.changePaper(it)
+                },
+            )
         }
     }
 }
@@ -356,13 +371,15 @@ private fun Context.findLifecycleOwner(): LifecycleOwner? {
     return null
 }
 
-/** Paylaş and Diğer on the editor's bar. */
+/** Paylaş ("PDF olarak paylaş") and Diğer on the editor's bar. Diğer holds the iPad's: for a
+ *  notebook "Şablonu değiştir (Çizgili)", then the pen-only drawing, the held shape, the animations
+ *  and the battery saver as switches, and Ayarlar under a divider. */
 @Composable
-private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> Unit, onSettings: (() -> Unit)?) {
+private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> Unit, onTemplates: () -> Unit, onSettings: (() -> Unit)?) {
     val z = Zen.colors
     var menuOpen by remember { mutableStateOf(false) }
     EditorBar(state.title, onBack) {
-        BarButton(stringResource(R.string.share), onClick = onShare) {
+        BarButton(stringResource(R.string.share_pdf), onClick = onShare) {
             Icon(Icons.Outlined.IosShare, contentDescription = null, modifier = Modifier.size(22.dp))
         }
         Box {
@@ -370,6 +387,22 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
                 Icon(Icons.Outlined.MoreHoriz, contentDescription = null, modifier = Modifier.size(22.dp))
             }
             ZenMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                if (!state.isPdf) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.change_template, stringResource(state.paper.titleRes))) },
+                        leadingIcon = { Spacer(Modifier.size(24.dp)) },
+                        trailingIcon = { Icon(Icons.Outlined.GridView, contentDescription = null) },
+                        enabled = !state.readOnly,
+                        onClick = {
+                            menuOpen = false
+                            onTemplates()
+                        },
+                    )
+                }
+                MenuSwitch(stringResource(R.string.editor_pen_only), Icons.Outlined.Draw, state.penOnly) {
+                    state.penOnly = it
+                    menuOpen = false
+                }
                 MenuSwitch(stringResource(R.string.editor_straighten_on_hold), Icons.Outlined.Gesture, state.straightLine) {
                     state.straightLine = it
                     menuOpen = false

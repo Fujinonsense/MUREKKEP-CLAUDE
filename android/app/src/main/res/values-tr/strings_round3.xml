@@ -6,4 +6,20 @@
     <string name="empty_favorites_text">Bir notu basılı tutup “Favorilere ekle”yi seç.</string>
     <!-- TalkBack'in favori bir notun adından sonraki yıldıza dediği -->
     <string name="favorite">Favori</string>
+
+    <!-- Diğer: açık defterin şablonu, yalnızca kalemle çizmek -->
+    <string name="change_template">Şablonu değiştir (%1$s)</string>
+    <string name="change_template_title">Şablonu değiştir</string>
+    <string name="editor_pen_only">Yalnızca kalemle çiz</string>
+
+    <!-- Ayarlar › Dil (iPad'in dil seçicisi) -->
+    <string name="settings_language">Dil</string>
+    <string name="settings_language_system">Sistem</string>
+    <string name="settings_language_footer">Uygulamanın tüm metinleri bu dilde gösterilir. Sistem, cihazın dilini izler.</string>
+
+    <!-- Ayarlar › Kalem (iPad'in Apple Pencil bölümü, Android kalemi için) -->
+    <string name="settings_pen">Kalem</string>
+    <string name="settings_hover_preview">Havada önizleme</string>
+    <string name="settings_straighten_on_hold">Bekleyince şekli düzelt (doğru, daire, elips, parabol, yay, çokgen)</string>
+    <string name="settings_pen_footer">Basınç, eğim ve yön her kalemde kullanılır. Kalemin yan düğmesini basılı tutunca silgiye geçilir, bırakınca kaldığın araca dönülür; kalemin silgi ucu da siler. Yalnızca kalemle çizerken de şekil tutamaçları parmakla sürüklenebilir. Bu kapalıyken parmak, kalem ekrana ilk dokunana dek çizer.</string>
 </resources>

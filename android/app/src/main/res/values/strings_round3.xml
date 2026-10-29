@@ -6,4 +6,20 @@
     <string name="empty_favorites_text">Touch and hold a note and choose “Add to favorites”.</string>
     <!-- TalkBack's word for the star after a favourite's title -->
     <string name="favorite">Favorite</string>
+
+    <!-- Diğer: the template of an open notebook, drawing with the pen only -->
+    <string name="change_template">Change template (%1$s)</string>
+    <string name="change_template_title">Change template</string>
+    <string name="editor_pen_only">Draw only with the pen</string>
+
+    <!-- Settings › Language (the iPad's language picker) -->
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System</string>
+    <string name="settings_language_footer">All of the app\'s text is shown in this language. System follows the device\'s language.</string>
+
+    <!-- Settings › Pen (the iPad's Apple Pencil section, for an Android pen) -->
+    <string name="settings_pen">Pen</string>
+    <string name="settings_hover_preview">Hover preview</string>
+    <string name="settings_straighten_on_hold">Fix the shape when you hold (line, circle, ellipse, parabola, arc, polygon)</string>
+    <string name="settings_pen_footer">Pressure, tilt and direction are used with every pen. Hold the pen\'s side button to erase and let go to return to your tool; the pen\'s eraser end erases too. Even when you draw only with the pen, shape handles can be dragged with a finger. With it off, a finger draws until the pen first touches the screen.</string>
 </resources>

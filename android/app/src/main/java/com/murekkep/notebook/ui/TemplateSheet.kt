@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -55,7 +57,9 @@ import com.murekkep.notebook.export.PaperDrawer
 
 // "Yeni defter" (TemplateGallery on iPad, opened by "Yeni not"): the page templates the Android
 // canvas draws, Temel's first four (Düz, Çizgili, Kareli, Noktalı), each an A4 page drawn by the
-// same code as the real pages, with its glyph and name; a tap starts a notebook on it.
+// same code as the real pages, with its glyph and name; a tap starts a notebook on it. Diğer ›
+// Şablonu değiştir opens the same sheet over a notebook, its own template marked, to put every page
+// on another.
 
 /** The templates a new notebook can start on: the four the paper shader draws. */
 val NewNotebookTemplates = listOf(PaperStyle.PLAIN, PaperStyle.LINED, PaperStyle.GRID, PaperStyle.DOTTED)
@@ -70,12 +74,19 @@ val PaperStyle.shaderIndex: Int
         else -> 1
     }
 
+/** The templates under [title] ("Yeni defter", or "Şablonu değiştir" for an open notebook, whose
+ *  [current] template wears a ring of ink, as the iPad's gallery marks it); a tap picks one. */
 @Composable
-fun TemplateSheet(onDismiss: () -> Unit, onPick: (PaperStyle) -> Unit) {
+fun TemplateSheet(
+    onDismiss: () -> Unit,
+    onPick: (PaperStyle) -> Unit,
+    title: String = stringResource(R.string.new_notebook_title),
+    current: PaperStyle? = null,
+) {
     val z = Zen.colors
     // On paper, as the iPad's gallery stands on the library's background.
     ZenSheet(
-        title = stringResource(R.string.new_notebook_title),
+        title = title,
         ground = z.paper,
         onDismiss = onDismiss,
         leading = { SheetButton(stringResource(R.string.cancel), onClick = onDismiss) },
@@ -94,7 +105,7 @@ fun TemplateSheet(onDismiss: () -> Unit, onPick: (PaperStyle) -> Unit) {
                 val cell = LibraryRules.adaptiveColumns(maxWidth.value, 118f, 168f, 18f).second
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     for (style in NewNotebookTemplates) {
-                        TemplateTile(style, (cell - 0.5f).dp) { onPick(style) }
+                        TemplateTile(style, (cell - 0.5f).dp, chosen = style == current) { onPick(style) }
                     }
                 }
             }
@@ -102,9 +113,10 @@ fun TemplateSheet(onDismiss: () -> Unit, onPick: (PaperStyle) -> Unit) {
     }
 }
 
-/** A template: its page in a hairline with a soft shadow, its glyph and name under it. */
+/** A template: its page in a hairline with a soft shadow, its glyph and name under it; the
+ *  notebook's own ([chosen]) in a 3 dp ring of ink. */
 @Composable
-private fun TemplateTile(style: PaperStyle, width: Dp, onClick: () -> Unit) {
+private fun TemplateTile(style: PaperStyle, width: Dp, chosen: Boolean, onClick: () -> Unit) {
     val z = Zen.colors
     val title = stringResource(style.titleRes)
     val shape = RoundedCornerShape(Zen.control)
@@ -112,7 +124,8 @@ private fun TemplateTile(style: PaperStyle, width: Dp, onClick: () -> Unit) {
         Modifier
             .width(width)
             // Read from its name under the page, once.
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { selected = chosen },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -123,7 +136,8 @@ private fun TemplateTile(style: PaperStyle, width: Dp, onClick: () -> Unit) {
                 .aspectRatio(EditorState.A4_WIDTH / EditorState.A4_HEIGHT)
                 .shadow(4.dp, shape)
                 .clip(shape)
-                .border(1.dp, z.rule, shape),
+                .border(1.dp, z.rule, shape)
+                .then(if (chosen) Modifier.border(3.dp, z.ink, shape) else Modifier),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(style.glyph, contentDescription = null, tint = z.ink, modifier = Modifier.size(14.dp))
@@ -160,7 +174,7 @@ internal fun PaperPage(style: PaperStyle, modifier: Modifier) {
     }
 }
 
-private val PaperStyle.titleRes: Int
+internal val PaperStyle.titleRes: Int
     get() = when (PaperDrawer.exported(this)) {
         PaperStyle.PLAIN -> R.string.template_plain
         PaperStyle.GRID -> R.string.template_grid
