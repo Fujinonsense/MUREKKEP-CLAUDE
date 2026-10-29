@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
@@ -70,10 +73,13 @@ class GameCornerTest {
         prefs.edit().clear().commit()
     }
 
+    /** The lasso's bar showing in the editor. */
+    private var selecting by mutableStateOf(false)
+
     private fun show(width: Dp = 1280.dp, height: Dp = 800.dp) {
         compose.setContent {
             MurekkepTheme {
-                Box(Modifier.size(width, height)) { BreakCorner(PaletteEdge.BOTTOM, 90.dp, width, height) }
+                Box(Modifier.size(width, height)) { BreakCorner(PaletteEdge.BOTTOM, 90.dp, width, height, selectionBar = selecting) }
             }
         }
     }
@@ -125,6 +131,29 @@ class GameCornerTest {
         val card = panel.getBoundsInRoot()
         assertEquals(12f, card.top.value, 0.5f)
         assertEquals(330f - 90f - 12f, card.bottom.value, 0.5f)
+        // Nor over the lasso's bar while it shows: cut to the room above that.
+        selecting = true
+        compose.waitForIdle()
+        assertEquals(12f, panel.getBoundsInRoot().top.value, 0.5f)
+        assertEquals(330f - 90f - 116f, panel.getBoundsInRoot().bottom.value, 0.5f)
+    }
+
+    @Test
+    fun theCardStandsOverTheLassosBarWhileItShows() {
+        // A phone upright, the pen bar along the bottom. The lasso's bar stands 52 over the bar's room
+        // and is 56 tall, and the card over its tile (58 up) would hide most of it: while it shows the
+        // card rises to 8 over it, as the iPad's panel clears its bar's buttons, and comes down after.
+        show(411.dp, 760.dp)
+        openGame()
+        fun card() = panel.getBoundsInRoot()
+        assertEquals(760f - 90f - 58f, card().bottom.value, 0.5f)
+        selecting = true
+        compose.waitForIdle()
+        assertEquals(760f - 90f - 116f, card().bottom.value, 0.5f)
+        assertEquals("the compact card whole", 420f, (card().bottom - card().top).value, 0.5f)
+        selecting = false
+        compose.waitForIdle()
+        assertEquals(760f - 90f - 58f, card().bottom.value, 0.5f)
     }
 
     @Test

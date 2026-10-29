@@ -122,6 +122,11 @@ private val TileMargin = 6.dp
 /** The panel's margin from the canvas's edges, and its gap above the tile. */
 private val PanelMargin = 12.dp
 private val PanelGap = 8.dp
+/**
+ * How high the lasso's bar reaches over a pen bar along the bottom while it shows: 52 up
+ * (EditorScreen), 56 tall (its 44 dp actions, 6 above and below them).
+ */
+private val SelectionBarTop = 52.dp + 56.dp
 
 /** The panel springs in and out from its corner (the iPad's spring: response 0.38, damping 0.82). */
 private fun <T> cornerSpring() = spring<T>(dampingRatio = 0.82f, stiffness = springStiffness(0.38f))
@@ -129,11 +134,12 @@ private fun <T> cornerSpring() = spring<T>(dampingRatio = 0.82f, stiffness = spr
 /**
  * The break corner in the editor's canvas ([canvasWidth] x [canvasHeight]), over the page: the tile
  * at the bottom left, raised over a pen bar along the bottom by [bottomClearance], and the panel
- * above it, clear of the pen bar on [edge]: compact, or one step larger that is never more than a
- * quarter of the canvas. Back leaves a game, then closes the panel.
+ * above it, clear of the pen bar on [edge] and of the lasso's bar while [selectionBar] shows:
+ * compact, or one step larger that is never more than a quarter of the canvas. Back leaves a game,
+ * then closes the panel.
  */
 @Composable
-fun BreakCorner(edge: PaletteEdge, bottomClearance: Dp, canvasWidth: Dp, canvasHeight: Dp) {
+fun BreakCorner(edge: PaletteEdge, bottomClearance: Dp, canvasWidth: Dp, canvasHeight: Dp, selectionBar: Boolean = false) {
     val context = LocalContext.current
     val store = remember(context) { GameProgressStore(context) }
     var open by rememberSaveable { mutableStateOf(false) }
@@ -145,12 +151,14 @@ fun BreakCorner(edge: PaletteEdge, bottomClearance: Dp, canvasWidth: Dp, canvasH
     val endInset = safe.calculateEndPadding(direction)
     // The room kept clear at each edge (the iPad's gamePanelSize): the pen bar along the top
     // (10 + 64 + 10) or down the side (12 + 64 + 14), the tile below. On a short canvas the panel
-    // comes down over its tile, but never over a pen bar along the bottom.
+    // comes down over its tile, but never over a pen bar along the bottom, nor over the lasso's bar
+    // while that shows (the iPad's, 104 up, clears its buttons): it rises to 8 over that bar, cut to
+    // the room left.
     val leading = PanelMargin + startInset
     val trailing = (if (edge == PaletteEdge.TRAILING) 90.dp else PanelMargin) + endInset
     val top = if (edge == PaletteEdge.TOP) 84.dp else PanelMargin
-    val aboveTile = bottomInset + bottomClearance + TileMargin + TileTarget + PanelGap
-    val low = bottomInset + bottomClearance + PanelMargin
+    val low = bottomInset + bottomClearance + (if (selectionBar) SelectionBarTop + PanelGap else PanelMargin)
+    val aboveTile = maxOf(bottomInset + bottomClearance + TileMargin + TileTarget + PanelGap, low)
     val bottom = GamePanelSize.bottom(canvasHeight.value.toDouble(), top.value.toDouble(), aboveTile.value.toDouble(), low.value.toDouble()).dp
     val step = if (expanded) {
         GamePanelSize.larger(canvasWidth.value.toDouble(), canvasHeight.value.toDouble(), leading.value.toDouble(), trailing.value.toDouble(), top.value.toDouble(), bottom.value.toDouble())
@@ -160,6 +168,8 @@ fun BreakCorner(edge: PaletteEdge, bottomClearance: Dp, canvasWidth: Dp, canvasH
     val size = GamePanelSize.fitted(step, (canvasWidth - leading - trailing).value.toDouble(), (canvasHeight - top - bottom).value.toDouble())
     val width by animateDpAsState(size.width.dp, cornerSpring(), label = "panel width")
     val height by animateDpAsState(size.height.dp, cornerSpring(), label = "panel height")
+    // Up over the lasso's bar and down again on the size's spring, so the panel's top moves as one.
+    val lift by animateDpAsState(bottom, cornerSpring(), label = "panel bottom")
 
     Box(Modifier.fillMaxSize()) {
         GameCornerButton(
@@ -169,7 +179,7 @@ fun BreakCorner(edge: PaletteEdge, bottomClearance: Dp, canvasWidth: Dp, canvasH
         )
         AnimatedVisibility(
             visible = open,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = leading, bottom = bottom),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = leading, bottom = lift),
             enter = scaleIn(cornerSpring(), initialScale = 0.86f, transformOrigin = TransformOrigin(0f, 1f)) + fadeIn(cornerSpring()),
             exit = scaleOut(cornerSpring(), targetScale = 0.86f, transformOrigin = TransformOrigin(0f, 1f)) + fadeOut(cornerSpring()),
         ) {
