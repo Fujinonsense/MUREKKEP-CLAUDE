@@ -31,6 +31,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.test.core.app.ApplicationProvider
 import com.murekkep.notebook.data.LibraryImport
 import com.murekkep.notebook.data.NoteKind
@@ -40,6 +42,7 @@ import com.murekkep.notebook.data.PaperStyle
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -205,6 +208,23 @@ class CoursesScreenTest {
         title.performClick()
         compose.waitForIdle()
         compose.onNode(menuItem("Rename")).assertIsDisplayed()
+    }
+
+    @Test
+    fun theNameHintIsCutWithAnEllipsis() {
+        show()
+        compose.onNodeWithContentDescription("New course").performClick()
+        compose.waitForIdle()
+        val hint = compose.onNodeWithText("Section name (e.g. Calculus, Anatomy)", useUnmergedTree = true).fetchSemanticsNode()
+        val layouts = ArrayList<TextLayoutResult>()
+        hint.config[SemanticsActions.GetTextLayoutResult].action!!(layouts)
+        // One line, cut with an ellipsis where a phone's field ends (as the iPad's placeholder), not
+        // after its last whole word. Robolectric measures no real glyphs, so the test reads how the
+        // hint asks to be laid out rather than where it is cut.
+        val input = layouts.single().layoutInput
+        assertEquals(TextOverflow.Ellipsis, input.overflow)
+        assertFalse(input.softWrap)
+        assertEquals(1, input.maxLines)
     }
 
     @Test

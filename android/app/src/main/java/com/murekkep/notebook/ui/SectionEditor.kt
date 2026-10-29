@@ -74,6 +74,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -274,8 +275,9 @@ private fun FormGroup(header: String?, content: @Composable () -> Unit) {
     }
 }
 
-/** The name in the iPad's title3 (20 sp), "Bölüm adı (ör. Calculus, Anatomi)" while it is empty;
- *  the keyboard's done key only puts the keyboard away, as Return does in the iPad's form. */
+/** The name in the iPad's title3 (20 sp), "Bölüm adı (ör. Calculus, Anatomi)" while it is empty, cut
+ *  with an ellipsis where a phone's field ends, as the iPad's placeholder; the keyboard's done key
+ *  only puts the keyboard away, as Return does in the iPad's form. */
 @Composable
 private fun NameField(name: String, onName: (String) -> Unit) {
     val z = Zen.colors
@@ -293,7 +295,7 @@ private fun NameField(name: String, onName: (String) -> Unit) {
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = hint },
         decorationBox = { inner ->
             Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.CenterStart) {
-                if (name.isEmpty()) Text(hint, style = style, color = z.muted, maxLines = 1)
+                if (name.isEmpty()) Text(hint, style = style, color = z.muted, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 inner()
             }
         },
