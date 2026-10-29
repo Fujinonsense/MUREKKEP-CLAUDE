@@ -15,12 +15,19 @@ data class PageSize(val width: Float, val height: Float) {
 }
 
 /** Pages stacked from the top (DocumentLayout on iPad): page `i` covers (left(i), top(i)) to
- *  (left(i) + width(i), top(i) + height(i)) in document points. A notebook's pages are all A4; an
- *  imported PDF's have its own sizes, the narrower ones centered on the widest. Ink is kept in each
- *  page's own points (`toPage`, `toDoc`). */
-class PageLayout(val sizes: List<PageSize>, val gap: Float = 24f) {
+ *  (left(i) + width(i), top(i) + height(i)) in document points, [gap] apart. A notebook's pages are
+ *  all A4; an imported PDF's have its own sizes, the narrower ones centered on the widest. Ink is
+ *  kept in each page's own points (`toPage`, `toDoc`). The canvas keeps [MARGIN] round them. */
+class PageLayout(val sizes: List<PageSize>, val gap: Float = GAP) {
     /** `pageCount` A4 pages (a notebook). */
     constructor(pageCount: Int) : this(List(pageCount) { PageSize.A4 })
+
+    companion object {
+        /** The iPad's DocumentLayout.margin round the pages and gap between them, in page points:
+         *  they grow and shrink with the zoom, as the pages do. */
+        const val MARGIN = 28f
+        const val GAP = 22f
+    }
 
     val pageCount: Int get() = sizes.size
 

@@ -33,6 +33,7 @@ import com.murekkep.notebook.ink.referenceNow
 import com.murekkep.notebook.render.ActiveStroke
 import com.murekkep.notebook.render.FrameInput
 import com.murekkep.notebook.render.InkRenderer
+import com.murekkep.notebook.render.PageLayout
 import com.murekkep.notebook.render.PdfTextures
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.Tool
@@ -359,15 +360,16 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val layout = pageLayout()
-        val margin = 24f * resources.displayMetrics.density
         val oldFit = fitZoom
-        fitZoom = max(0.1f, (w - 2 * margin) / layout.pageWidth)
+        // The iPad's fit (CanvasView.fitZoom): the widest page with its margin on either side fills
+        // the width, so the margins and the gaps are page points that zoom with the pages.
+        fitZoom = max(0.1f, w / (layout.pageWidth + 2 * PageLayout.MARGIN))
         if (!fitted) {
             zoom = fitZoom
             // In the middle: with a bar down the right side the clamp lets a fitted page stand left of
             // the middle, so it would leave it at the left edge.
             originX = (w - layout.pageWidth * zoom) / 2f
-            originY = margin + clearance.top
+            originY = PageLayout.MARGIN * zoom + clearance.top
             fitted = true
         } else {
             // A turned tablet or a resized window: the same zoom against the page's width (a fitted
@@ -400,7 +402,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     /** Where the document's origin may stand vertically (view pixels). */
     private fun verticalRange(): ClosedFloatingPointRange<Float> =
-        PageScroll.verticalRange(height.toFloat(), pageLayout().totalHeight * zoom, 24f * resources.displayMetrics.density, clearance)
+        PageScroll.verticalRange(height.toFloat(), pageLayout().totalHeight * zoom, PageLayout.MARGIN * zoom, clearance)
 
     private fun docX(x: Float) = (x - originX) / zoom
     private fun docY(y: Float) = (y - originY) / zoom
