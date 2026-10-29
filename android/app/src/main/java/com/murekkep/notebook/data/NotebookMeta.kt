@@ -58,12 +58,15 @@ data class NotebookMeta(
     val paper: PaperStyle,
     /** An imported PDF keeps it as `source.pdf` in its folder, its pages are the PDF's. */
     val kind: NoteKind = NoteKind.NOTEBOOK,
+    /** When the note was last opened in the editor (the library's "Son açılanlar"); its last change until then. */
+    val opened: Long = modified,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("title", title)
         .put("created", Instant.ofEpochMilli(created).toString())
         .put("modified", Instant.ofEpochMilli(modified).toString())
+        .put("opened", Instant.ofEpochMilli(opened).toString())
         .put("pageCount", pageCount)
         .put("paper", paper.raw)
         .put("kind", kind.raw)
@@ -73,14 +76,16 @@ data class NotebookMeta(
         fun fromJson(json: JSONObject, id: String): NotebookMeta {
             val now = System.currentTimeMillis()
             val created = parseTime(json.opt("created")) ?: now
+            val modified = parseTime(json.opt("modified")) ?: created
             return NotebookMeta(
                 id = id,
                 title = json.optString("title", ""),
                 created = created,
-                modified = parseTime(json.opt("modified")) ?: created,
+                modified = modified,
                 pageCount = json.optInt("pageCount", 1).coerceAtLeast(1),
                 paper = PaperStyle.fromRaw(json.optString("paper", "")),
                 kind = NoteKind.fromRaw(json.optString("kind", "")),
+                opened = parseTime(json.opt("opened")) ?: modified,
             )
         }
 

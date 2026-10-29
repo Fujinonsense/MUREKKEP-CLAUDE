@@ -2,11 +2,14 @@ package com.murekkep.notebook.data
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.murekkep.notebook.export.FlatInk
+import com.murekkep.notebook.export.PaperDrawer
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.render.PageSize
 import com.murekkep.notebook.ui.EditorState
@@ -28,8 +31,9 @@ import java.util.UUID
 import kotlin.math.max
 
 // Notebooks on disk (Murekkep.swiftpm/LibraryStore.swift and the saving part of EditorModel.swift):
-// filesDir/notebooks/<uuid>/meta.json and ink.bin, and for an imported PDF its source.pdf and a
-// picture of its first page for the library (thumb.jpg). There is no index file: the library is the folders,
+// filesDir/notebooks/<uuid>/meta.json and ink.bin, a picture of the first page for the library's
+// cover (thumb.jpg, drawn at every save), and for an imported PDF its source.pdf (its cover is the
+// PDF's first page). There is no index file: the library is the folders,
 // each with its own record, so one damaged record never empties the list. Saves wait for a pause in
 // writing (1.2 s, as on iPad), take their snapshot on the main thread and write it on the IO
 // dispatcher; the screen asks for a save at once when it leaves or the app goes to the background.
@@ -58,13 +62,17 @@ class NotebookStore private constructor(context: Context) {
     var loaded by mutableStateOf(false)
         private set
 
+    /** Bumped after a cover (thumb.jpg) is written, so the library reads it again. */
+    var coverVersion by mutableStateOf(0)
+        private set
+
     /** The one read of the folders: everyone who needs the list waits for the same one. */
     private var firstLoad: Deferred<Unit>? = null
 
     companion object {
         private const val SAVE_DELAY_MS = 1200L
 
-        /** The library's picture of a PDF's first page, in pixels across. */
+        /** The library's picture of a note's first page, in pixels across. */
         private const val THUMB_WIDTH = 360f
 
         @Volatile
@@ -237,8 +245,12 @@ class NotebookStore private constructor(context: Context) {
 
     private class Loaded(val pages: List<List<Stroke>>, val readOnly: Boolean, val pdfSizes: List<PageSize>? = null)
 
-    /** Loads the notebook's ink off the main thread into an editor state hooked to this store. */
+    /** Loads the notebook's ink off the main thread into an editor state hooked to this store, and
+     *  notes the moment for the library's "Son açılanlar". */
     suspend fun open(meta: NotebookMeta): EditorState {
+        update(meta.id) { it.copy(opened = System.currentTimeMillis()) }?.let { opened ->
+            scope.launch(Dispatchers.IO) { writeMeta(opened) }
+        }
         val file = inkFile(meta.id)
         val isPdf = meta.kind == NoteKind.PDF
         val result = withContext(Dispatchers.IO) {
@@ -309,8 +321,9 @@ class NotebookStore private constructor(context: Context) {
         val meta = update(id) { it.copy(modified = now, pageCount = pages.size) } ?: return
         notebooks = notebooks.sortedByDescending { it.modified }
         val sequence = ++nextSequence
+        val cover = if (state.isPdf) null else pages.firstOrNull() ?: emptyList()
         // Once the snapshot is taken the write goes through, even if the job is cancelled meanwhile.
-        withContext(Dispatchers.IO + NonCancellable) {
+        val coverWritten = withContext(Dispatchers.IO + NonCancellable) {
             val bytes = InkCodec.encode(pages)
             synchronized(writeLock) {
                 val last = writtenSequence[id] ?: 0L
@@ -318,8 +331,41 @@ class NotebookStore private constructor(context: Context) {
                     writtenSequence[id] = sequence
                     writeAtomically(inkFile(id), bytes)
                     writeMeta(meta)
+                    if (cover != null) writeCover(id, cover, meta.paper)
+                    cover != null
+                } else {
+                    false
                 }
             }
+        }
+        if (coverWritten) coverVersion++
+    }
+
+    /** The library's cover of a notebook: its first page, paper template and ink, 360 pixels across
+     *  (an empty first page has no cover; the library draws ruled paper). */
+    private fun writeCover(id: String, first: List<Stroke>, paper: PaperStyle) {
+        val file = thumbFile(id)
+        if (first.isEmpty()) {
+            file.delete()
+            return
+        }
+        try {
+            val scale = THUMB_WIDTH / PageSize.A4.width
+            val picture = Bitmap.createBitmap(THUMB_WIDTH.toInt(), (PageSize.A4.height * scale).toInt(), Bitmap.Config.ARGB_8888)
+            picture.eraseColor(android.graphics.Color.WHITE)
+            val canvas = Canvas(picture)
+            canvas.scale(scale, scale)
+            PaperDrawer.draw(paper, PageSize.A4.width, PageSize.A4.height, canvas)
+            FlatInk.draw(first, canvas)
+            val tmp = File(file.parentFile, file.name + ".tmp")
+            tmp.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            picture.recycle()
+            if (!tmp.renameTo(file)) {
+                file.delete()
+                tmp.renameTo(file)
+            }
+        } catch (e: Exception) {
+            // A cover is a nicety: the note is saved either way.
         }
     }
 

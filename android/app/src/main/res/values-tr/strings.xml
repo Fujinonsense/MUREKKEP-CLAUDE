@@ -4,10 +4,10 @@
 
     <!-- Kütüphane -->
     <string name="library_title">Defterler</string>
-    <string name="new_notebook">Yeni defter</string>
+    <string name="new_notebook">Yeni not</string>
     <string name="notebook_default_title">Not</string>
-    <string name="library_empty_title">Henüz defter yok</string>
-    <string name="library_empty_hint">“Yeni defter”e dokun ve yazmaya başla.</string>
+    <string name="library_empty_title">Henüz not yok</string>
+    <string name="library_empty_hint">“Yeni not”a dokun ve yazmaya başla.</string>
     <string name="more_actions">Daha fazla</string>
     <string name="rename">Yeniden adlandır</string>
     <string name="delete">Sil</string>
@@ -90,4 +90,23 @@
     <string name="pen_desc_pearl">Çizgi boyunca dizilmiş inciler.</string>
     <string name="pen_desc_impasto">Kalın yağlı boya; fırça izi ve kabartı kalır.</string>
     <string name="pen_desc_bloom">Parlak bir su çizgisi; kalemi kaldırınca cam çiçekler açar.</string>
+
+    <!-- Zen kütüphane -->
+    <string name="library_all_notes">Tüm notlar</string>
+    <string name="library_recent">Son açılanlar</string>
+    <string name="library_notebooks">Defterler</string>
+    <string name="library_pdfs">PDF’ler</string>
+    <string name="search">Ara</string>
+    <string name="settings">Ayarlar</string>
+    <string name="all">Hepsi</string>
+    <string name="sort_modified">Son düzenlenen</string>
+    <string name="sort_title">Ada göre</string>
+    <string name="sort_created">Oluşturulma</string>
+    <string name="pdf_label">PDF</string>
+    <string name="library_section_empty">Burada henüz not yok.</string>
+    <string name="menu">Menü</string>
+    <string name="hide_sidebar">Kenar çubuğunu gizle</string>
+    <plurals name="pages">
+        <item quantity="other">%d sayfa</item>
+    </plurals>
 </resources>
