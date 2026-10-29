@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -176,7 +177,7 @@ private fun PanelPen(state: EditorState, brush: Brush, modifier: Modifier, onPic
                 .clip(shape)
                 .background(paper)
                 .border(if (selected) 1.5.dp else 1.dp, if (selected) z.accent else z.rule, shape)
-                .combinedClickable(onClick = onPick, onLongClick = { menu = true }, onLongClickLabel = favoriteLabel)
+                .combinedClickable(onClick = onPick, role = Role.Button, onLongClick = { menu = true }, onLongClickLabel = favoriteLabel)
                 // Named by its text, once.
                 .semantics { this.selected = selected }
                 .padding(start = 10.dp, end = 12.dp),
@@ -240,7 +241,7 @@ private fun Heart(name: String, starred: Boolean, modifier: Modifier, onToggle: 
     Box(
         modifier
             .size(40.dp)
-            .clickable {
+            .clickable(role = Role.Button) {
                 onToggle()
                 tick()
             }
@@ -282,7 +283,7 @@ private fun NoFavorites(onBrowse: () -> Unit) {
             modifier = Modifier
                 .padding(top = 2.dp)
                 .clip(RoundedCornerShape(Zen.control))
-                .clickable(onClick = onBrowse)
+                .clickable(role = Role.Button, onClick = onBrowse)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
         )
     }

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,7 +106,7 @@ fun SheetButton(label: String, bold: Boolean = false, onClick: () -> Unit) {
         Modifier
             .height(Zen.target)
             .clip(RoundedCornerShape(Zen.control))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

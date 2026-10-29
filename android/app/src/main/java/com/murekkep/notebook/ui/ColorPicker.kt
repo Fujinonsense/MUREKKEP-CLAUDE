@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -99,7 +100,7 @@ private fun Swatch(color: InkColor, selected: Boolean, label: String, small: Boo
             .clip(CircleShape)
             .background(color.toColor())
             .border(1.dp, z.ink.copy(alpha = 0.12f), CircleShape)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = label
                 this.selected = selected
@@ -116,7 +117,7 @@ private fun CustomSwatch(color: InkColor, onClick: () -> Unit) {
             .size(40.dp)
             .padding(4.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
     ) {
         Canvas(Modifier.size(32.dp)) {

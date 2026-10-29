@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -192,7 +193,7 @@ private fun SelectionAction(title: String, icon: ImageVector, tint: Color = Colo
     Column(
         Modifier
             .clip(RoundedCornerShape(Zen.control))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .defaultMinSize(minWidth = 52.dp, minHeight = 44.dp)
             .padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

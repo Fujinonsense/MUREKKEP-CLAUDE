@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -111,7 +112,7 @@ private fun TemplateTile(style: PaperStyle, width: Dp, onClick: () -> Unit) {
         Modifier
             .width(width)
             // Read from its name under the page, once.
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

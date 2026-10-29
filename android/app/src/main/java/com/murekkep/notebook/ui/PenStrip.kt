@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -459,7 +461,7 @@ fun BarButton(
             .size(Zen.target)
             .clip(RoundedCornerShape(Zen.control))
             .background(if (selected) z.accent.copy(alpha = 0.10f) else Color.Transparent)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = label
                 if (selected) this.selected = true
@@ -606,7 +608,7 @@ private fun FoldButton(edge: PaletteEdge, onFold: () -> Unit) {
         Modifier
             .size(if (edge.isVertical) 44.dp else FoldLength, if (edge.isVertical) FoldLength else 44.dp)
             .clip(RoundedCornerShape(Zen.control))
-            .clickable(onClick = onFold)
+            .clickable(role = Role.Button, onClick = onFold)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -623,7 +625,7 @@ private fun FoldedTool(state: EditorState, edge: PaletteEdge, onUnfold: () -> Un
         Modifier
             .defaultMinSize(minWidth = Zen.target, minHeight = Zen.target)
             .clip(RoundedCornerShape(Zen.control))
-            .clickable(onClick = onUnfold)
+            .clickable(role = Role.Button, onClick = onUnfold)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -715,6 +717,7 @@ private fun PenSlot(
             .clipToBounds()
             .combinedClickable(
                 onClick = onTap,
+                role = Role.Button,
                 onClickLabel = if (selected) openSettings else null,
                 onLongClick = if (favorite != null) ({ menu = true }) else null,
                 onLongClickLabel = favoriteLabel,
@@ -755,7 +758,7 @@ private fun ColorDot(color: Color, onClick: () -> Unit, popover: @Composable Box
         Modifier
             .size(Zen.target)
             .clip(RoundedCornerShape(Zen.control))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -929,7 +932,7 @@ fun SwitchRow(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
 @Composable
 fun ZenSegments(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val z = Zen.colors
-    Row(modifier.width(IntrinsicSize.Max).background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp)) {
+    Row(modifier.width(IntrinsicSize.Max).background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp).selectableGroup()) {
         options.forEachIndexed { i, label ->
             val on = i == selected
             Box(
@@ -939,8 +942,7 @@ fun ZenSegments(options: List<String>, selected: Int, onSelect: (Int) -> Unit, m
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) z.paper else Color.Transparent)
                     .then(if (on) Modifier.border(1.dp, z.rule, RoundedCornerShape(8.dp)) else Modifier)
-                    .clickable { onSelect(i) }
-                    .semantics { this.selected = on }
+                    .selectable(selected = on, role = Role.Tab) { onSelect(i) }
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1040,7 +1042,7 @@ private fun ShapeTile(kind: ShapeKind, selected: Boolean, modifier: Modifier, on
             .clip(shape)
             .background(if (selected) z.accent else z.paper2)
             .then(if (selected) Modifier else Modifier.border(1.dp, z.rule, shape))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = 4.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

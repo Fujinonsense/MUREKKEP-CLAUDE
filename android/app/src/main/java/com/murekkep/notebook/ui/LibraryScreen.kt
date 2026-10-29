@@ -48,6 +48,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -130,6 +132,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -538,7 +541,7 @@ private fun NavRow(icon: ImageVector, title: String, count: Int?, selected: Bool
             .height(40.dp)
             .clip(RoundedCornerShape(Zen.control))
             .background(if (selected) z.paper3 else Color.Transparent)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -602,7 +605,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
                         Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .clickable { onQuery("") }
+                            .clickable(role = Role.Button) { onQuery("") }
                             .semantics { contentDescription = clear },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -827,8 +830,7 @@ private fun FilterSegments(filter: LibraryFilter, onFilter: (LibraryFilter) -> U
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (on) z.paper else Color.Transparent)
                         .then(if (on) Modifier.border(1.dp, z.rule, RoundedCornerShape(8.dp)) else Modifier)
-                        .clickable { onFilter(option) }
-                        .semantics { this.selected = on }
+                        .selectable(selected = on, role = Role.Tab) { onFilter(option) }
                         .padding(horizontal = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -843,7 +845,7 @@ private fun FilterSegments(filter: LibraryFilter, onFilter: (LibraryFilter) -> U
                 }
             }
         },
-        modifier = modifier.background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp).semantics { contentDescription = label },
+        modifier = modifier.background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp).semantics { contentDescription = label }.selectableGroup(),
     ) { segments, constraints ->
         val natural = segments.map { it.maxIntrinsicWidth(constraints.maxHeight) }
         val total = if (constraints.hasBoundedWidth) constraints.maxWidth else natural.sum()
@@ -877,7 +879,7 @@ fun ZenButton(label: String, filled: Boolean, enabled: Boolean = true, onClick: 
             .clip(shape)
             .background(if (filled) z.ink else z.paper2)
             .border(1.dp, if (filled) z.ink else z.rule, shape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -905,7 +907,7 @@ private fun SortMenu(sort: LibrarySort, onSort: (LibrarySort) -> Unit, modifier:
             Modifier
                 .height(36.dp)
                 .clip(RoundedCornerShape(Zen.control))
-                .clickable { open = true }
+                .clickable(role = Role.DropdownList) { open = true }
                 .semantics { contentDescription = label }
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1059,7 +1061,7 @@ private fun SourceChoice(label: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(Zen.control))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 4.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -1128,7 +1130,7 @@ private fun NoteCard(
     Column(
         modifier
             .clip(shape)
-            .combinedClickable(onClick = onOpen, onLongClickLabel = more, onLongClick = { menuOpen = true }),
+            .combinedClickable(onClick = onOpen, role = Role.Button, onLongClickLabel = more, onLongClick = { menuOpen = true }),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(

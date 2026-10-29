@@ -363,7 +363,7 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
                 Modifier
                     .height(Zen.target)
                     .clip(RoundedCornerShape(Zen.control))
-                    .clickable(onClick = onBack)
+                    .clickable(role = Role.Button, onClick = onBack)
                     .padding(start = 6.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
