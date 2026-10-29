@@ -51,6 +51,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,6 +100,8 @@ import com.murekkep.notebook.canvas.Clearance
 import com.murekkep.notebook.canvas.HoverRing
 import com.murekkep.notebook.canvas.InkCanvasView
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 // One open notebook, the spec's editor: a quiet top bar on paper-2 ("‹ Notlar", the title in the
@@ -163,6 +167,21 @@ fun EditorScreen(
     val canvasPlace = remember { CanvasPlace() }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    // The bar's way back to its place on the iPad's spring; the grip taken again stops it.
+    var settling by remember { mutableStateOf<Job?>(null) }
+    val settle = {
+        val from = paletteDrag
+        settling = scope.launch {
+            animate(Offset.VectorConverter, from, Offset.Zero, animationSpec = spring(dampingRatio = 0.82f, stiffness = springStiffness(0.38f))) { value, _ ->
+                paletteDrag = value
+            }
+        }
+    }
+    // A soft knock whenever the bar settles on another edge, by its grip, its menu or TalkBack (the
+    // iPad's sensoryFeedback on its dock).
+    LaunchedEffect(state, view) {
+        snapshotFlow { state.paletteEdge }.drop(1).collect { view.dockThud() }
+    }
     // What stands along the bottom (the page badge, the lasso's bar) moves up over a bar there.
     val bottomClearance = if (edge == PaletteEdge.BOTTOM) PenBarMargin + PenBarHeight + 8.dp else 0.dp
     SideEffect {
@@ -218,6 +237,7 @@ fun EditorScreen(
                     state,
                     popoverRoom = popoverRoom(edge, maxHeight, bottomInset),
                     onGripMove = { finger, moved ->
+                        settling?.cancel()
                         paletteDrag = moved
                         val target = nearest(finger)
                         if (paletteTarget != null && paletteTarget != target) view.selectionTick()
@@ -225,19 +245,17 @@ fun EditorScreen(
                     },
                     onGripDrop = { finger ->
                         val target = nearest(finger)
-                        if (target != edge) view.dockThud()
-                        state.paletteEdge = target
-                        paletteDrag = Offset.Zero
                         paletteTarget = null
+                        if (target == edge) {
+                            settle()
+                        } else {
+                            state.paletteEdge = target
+                            paletteDrag = Offset.Zero
+                        }
                     },
                     onGripCancel = {
                         paletteTarget = null
-                        val from = paletteDrag
-                        scope.launch {
-                            animate(Offset.VectorConverter, from, Offset.Zero, animationSpec = spring(dampingRatio = 0.82f, stiffness = springStiffness(0.38f))) { value, _ ->
-                                paletteDrag = value
-                            }
-                        }
+                        settle()
                     },
                     modifier = Modifier
                         .align(edge.alignment)
