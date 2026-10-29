@@ -723,10 +723,11 @@ final class CanvasView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegat
         zoomPanel?.requestRender()
     }
 
+    /// The ground around the pages: the zen spec's paper-3 (#EDEDEA by day, #151618 at night).
     private func updateClearColor() {
         let dark = traitCollection.userInterfaceStyle == .dark
-        metalView.clearColor = dark ? MTLClearColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-                                    : MTLClearColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1)
+        metalView.clearColor = dark ? MTLClearColor(red: 0.082, green: 0.086, blue: 0.094, alpha: 1)
+                                    : MTLClearColor(red: 0.929, green: 0.929, blue: 0.918, alpha: 1)
     }
 
     private func drawFrame() {
