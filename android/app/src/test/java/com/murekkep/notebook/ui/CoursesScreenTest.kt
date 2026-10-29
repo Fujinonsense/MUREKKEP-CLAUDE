@@ -2,8 +2,11 @@ package com.murekkep.notebook.ui
 
 import android.content.Context
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
@@ -173,6 +176,20 @@ class CoursesScreenTest {
         compose.onNode(menuItem("Remove from course")).performClick()
         compose.waitUntil(5_000) { !record("Derivatives").has("sectionID") }
         compose.onNode(sidebarRow("Biology") and hasText("2")).assertIsDisplayed()
+    }
+
+    @Test
+    fun theMoveMenusTitleSaysItGoesBack() {
+        show()
+        compose.onNodeWithText("Derivatives").performTouchInput { longClick() }
+        compose.onNodeWithText("Move to course").performClick()
+        compose.waitForIdle()
+        // TalkBack hears what the title does, not only the name of the action just chosen.
+        val title = compose.onNode(menuItem("Move to course"))
+        title.assert(SemanticsMatcher("goes back") { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Back" })
+        title.performClick()
+        compose.waitForIdle()
+        compose.onNode(menuItem("Rename")).assertIsDisplayed()
     }
 
     @Test

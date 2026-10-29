@@ -57,6 +57,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -223,10 +224,18 @@ internal fun ColumnScope.MoveToCourseItems(
     onNewCourse: () -> Unit,
 ) {
     val rule = Zen.colors.rule
+    val back = stringResource(R.string.back)
     DropdownMenuItem(
         text = { Text(stringResource(R.string.course_move), fontWeight = FontWeight.SemiBold) },
         leadingIcon = { Icon(Icons.Outlined.ChevronLeft, contentDescription = null, modifier = Modifier.size(20.dp)) },
         onClick = onBack,
+        // TalkBack hears that the title goes back: its name alone is the action just chosen.
+        modifier = Modifier.semantics {
+            onClick(label = back) {
+                onBack()
+                true
+            }
+        },
     )
     HorizontalDivider(Modifier.padding(vertical = 4.dp), color = rule)
     for (section in sections) {
