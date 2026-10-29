@@ -74,8 +74,10 @@ val PaperStyle.shaderIndex: Int
 @Composable
 fun TemplateSheet(onDismiss: () -> Unit, onPick: (PaperStyle) -> Unit) {
     val z = Zen.colors
+    // On paper, as the iPad's gallery stands on the library's background.
     ZenSheet(
         title = stringResource(R.string.new_notebook_title),
+        ground = z.paper,
         onDismiss = onDismiss,
         leading = { SheetButton(stringResource(R.string.cancel), onClick = onDismiss) },
     ) {

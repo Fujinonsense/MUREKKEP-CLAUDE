@@ -59,16 +59,17 @@ import androidx.compose.ui.unit.sp
 import com.murekkep.notebook.R
 
 // Ayarlar (the spec's "Ayarlar. Gruplu liste; Görünüm › Tema seçici", SettingsView on iPad): a
-// sheet over the library with "Bitti", holding a grouped list. Görünüm is a card with a "Tema" row
-// naming the theme in force, then the themes' tiles, black and white first; its footer explains
-// them. While Pro is locked (the Play build, until Play Billing) a Pro tile wears the Pro badge
-// and a tap on it says Pro is coming.
+// sheet over the library with "Bitti", holding a grouped list on paper-3. Görünüm is a card with a
+// "Tema" row naming the theme in force, then the themes' tiles, black and white first; its footer
+// explains them. While Pro is locked (the Play build, until Play Billing) a Pro tile wears the Pro
+// badge and a tap on it says Pro is coming.
 
 @Composable
 fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, onDone: () -> Unit) {
     var proSoon by remember { mutableStateOf(false) }
     ZenSheet(
         title = stringResource(R.string.settings),
+        ground = Zen.colors.paper3,
         onDismiss = onDone,
         trailing = { SheetButton(stringResource(R.string.done), bold = true, onClick = onDone) },
     ) {

@@ -1,6 +1,5 @@
 package com.murekkep.notebook.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -24,7 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -33,23 +32,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-// A sheet over the screen, as the iPad presents Ayarlar and "Yeni defter" (.sheet): from 600 dp a
-// card of paper-3 with the pop-up's corners, up to 700 dp wide and 94 % of the height, over the
-// dimmed screen, so the library stays in view behind it; narrower, the whole screen. Its bar
-// carries the title in the middle and the sheet's buttons ("Vazgeç", "Bitti") at its ends.
+// A sheet over the screen, as the iPad presents Ayarlar and "Yeni defter" (.sheet), in a window of
+// its own, so touches, the keyboard's focus and TalkBack stay in it: from 600 dp a card with the
+// pop-up's corners, up to 700 dp wide and 94 % of the height, over the dimmed screen, so the
+// library stays in view behind it; narrower, the whole screen, drawn under the bars. Its bar
+// carries the title in the middle and the sheet's buttons ("Vazgeç", "Bitti") at its ends; Back
+// closes it.
 
 /** From this window width a sheet is a card over the screen. */
 private const val SHEET_CARD_WIDTH_DP = 600
 
+/** A sheet titled [title] on [ground] (Ayarlar's grouped list on paper-3, the templates on paper). */
 @Composable
 fun ZenSheet(
     title: String,
+    ground: Color,
     onDismiss: () -> Unit,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val z = Zen.colors
     if (LocalConfiguration.current.screenWidthDp >= SHEET_CARD_WIDTH_DP) {
         Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
             Column(
@@ -58,23 +60,19 @@ fun ZenSheet(
                     .fillMaxWidth()
                     .fillMaxHeight(0.94f)
                     .clip(RoundedCornerShape(Zen.popover))
-                    .background(z.paper3),
+                    .background(ground),
             ) {
                 SheetBar(title, leading, trailing, Modifier)
                 content()
             }
         }
     } else {
-        BackHandler(onBack = onDismiss)
-        Column(
-            Modifier
-                .fillMaxSize()
-                .background(z.paper3)
-                // The screen under the sheet takes no touches.
-                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
-        ) {
-            SheetBar(title, leading, trailing, Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)))
-            content()
+        Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            DialogBars(Zen.colors.dark)
+            Column(Modifier.fillMaxSize().background(ground)) {
+                SheetBar(title, leading, trailing, Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)))
+                content()
+            }
         }
     }
 }
