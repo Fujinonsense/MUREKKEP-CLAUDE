@@ -48,8 +48,9 @@ PC; the folder of the newest build is named after its commit.
 
 ## Status (2026-10-29)
 
-**Builds:** on the PC and on Codemagic, with the 60 JUnit tests passing (the ink logic checked
-against the iPad's numbers).
+**Builds:** on the PC and on Codemagic, with the 99 JUnit tests passing (the ink logic checked
+against the iPad's numbers; the shape recognizer, its handles and the shape tool against the
+iPad's own Swift code, run on the PC by `tools/shapecheck`).
 
 **Seen working on the emulator** (Pixel Tablet, Android 16, the PC's GPU through the emulator's
 GLES translator), `docs/emulator-pens.png`:
@@ -61,7 +62,16 @@ GLES translator), `docs/emulator-pens.png`:
 - turning the tablet: the page fits the new width;
 - a virtual pen made with Android's `uinput` tool (`tools/androidcheck/pen.py`): pressure makes the
   line thicker, a tilted pencil shades wide, the side button erases while held, the eraser end
-  erases, hovering shows the ring (red with the side button).
+  erases, hovering shows the ring (red with the side button);
+- the lasso: a loop or a tap selects, the frame moves, resizes ("144%") and turns (settling at
+  right angles, "-90°"); Duplicate, Apply ink, Delete, Done; a selection dragged onto the next page
+  moves there, one undo puts both pages back; the side button still erases with the lasso in hand;
+- held shapes: a shaky circle, square or triangle held still becomes a clean circle, square or
+  equilateral triangle, follows the pen ("Circle · 175% · 0°") and keeps handles after the pen
+  lifts (a circle's axis handle makes an ellipse, a corner shows its angle, the middle moves it);
+  a held line straightens and its end follows the pen;
+- the shape tool: a rectangle and a dashed regular hexagon previewed with their size and drawn in
+  the pen's ink (`docs/emulator-lasso-shapes.png`).
 
 Not checkable on the emulator: palm rejection by the system (`FLAG_CANCELED`), 120 Hz (the emulator
 runs at 60 Hz) and how prediction feels under a real pen.
@@ -74,7 +84,8 @@ runs at 60 Hz) and how prediction feels under a real pen.
 - the library said "0 min. ago" in the first minute; now "now", as on iPad.
 
 **Checking on the emulator:** `tools/androidcheck/` (`drive.py` taps by label, draws with
-`input stylus`, takes screenshots; `pen.py` is the virtual pen; `savecheck.sh` repeats the save
+`input stylus`, draws lasso loops (`loop`) and shaky shapes held still (`hold`), takes screenshots;
+`pen.py` is the virtual pen, made for the landscape screen; `savecheck.sh` repeats the save
 check). Start the emulator with
 `%LOCALAPPDATA%\Android\Sdk\emulator\emulator -avd murekkep_tab -no-window -gpu host`; a debuggable
 build started with `adb shell am start -n com.murekkep.notebook/.MainActivity --es murekkep.demo pens`
@@ -85,13 +96,20 @@ opens a page with a wave in 21 pens.
 - notebook pages, pinch and fling;
 - all 23 pens with the iPad's shading, including 3D inks, shadows, grass blades and flowers;
 - highlighter, eraser (whole stroke and partial), undo/redo;
+- the lasso: select, move, resize, turn, carry to another page, duplicate, apply ink, delete;
+- hold-to-shape (lines, broken lines, curves, circles, ellipses, triangles, rectangles, polygons)
+  with handles to fix them afterwards;
+- the shape tool: line, arrow, double arrow, rectangle, ellipse, circle from the center, triangle,
+  right triangle, regular polygon (3 to 12 sides), dashed or not;
 - pen preferences;
 - notebooks saved in the iPad's own ink format;
 - the pen features in the table above.
 
 **Not ported yet:**
-- lasso;
-- shapes and the compass;
+- the compass, the ruler, set squares and protractor;
+- the shape tool's coordinate axes and dimension line, and plots (they write with the stroke font);
+- held drawings that become pictures (heart, face, organs) and their suggestions;
+- the lasso's "Convert to text" (it comes with the text pen);
 - the text pen (handwriting to text);
 - PDF import and export;
 - page templates beyond plain, lined, grid and dotted;
