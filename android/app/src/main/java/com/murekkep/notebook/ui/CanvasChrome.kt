@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -66,12 +67,14 @@ private val Accent = Color(0xFF2457D6)
 /** The lasso's loop, the selection's dashed frame with its turn handle and corner handles, the
  *  shape tool's preview, a recognized shape's handles and the measurement next to the pen, as the
  *  canvas reports them in view pixels; under them a drafting instrument, over them the compass and
- *  the instrument's angle while it turns. Touches go through. */
+ *  the instrument's angle while it turns. Touches go through. Kept inside the canvas, as the iPad's
+ *  overlay view: an instrument, a compass or a frame running past the pages' top edge stays off the
+ *  editor's top bar. */
 @Composable
 fun CanvasOverlayLayer(overlay: CanvasOverlay) {
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = Color.White, fontSize = 13.sp)
-    Canvas(Modifier.fillMaxSize()) {
+    Canvas(Modifier.fillMaxSize().clipToBounds()) {
         overlay.instrument?.let { drawInstrument(it, Accent) }
         val dash = PathEffect.dashPathEffect(floatArrayOf(Lasso.DASH.dp.toPx(), Lasso.GAP.dp.toPx()))
         overlay.lasso?.let { a ->
