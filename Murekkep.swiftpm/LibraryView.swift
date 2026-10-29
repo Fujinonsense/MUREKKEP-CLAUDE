@@ -614,9 +614,10 @@ struct LibrarySidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 18) {
                     brand
                     searchField
+                    quickCreate
                     VStack(alignment: .leading, spacing: 2) {
                         row(.home, Loc.t("Tüm notlar"), "square.grid.2x2", count: store.notes.count)
                         row(.recent, Loc.t("Son açılanlar"), "clock", count: nil)
@@ -711,9 +712,44 @@ struct LibrarySidebar: View {
         .overlay(Self.rowShape.strokeBorder(Theme.hairline, lineWidth: 1))
     }
 
+    /// A notebook, a PDF or photos, a course: three quiet tiles under the search, as before the zen
+    /// redesign. A notebook or a PDF made here goes into the course that is open.
+    private var quickCreate: some View {
+        HStack(spacing: 10) {
+            quickTile(Loc.t("Defter"), "square.and.pencil") { actions.newNotebook(currentCourse) }
+            quickTile(Loc.t("PDF / Foto"), "doc.badge.plus") { actions.importPDF(currentCourse) }
+            quickTile(Loc.t("Ders"), "folder.badge.plus") { actions.newCourse() }
+        }
+    }
+
     private var currentCourse: UUID? {
         if case let .course(id) = place { return id }
         return nil
+    }
+
+    private static let tileShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
+    /// One tile: its icon over its name, 58 points tall, paper with a hairline.
+    private func quickTile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.text2)
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(Theme.paper, in: Self.tileShape)
+            .overlay(Self.tileShape.strokeBorder(Theme.hairline, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(Loc.t("Yeni {0}", "\(title)"))
     }
 
     /// One line of the sidebar: an icon, the name, and on the right a count.
