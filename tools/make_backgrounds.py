@@ -2,9 +2,11 @@
 catalog entries: bg-<name> (2752 px JPEG for the library: the long side of a 13-inch iPad Pro, so
 the picture is never enlarged) and bg-<name>-thumb (320 px for the
 Settings tiles), plus a contact sheet to look at. Every <name>.png in the folder becomes one
-background; artwork in the catalog that is no longer in the folder is removed.
+background; artwork in the catalog that is no longer in the folder is removed, unless --keep is
+given (then the folder's pictures are only added or replaced: for a few new themes when the older
+source pictures are not at hand).
 
-    python tools/make_backgrounds.py <folder with glass.png, silk.png, ...> [contact-sheet.png]
+    python tools/make_backgrounds.py [--keep] <folder with glass.png, silk.png, ...> [contact-sheet.png]
 """
 import json
 import sys
@@ -28,16 +30,17 @@ def imageset(name, image, quality):
     (folder / "Contents.json").write_text(json.dumps(contents, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
-def main(source, sheet=None):
+def main(source, sheet=None, keep=False):
     CATALOG.mkdir(parents=True, exist_ok=True)
     (CATALOG / "Contents.json").write_text(json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n",
                                            encoding="utf-8", newline="\n")
     names = sorted(f.stem for f in Path(source).glob("*.png"))
-    for old in CATALOG.glob("bg-*.imageset"):
-        if old.name.removesuffix(".imageset").removeprefix("bg-").removesuffix("-thumb") not in names:
-            for f in old.iterdir():
-                f.unlink()
-            old.rmdir()
+    if not keep:
+        for old in CATALOG.glob("bg-*.imageset"):
+            if old.name.removesuffix(".imageset").removeprefix("bg-").removesuffix("-thumb") not in names:
+                for f in old.iterdir():
+                    f.unlink()
+                old.rmdir()
     thumbs = []
     for name in names:
         art = Image.open(Path(source) / f"{name}.png").convert("RGB")
@@ -61,4 +64,5 @@ def main(source, sheet=None):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)
+    args = [a for a in sys.argv[1:] if a != "--keep"]
+    main(args[0], args[1] if len(args) > 1 else None, keep="--keep" in sys.argv[1:])

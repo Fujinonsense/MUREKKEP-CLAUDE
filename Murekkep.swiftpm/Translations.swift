@@ -1447,6 +1447,12 @@ enum Translations {
     private static let part15: [String: String] = [
         "Siyah beyaz": "Black and white",
         "Tema": "Theme",
+        "tema|Ebru": "Marbling",
+        "Hokka": "Inkwell",
+        "Lapis": "Lapis",
+        "Çini": "Glaze",
+        "Varak": "Gold leaf",
+        "Lavi": "Ink wash",
         "Tüm notlar": "All notes",
         "Son açılanlar": "Recently opened",
         "Kurslar": "Courses",
