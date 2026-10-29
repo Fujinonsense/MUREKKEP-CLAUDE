@@ -30,10 +30,36 @@ object PdfShare {
     /** Pixels per point for an imported page's picture in the file. */
     private const val PDF_PAGE_SCALE = 2f
 
-    /** The file's name from the note's title: the characters no file system takes become "_". */
+    /** The longest name before ".pdf", in UTF-8 bytes: a file name takes at most 255, and a Turkish
+     *  letter (ğ, ş, ı, ç, ö, ü) is two of them. */
+    const val NAME_BYTES = 240
+
+    /** The file's name from the note's title: the characters no file system takes become "_", and
+     *  a title longer than a file name takes is cut. */
     fun fileName(title: String): String {
         val clean = title.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trim('.').ifEmpty { "Not" }
-        return if (clean.endsWith(".pdf", ignoreCase = true)) clean else "$clean.pdf"
+        val hasPdf = clean.endsWith(".pdf", ignoreCase = true)
+        val name = if (hasPdf) clean.dropLast(4) else clean
+        val cut = cutToBytes(name, NAME_BYTES).let { if (it.length < name.length) it.trimEnd() else it }
+        return cut + if (hasPdf) clean.takeLast(4) else ".pdf"
+    }
+
+    /** `text` cut to at most `max` bytes of UTF-8, never inside a character. */
+    private fun cutToBytes(text: String, max: Int): String {
+        var bytes = 0
+        var i = 0
+        while (i < text.length) {
+            val c = text.codePointAt(i)
+            bytes += when {
+                c < 0x80 -> 1
+                c < 0x800 -> 2
+                c < 0x10000 -> 3
+                else -> 4
+            }
+            if (bytes > max) return text.substring(0, i)
+            i += Character.charCount(c)
+        }
+        return text
     }
 
     /** Writes the note into the cache off the main thread and returns the file; older shared files go. */
