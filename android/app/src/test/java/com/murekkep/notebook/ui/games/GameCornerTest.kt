@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.murekkep.notebook.games.GameDifficulty
 import com.murekkep.notebook.games.GameProgress
 import com.murekkep.notebook.games.Sudoku
@@ -241,6 +243,27 @@ class GameCornerTest {
         assertEquals("the closed card's clock stands still", kept, SudokuSave.decode(prefs.getString(GameProgress.Keys.saved("sudoku"), null))!!.elapsed)
         openGame(tiles[3])
         compose.onNodeWithText(clock(kept)).assertIsDisplayed()
+    }
+
+    @Test
+    fun theClockStopsWithTheAppItselfWithoutWaitingForAFrame() {
+        // A screen switched off at once gives no frame between pausing and stopping, so the clock may
+        // not wait for a recomposition to stop: nothing here reads the lifecycle's state, and still
+        // the seconds behind another app count for nothing.
+        var ticks = 0
+        compose.setContent {
+            val lifecycle = LocalLifecycleOwner.current.lifecycle
+            LaunchedEffect(lifecycle) { tickWhileInFront(lifecycle) { ticks += 1 } }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(2_000)
+        assertEquals(2, ticks)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        compose.mainClock.advanceTimeBy(5_000)
+        assertEquals("behind another app the clock stands", 2, ticks)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.mainClock.advanceTimeBy(1_000)
+        assertEquals(3, ticks)
     }
 
     @Test

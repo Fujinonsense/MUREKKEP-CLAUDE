@@ -59,6 +59,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.murekkep.notebook.R
 import com.murekkep.notebook.games.GameDifficulty
 import com.murekkep.notebook.games.GameProgress
@@ -67,7 +68,6 @@ import com.murekkep.notebook.games.SudokuSave
 import com.murekkep.notebook.ui.Zen
 import com.murekkep.notebook.ui.ZenMenu
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -218,14 +218,9 @@ private fun SudokuPuzzle(model: SudokuModel, kept: SudokuSave, newBest: Boolean)
     val z = Zen.colors
     var confirmNew by remember { mutableStateOf(false) }
     // The clock: a second at a time while the app is in front and the puzzle on screen; the loop ends
-    // with the puzzle and starts again when the app comes back.
-    val inFront = rememberAppInFront()
-    LaunchedEffect(inFront) {
-        while (inFront) {
-            delay(1_000)
-            model.tick()
-        }
-    }
+    // with the puzzle, and the app's lifecycle itself stops it and starts it again when it comes back.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle, model) { tickWhileInFront(lifecycle) { model.tick() } }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(kept.difficulty.titleRes), style = GameText.subheadline.copy(fontWeight = FontWeight.SemiBold), color = z.ink)

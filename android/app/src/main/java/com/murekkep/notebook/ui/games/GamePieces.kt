@@ -67,11 +67,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import androidx.lifecycle.repeatOnLifecycle
 import com.murekkep.notebook.R
 import com.murekkep.notebook.games.GameDifficulty
 import com.murekkep.notebook.games.GameProgress
 import com.murekkep.notebook.ui.Zen
 import com.murekkep.notebook.ui.ZenSegments
+import kotlinx.coroutines.delay
 
 // The pieces every game of the break corner shares (the second half of the iPad's GameCorner.swift):
 // the iPad's text sizes, the difficulty picker, the board's frame, the stars, the card at the end of a
@@ -390,11 +392,25 @@ private fun PointerInputChange.cancelledLift(): Boolean = !pressed && isConsumed
 /** "1:05": minutes and seconds. */
 internal fun clock(seconds: Int): String = "%d:%02d".format(seconds / 60, seconds % 60)
 
-/** True while the app is in front (the iPad's scenePhase == .active): the clocks and the bubbles stop when it is not. */
+/** True while the app is in front (the iPad's scenePhase == .active): the bubbles stop when it is not. */
 @Composable
 internal fun rememberAppInFront(): Boolean {
     val state by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     return state.isAtLeast(Lifecycle.State.RESUMED)
+}
+
+/**
+ * [tick] once a second while the app is in front ([lifecycle] resumed, the iPad's scenePhase ==
+ * .active), until the caller ends. The lifecycle itself stops it and starts it again, with no frame or
+ * recomposition needed: a screen switched off at once gives none between pausing and stopping.
+ */
+internal suspend fun tickWhileInFront(lifecycle: Lifecycle, tick: () -> Unit) {
+    lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+        while (true) {
+            delay(1_000)
+            tick()
+        }
+    }
 }
 
 // The iPad's sensoryFeedback in the games, as Android's haptic constants (the system's touch
