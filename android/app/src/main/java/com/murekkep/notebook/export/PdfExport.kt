@@ -44,15 +44,21 @@ object PdfExport {
                 val (width, height) = sizes[i]
                 val info = PdfDocument.PageInfo.Builder(pointSize(width), pointSize(height), i + 1).create()
                 val page = document.startPage(info)
-                val canvas = page.canvas
-                canvas.drawRect(0f, 0f, width, height, white)
-                if (background != null) {
-                    background(i, canvas)
-                } else {
-                    PaperDrawer.draw(paper, width, height, canvas)
+                // The page is finished even when drawing it throws (an imported page's picture that
+                // does not fit in memory): close() refuses a document with an open page, so it would
+                // keep every page's picture and its own error would take the place of this one.
+                try {
+                    val canvas = page.canvas
+                    canvas.drawRect(0f, 0f, width, height, white)
+                    if (background != null) {
+                        background(i, canvas)
+                    } else {
+                        PaperDrawer.draw(paper, width, height, canvas)
+                    }
+                    FlatInk.draw(pages[i], canvas)
+                } finally {
+                    document.finishPage(page)
                 }
-                FlatInk.draw(pages[i], canvas)
-                document.finishPage(page)
             }
             document.writeTo(out)
         } finally {
