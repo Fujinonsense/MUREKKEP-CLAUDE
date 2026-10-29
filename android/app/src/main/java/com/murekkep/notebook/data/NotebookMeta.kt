@@ -62,6 +62,9 @@ data class NotebookMeta(
     val opened: Long = modified,
     /** Starred in the library (the iPad's NoteMeta.starred, kept under its key "isFavorite"). */
     val starred: Boolean = false,
+    /** The course it is filed under (the iPad's NoteMeta.sectionID, kept under that key), an
+     *  upper-case UUID; null in none. */
+    val sectionId: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -73,6 +76,8 @@ data class NotebookMeta(
         .put("paper", paper.raw)
         .put("kind", kind.raw)
         .put("isFavorite", starred)
+        // Left out in no course, as the iPad leaves out a nil sectionID.
+        .apply { if (sectionId != null) put("sectionID", sectionId) }
 
     companion object {
         /** The record in a folder named `id`; missing or odd fields take sensible defaults. */
@@ -91,11 +96,13 @@ data class NotebookMeta(
                 opened = parseTime(json.opt("opened")) ?: modified,
                 // Missing in older records: not starred.
                 starred = json.optBoolean("isFavorite", false),
+                // Missing, null or not a UUID: in no course.
+                sectionId = NoteSection.normalizedId(json.opt("sectionID") as? String),
             )
         }
 
         /** ISO-8601 (as the iPad's index.json) or epoch milliseconds. */
-        private fun parseTime(value: Any?): Long? = when (value) {
+        internal fun parseTime(value: Any?): Long? = when (value) {
             is Number -> value.toLong()
             is String -> try {
                 Instant.parse(value).toEpochMilli()
