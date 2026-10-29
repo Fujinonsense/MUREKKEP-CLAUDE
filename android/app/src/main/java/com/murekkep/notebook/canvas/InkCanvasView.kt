@@ -44,6 +44,7 @@ import java.text.NumberFormat
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.max
@@ -91,6 +92,9 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
         /** How far from a shape's handle (dp) a finger still takes it: a finger is broader than a pen. */
         private const val FINGER_REACH = 34f
+
+        /** How long a jump to a near page slides (UIScrollView's animated offset). */
+        private const val PAGE_SCROLL_MILLIS = 300
     }
 
     private val renderer = InkRenderer()
@@ -180,6 +184,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         })
         renderMode = RENDERMODE_WHEN_DIRTY
         state.onInkChange = { requestFrame() }
+        state.onScrollRequest = { scrollToPage(it) }
         isFocusable = true
     }
 
@@ -187,6 +192,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     fun release() {
         saverLoop.running = false
         state.onInkChange = null
+        state.onScrollRequest = null
         val pdf = pdfTextures
         queueEvent {
             renderer.release()
@@ -1019,6 +1025,23 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         clamp()
         requestFrame()
         postOnAnimation(::flingStep)
+    }
+
+    /** Brings page [page] to the top of the view, half a gap above it (CanvasView.scrollToPage on
+     *  iPad, the page navigator's jump): the zoom and the place across stay. A page within two of the
+     *  one in view slides there, a farther one is there at once. */
+    fun scrollToPage(page: Int) {
+        val l = pageLayout()
+        if (page !in 0 until l.pageCount || height <= 0) return
+        scroller.forceFinished(true)
+        val target = PageScroll.pageOriginY(l.top(page), l.gap, zoom, clearance).coerceIn(verticalRange())
+        if (abs(page - state.currentPage) <= 2) {
+            scroller.startScroll(0, originY.roundToInt(), 0, target.roundToInt() - originY.roundToInt(), PAGE_SCROLL_MILLIS)
+            postOnAnimation(::flingStep)
+        } else {
+            originY = target
+            requestFrame()
+        }
     }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
