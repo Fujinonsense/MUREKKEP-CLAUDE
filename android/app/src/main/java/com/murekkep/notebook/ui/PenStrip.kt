@@ -704,7 +704,9 @@ private fun PenSlot(
     popover: @Composable BoxScope.() -> Unit,
 ) {
     val name = brush?.localizedTitle() ?: stringResource(R.string.eraser)
-    val hint = stringResource(R.string.tap_again_settings)
+    // The picked one's tap opens its settings: TalkBack says so as the tap's action, not as its name
+    // (the iPad's accessibilityHint while it is selected).
+    val openSettings = stringResource(R.string.open_settings_action)
     var menu by remember { mutableStateOf(false) }
     val favoriteLabel = favorite?.let { stringResource(if (it) R.string.remove_favorite else R.string.add_favorite) }
     Box(
@@ -713,11 +715,12 @@ private fun PenSlot(
             .clipToBounds()
             .combinedClickable(
                 onClick = onTap,
+                onClickLabel = if (selected) openSettings else null,
                 onLongClick = if (favorite != null) ({ menu = true }) else null,
                 onLongClickLabel = favoriteLabel,
             )
             .semantics {
-                contentDescription = if (selected) "$name. $hint" else name
+                contentDescription = name
                 this.selected = selected
             },
     ) {

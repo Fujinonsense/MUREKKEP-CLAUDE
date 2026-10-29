@@ -3,4 +3,7 @@
     <!-- Çokgenin adımlayıcısı, TalkBack için iki yarısı (UIStepper'ın kendi adları) -->
     <string name="stepper_decrease">Azalt</string>
     <string name="stepper_increase">Artır</string>
+
+    <!-- Seçili kalemin dokunuşu, TalkBack'in söylediği gibi: "Ayarlarını açmak için iki kez dokunun" -->
+    <string name="open_settings_action">ayarlarını açmak</string>
 </resources>

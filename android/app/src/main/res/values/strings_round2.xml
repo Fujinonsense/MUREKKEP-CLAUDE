@@ -3,4 +3,7 @@
     <!-- The polygon's stepper, its halves for TalkBack (UIStepper's own names) -->
     <string name="stepper_decrease">Decrease</string>
     <string name="stepper_increase">Increase</string>
+
+    <!-- The picked pen's tap, as TalkBack says it: "Double-tap to open its settings" -->
+    <string name="open_settings_action">open its settings</string>
 </resources>

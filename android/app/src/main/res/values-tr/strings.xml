@@ -59,7 +59,6 @@
     <string name="shape_settings">Şekil ayarları</string>
     <string name="page_badge">%1$d / %2$d</string>
     <string name="page_badge_description">Sayfa %1$d / %2$d</string>
-    <string name="tap_again_settings">Ayarlarını açmak için tekrar dokun</string>
     <string name="pro">Pro</string>
     <string name="eraser_help">Kalemin yan düğmesini basılı tutarak da silebilirsin; kalemin silgi ucu da siler.</string>
     <string name="pen_desc_pen">Basınca duyarlı, keskin tükenmez kalem.</string>

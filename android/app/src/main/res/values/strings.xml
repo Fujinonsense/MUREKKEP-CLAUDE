@@ -59,7 +59,6 @@
     <string name="shape_settings">Shape settings</string>
     <string name="page_badge">%1$d / %2$d</string>
     <string name="page_badge_description">Page %1$d of %2$d</string>
-    <string name="tap_again_settings">Tap again for its settings</string>
     <string name="pro">Pro</string>
     <string name="eraser_help">Hold the pen’s side button to erase while it is held; the eraser end of a pen erases too.</string>
     <string name="pen_desc_pen">Pressure-sensitive, crisp ballpoint pen.</string>
