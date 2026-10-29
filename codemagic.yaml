@@ -1007,3 +1007,40 @@ workflows:
     - demo-out/*.ips
     - demo-out/*.crash
     - '*.log'
+  android-build:
+    name: Murekkep Android (APK + AAB)
+    instance_type: mac_mini_m2
+    max_build_duration: 40
+    environment:
+      java: '17'
+    scripts:
+    - name: Android Derle
+      script: |
+        #!/usr/bin/env bash
+        # Like GitHub's run steps (bash -e): stop at the first failing command.
+        set -e
+        export RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        export ASC_KEY_ID="${ASC_KEY_ID:-$APP_STORE_CONNECT_KEY_IDENTIFIER}"
+        export ASC_ISSUER_ID="${ASC_ISSUER_ID:-$APP_STORE_CONNECT_ISSUER_ID}"
+        export ASC_KEY_P8="${ASC_KEY_P8:-$APP_STORE_CONNECT_PRIVATE_KEY}"
+        # Build numbers above every GitHub upload (100 + GitHub's run number): 200 + Codemagic's count.
+        export GITHUB_RUN_NUMBER="$((100 + ${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}))"
+        GRADLE=8.14.3
+        if ! gradle --version 2>/dev/null | grep -q "Gradle $GRADLE"; then
+          curl -sSfL -o "$RUNNER_TEMP/gradle.zip" "https://services.gradle.org/distributions/gradle-$GRADLE-bin.zip"
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          export PATH="$RUNNER_TEMP/gradle-$GRADLE/bin:$PATH"
+        fi
+        java -version
+        cd android
+        set -o pipefail
+        if ! gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug bundleRelease > ../android-build.log 2>&1; then
+          grep -E "^e: |^w: .*error|error:|What went wrong|^> |FAILED|expected:" ../android-build.log | sort -u | head -120
+          echo "::error::Android build failed (android-build.log)"
+          exit 1
+        fi
+        grep -E "tests completed|BUILD SUCCESSFUL" ../android-build.log | tail -3
+    artifacts:
+    - android/app/build/outputs/apk/debug/*.apk
+    - android/app/build/outputs/bundle/release/*.aab
+    - android-build.log

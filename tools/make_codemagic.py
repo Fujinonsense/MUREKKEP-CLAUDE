@@ -110,6 +110,18 @@ def build():
                 "artifacts": ["demo-out/*.mp4", "demo-out/*.json", "demo-out/*.png", "demo-out/*.start",
                               "demo-out/*.log", "demo-out/*.txt", "demo-out/*.ips", "demo-out/*.crash", "*.log"],
             },
+            # The Android edition (android/): unit tests, a debug APK to install and an unsigned
+            # release bundle for Google Play. GitHub's Actions minutes for the private repo are gone,
+            # so it runs here, started by hand on the android branch. No keys.
+            "android-build": {
+                "name": "Murekkep Android (APK + AAB)",
+                "instance_type": "mac_mini_m2",
+                "max_build_duration": 40,
+                "environment": {"java": "17"},
+                "scripts": [script("Android Derle", ANDROID_BUILD)],
+                "artifacts": ["android/app/build/outputs/apk/debug/*.apk",
+                              "android/app/build/outputs/bundle/release/*.aab", "android-build.log"],
+            },
         }
     }
 
@@ -142,6 +154,27 @@ codesign --force --sign - --deep build/Build/Products/Release-iphonesimulator/Mu
 # The scenes listed in tools/demo/film.txt: a run films only what changed.
 DEMO_RECORD = """\
 bash tools/demo/record.sh build/Build/Products/Release-iphonesimulator/Murekkep.app demo-out
+"""
+
+
+# Gradle as the build machine has it, or the pinned one fetched; the compiler's errors are printed
+# on their own when the build fails, the whole log is an artifact.
+ANDROID_BUILD = """\
+GRADLE=8.14.3
+if ! gradle --version 2>/dev/null | grep -q "Gradle $GRADLE"; then
+  curl -sSfL -o "$RUNNER_TEMP/gradle.zip" "https://services.gradle.org/distributions/gradle-$GRADLE-bin.zip"
+  unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+  export PATH="$RUNNER_TEMP/gradle-$GRADLE/bin:$PATH"
+fi
+java -version
+cd android
+set -o pipefail
+if ! gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug bundleRelease > ../android-build.log 2>&1; then
+  grep -E "^e: |^w: .*error|error:|What went wrong|^> |FAILED|expected:" ../android-build.log | sort -u | head -120
+  echo "::error::Android build failed (android-build.log)"
+  exit 1
+fi
+grep -E "tests completed|BUILD SUCCESSFUL" ../android-build.log | tail -3
 """
 
 
