@@ -77,8 +77,10 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
 üstündeki karartma hoş değil, eski seri kartı ve hızlı oluşturma kayboldu):
 - Kenar çubuğu tam boy tek düz yüzey: arka planı güvenli alanı yok sayar (durum çubuğunun ve ev
   çizgisinin altına da uzanır). Siyah beyazda (ve çizgili kâğıtta) paper-2; Pro tema görselinde
-  eşit buzlu panel: ultraThinMaterial üstünde paper-2 %80 (alt blok dahil hiçbir bant açık ya da
-  koyu görünmez). Parçalar 18 aralıklı, yukarıdan aşağı:
+  eşit buzlu panel: ultraThinMaterial üstünde paper-2 %90 (alt blok dahil hiçbir bant açık ya da
+  koyu görünmez; %80'de yedi temada alt blok başka tondaydı, ΔE en çok 3,1-4,7: Varak, Çini,
+  Lapis, Manyetik sıvı, Işık izi, Buzlu cam, Kâğıt dalga; %90'da hiçbir temada 2,3'ü geçmez).
+  Parçalar 18 aralıklı, yukarıdan aşağı:
   - "Mürekkep" (title2 kalın) ve altında yapay zekâ durumu: 6 nokta (hazırsa yeşil, değilse turuncu;
     gerçek durum olduğu için renkli) + caption muted: "Claude · <model>", "Cihazda yapay zekâ"
     (Apple'ın modeli ya da indirilen model hazırsa), "Yerel sunucu", "Çevrimdışı asistan"; sağda
