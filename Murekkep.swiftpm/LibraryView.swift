@@ -921,8 +921,9 @@ private struct EngineStatus: View {
 }
 
 /// This week in the sidebar, as before the zen redesign: today's date, the streak, the seven days
-/// (a day worked in a note filled with ink and a check, today ringed) and how many notes changed
-/// today. A paper card with a hairline; the streak's flame is the one colour it keeps.
+/// (a day worked in a note filled with ink and a check, today ringed outside its circle) and how
+/// many notes changed today. A paper card with a hairline; the streak's flame is the one colour it
+/// keeps.
 private struct WeekCard: View {
     @EnvironmentObject private var store: LibraryStore
 
@@ -964,15 +965,21 @@ private struct WeekCard: View {
                     let day = week[i]
                     let worked = ActivityLog.worked(on: day)
                     let isToday = Calendar.current.isDateInToday(day)
-                    VStack(spacing: 4) {
+                    VStack(spacing: 6) {
                         Text(letters[i % 7])
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Theme.muted)
                         Circle()
                             .fill(worked ? Theme.ink : Theme.paper3)
                             .frame(width: 22, height: 22)
+                            // Today's ring stands 2 points outside the day (30 across), so it shows
+                            // on a day filled with ink too.
                             .overlay {
-                                Circle().strokeBorder(Theme.ink, lineWidth: isToday ? 2 : 0)
+                                if isToday {
+                                    Circle()
+                                        .strokeBorder(Theme.ink, lineWidth: 2)
+                                        .padding(-4)
+                                }
                             }
                             .overlay {
                                 if worked {
