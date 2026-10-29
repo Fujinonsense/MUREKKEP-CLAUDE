@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -24,8 +25,8 @@ import java.io.File
 // The store keeps the courses as the iPad's LibraryStore does: sections.json at the library's root
 // (made, changed and deleted courses written to it, its unreadable entries kept, a file that is not
 // a list copied aside), each note's course in its own record, a deleted course's notes left in the
-// library in no course, and a course made before the first read of the disk never writing over the
-// ones there.
+// library in no course, a course made before the first read of the disk never writing over the
+// ones there, and a write that fails (a full disk) leaving the old file, as the iPad's try? does.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
@@ -65,9 +66,16 @@ class NotebookStoreSectionsTest {
         return store
     }
 
-    private fun writeNote(id: String, sectionId: String? = null) {
-        val meta = NotebookMeta(id = id, title = id, created = 0, modified = 0, pageCount = 1, paper = PaperStyle.LINED, sectionId = sectionId)
+    private fun writeNote(id: String, sectionId: String? = null, modified: Long = 0) {
+        val meta = NotebookMeta(id = id, title = id, created = 0, modified = modified, pageCount = 1, paper = PaperStyle.LINED, sectionId = sectionId)
         File(root, id).apply { mkdirs() }.resolve("meta.json").writeText(meta.toJson().toString())
+    }
+
+    /** Runs the main thread's work until the store's own jobs (its writes) are over. */
+    private fun idleUntilWritten(store: NotebookStore) {
+        val scope = NotebookStore::class.java.getDeclaredField("scope").apply { isAccessible = true }.get(store) as CoroutineScope
+        val jobs = scope.coroutineContext[Job]!!
+        idleUntil("the writes") { jobs.children.none() }
     }
 
     private fun record(id: String): JSONObject = JSONObject(File(root, "$id/meta.json").readText())
@@ -152,6 +160,37 @@ class NotebookStoreSectionsTest {
         val again = loaded()
         assertTrue(again.sections.isEmpty())
         assertNull(again.notebook("kalp")!!.sectionId)
+    }
+
+    @Test
+    fun aWriteThatFailsKeepsTheOldFileAndTheAppGoesOn() {
+        root.mkdirs()
+        sectionsFile.writeText(ipadsFile)
+        // Freed newest first: "kalp", whose record cannot be written, then "akciger".
+        writeNote("kalp", anatomy, modified = 2)
+        writeNote("akciger", anatomy, modified = 1)
+        val store = loaded()
+        // A full disk, as far as the writes can tell: their files beside the old ones cannot be made.
+        File(root, "sections.json.tmp").mkdirs()
+        File(root, "kalp/meta.json.tmp").mkdirs()
+        val crashes = ArrayList<Throwable>()
+        val handler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> synchronized(crashes) { crashes.add(e) } }
+        try {
+            store.deleteSection(anatomy)
+            // The second record is written after the first one failed.
+            idleUntil("the second record") { !record("akciger").has("sectionID") }
+            idleUntilWritten(store)
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(handler)
+        }
+        // Nothing went uncaught (Android would have closed the app), as the iPad's try? ignores it.
+        assertEquals(emptyList<Throwable>(), synchronized(crashes) { crashes.toList() })
+        // The old file and the old record stay; the library in memory has the change.
+        assertEquals(ipadsFile, sectionsFile.readText())
+        assertEquals(anatomy, record("kalp").getString("sectionID"))
+        assertTrue(store.sections.isEmpty())
+        assertTrue(store.notebooks.all { it.sectionId == null })
     }
 
     @Test

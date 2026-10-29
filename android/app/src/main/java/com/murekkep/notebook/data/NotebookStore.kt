@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Collections
@@ -345,13 +346,18 @@ class NotebookStore private constructor(context: Context) {
     }
 
     /** Writes sections.json with the newest courses and the entries kept from the file. Only after
-     *  the first read of the disk, so a course made before it never writes over the ones there. */
+     *  the first read of the disk, so a course made before it never writes over the ones there. A
+     *  file that cannot be written (a full disk) stays as it was, as the iPad's `try?` leaves it. */
     private fun persistSections() {
         scope.launch {
             load()
             withContext(Dispatchers.IO) {
                 synchronized(writeLock) {
-                    writeAtomically(sectionsFile(), SectionList(sections, unreadableSections).encode().toByteArray())
+                    try {
+                        writeAtomically(sectionsFile(), SectionList(sections, unreadableSections).encode().toByteArray())
+                    } catch (e: IOException) {
+                        // The next change of a course writes the list again.
+                    }
                 }
             }
         }
@@ -555,12 +561,17 @@ class NotebookStore private constructor(context: Context) {
         }
     }
 
-    /** Writes the newest record of the notebook (the list's, which may be newer than `meta`). */
+    /** Writes the newest record of the notebook (the list's, which may be newer than `meta`). A record
+     *  that cannot be written (a full disk) stays as it was, as the iPad's `try?` leaves its index. */
     private fun writeMeta(meta: NotebookMeta) {
         synchronized(writeLock) {
             val latest = notebooks.firstOrNull { it.id == meta.id } ?: meta
             folder(meta.id).mkdirs()
-            writeAtomically(metaFile(meta.id), latest.toJson().toString(2).toByteArray())
+            try {
+                writeAtomically(metaFile(meta.id), latest.toJson().toString(2).toByteArray())
+            } catch (e: IOException) {
+                // The library in memory has the change; the note's next change writes it again.
+            }
         }
     }
 
