@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -45,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -52,22 +56,28 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.murekkep.notebook.R
+import com.murekkep.notebook.data.InkSettings
+import kotlin.math.roundToInt
 
 // Ayarlar (the spec's "Ayarlar. Gruplu liste; Görünüm › Tema seçici", SettingsView on iPad): a
-// sheet over the library with "Bitti", holding a grouped list on paper-3. Görünüm is a card with a
-// "Tema" row naming the theme in force, then the themes' tiles, black and white first; its footer
-// explains them. While Pro is locked (the Play build, until Play Billing) a Pro tile wears the Pro
-// badge and a tap on it says Pro is coming.
+// sheet over the library (or over a note, from Diğer) with "Bitti", holding a grouped list on
+// paper-3. Görünüm is a card with a "Tema" row naming the theme in force, then the themes' tiles,
+// black and white first; its footer explains them. While Pro is locked (the Play build, until Play
+// Billing) a Pro tile wears the Pro badge and a tap on it says Pro is coming. 3B mürekkep is the
+// iPad's ink section: the animations and the battery saver, the wet ink's drying and the lava's
+// cooling times, the flowers in the grass, and its footer; the same settings a pen's popover and
+// Diğer change ([InkSettings]), so a change here shows there at once and the other way round.
 
-/** Ayarlar; [onBack] closes the sheet ("Bitti", Back). */
+/** Ayarlar over the ink settings [ink]; [onBack] closes the sheet ("Bitti", Back). */
 @Composable
-fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, onBack: () -> Unit) {
+fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, ink: InkSettings, onBack: () -> Unit) {
     var proSoon by remember { mutableStateOf(false) }
     ZenSheet(
         title = stringResource(R.string.settings),
@@ -95,6 +105,10 @@ fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, onBack: () -> U
                     ThemeTiles(shown) { option -> if (option.locked) proSoon = true else onTheme(option) }
                 }
             }
+            Spacer(Modifier.height(GroupSpacing))
+            Group(header = stringResource(R.string.settings_ink), footer = stringResource(R.string.settings_ink_footer)) {
+                InkGroup(ink)
+            }
         }
     }
     if (proSoon) {
@@ -105,6 +119,84 @@ fun SettingsScreen(theme: AppTheme, onTheme: (AppTheme) -> Unit, onBack: () -> U
             confirmButton = { TextButton(onClick = { proSoon = false }) { Text(stringResource(R.string.ok)) } },
         )
     }
+}
+
+/** The room between one group's footer and the next group's header. */
+private val GroupSpacing = 32.dp
+
+/** Where a row's text starts after its glyph, and the hairline under it: the glyph's 28 dp and 12 dp past the card's 16. */
+private val GlyphRowInset = 56.dp
+
+/**
+ * 3B mürekkep (the ink section of the iPad's SettingsView): Animasyonlar and Pil tasarrufu as
+ * switches with their glyphs, the drying and the cooling times as sliders under their lines
+ * ("Islak mürekkebin kuruma süresi: 4 sn"), in whole seconds as the iPad's steps, and the flowers in
+ * the grass as a segmented picker (its label is for TalkBack, as a segmented picker shows none).
+ */
+@Composable
+private fun InkGroup(ink: InkSettings) {
+    Column {
+        SettingSwitch(Icons.Outlined.AutoAwesome, stringResource(R.string.settings_ink_animations), ink.animations) { ink.animations = it }
+        RowHairline(GlyphRowInset)
+        SettingSwitch(BatteryHalfGlyph, stringResource(R.string.settings_ink_battery_saver), ink.batterySaver) { ink.batterySaver = it }
+        RowHairline(GlyphRowInset)
+        SettingSlider(
+            stringResource(R.string.settings_ink_drying, ink.dryDuration.roundToInt()),
+            stringResource(R.string.pen_drying_time),
+            ink.dryDuration.coerceIn(1f, 15f),
+            1f..15f,
+        ) { ink.dryDuration = it.roundToInt().toFloat() }
+        RowHairline(16.dp)
+        SettingSlider(
+            stringResource(R.string.settings_ink_cooling, ink.coolDuration.roundToInt()),
+            stringResource(R.string.pen_cooling_time),
+            ink.coolDuration,
+            2f..20f,
+        ) { ink.coolDuration = it.roundToInt().toFloat() }
+        RowHairline(16.dp)
+        val flowers = stringResource(R.string.settings_ink_flowers)
+        ZenSegments(
+            options = listOf(
+                stringResource(R.string.pen_flowers_none),
+                stringResource(R.string.pen_flowers_some),
+                stringResource(R.string.pen_flowers_lots),
+            ),
+            selected = ink.flowerLevel,
+            onSelect = { ink.flowerLevel = it },
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .fillMaxWidth()
+                .semantics { contentDescription = flowers },
+        )
+    }
+}
+
+/** A row with a switch: its glyph in the accent, its name, the switch; one switch for TalkBack. */
+@Composable
+private fun SettingSwitch(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val z = Zen.colors
+    SwitchRow(checked, onChange, padding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)) {
+        Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterStart) {
+            Icon(icon, contentDescription = null, tint = z.accent, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(title, style = MaterialTheme.typography.bodyLarge, color = z.ink, modifier = Modifier.weight(1f).padding(end = 12.dp))
+    }
+}
+
+/** A line that says the value, with a slider under it ([label] names the slider for TalkBack). */
+@Composable
+private fun SettingSlider(line: String, label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
+        Text(line, style = MaterialTheme.typography.bodyLarge, color = Zen.colors.ink)
+        ZenSlider(value, onChange, range, label)
+    }
+}
+
+/** The hairline between two rows of a group, from [start] to the card's edge. */
+@Composable
+private fun RowHairline(start: Dp) {
+    Box(Modifier.padding(start = start).fillMaxWidth().height(1.dp).background(Zen.colors.rule))
 }
 
 /** A group of the list: its header in muted text, its card of paper in a hairline, its footer under the card. */

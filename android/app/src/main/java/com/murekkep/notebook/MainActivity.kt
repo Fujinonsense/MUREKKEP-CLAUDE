@@ -114,7 +114,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                 )
             }
             if (settingsOpen) {
-                SettingsScreen(theme = theme, onTheme = onTheme, onBack = { settingsOpen = false })
+                SettingsScreen(theme = theme, onTheme = onTheme, ink = store.penPreferences.ink, onBack = { settingsOpen = false })
             }
         }
         return
@@ -167,7 +167,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                     }
                 }
             },
-            settings = { close -> SettingsScreen(theme = theme, onTheme = onTheme, onBack = close) },
+            settings = { close -> SettingsScreen(theme = theme, onTheme = onTheme, ink = store.penPreferences.ink, onBack = close) },
         )
         // A failed export is an alert, as on the iPad, and the share button is free again at once.
         if (exportFailed) {

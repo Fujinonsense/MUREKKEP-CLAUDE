@@ -12,6 +12,15 @@
     <string name="load_ink_newer">This note was saved by a newer version of Mürekkep, which this version can\'t open. The ink is still in the file; update the app to see it.</string>
     <string name="load_ink_damaged">This note\'s ink file couldn\'t be read. The file was kept as it is, with a copy next to it; the note opened read-only.</string>
 
+    <!-- Settings › 3D ink (the iPad's ink section) -->
+    <string name="settings_ink">3D ink</string>
+    <string name="settings_ink_animations">Animations (waves, glitter, wind)</string>
+    <string name="settings_ink_battery_saver">Battery saver (30 fps)</string>
+    <string name="settings_ink_drying">Wet ink drying time: %1$d s</string>
+    <string name="settings_ink_cooling">Time for lava to cool into embers: %1$d s</string>
+    <string name="settings_ink_flowers">Flowers in grass</string>
+    <string name="settings_ink_footer">When nothing on screen is moving, the drawing engine stops completely and uses no battery.</string>
+
     <!-- More -->
     <string name="editor_battery_saver">Battery saver</string>
 </resources>

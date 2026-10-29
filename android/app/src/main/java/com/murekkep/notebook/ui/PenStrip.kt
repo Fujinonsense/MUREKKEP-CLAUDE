@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -907,16 +908,24 @@ fun ZenSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?) {
 
 /**
  * A switch's row, as the iPad's Toggle with its label: [label] (it takes the room left), then the
- * switch. The row takes the touch and is one switch for TalkBack, named by its text.
+ * switch, [padding] inside the row. The whole row takes the touch and is one switch for TalkBack,
+ * named by its text.
  */
 @Composable
-fun SwitchRow(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, label: @Composable RowScope.() -> Unit) {
+fun SwitchRow(
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    padding: PaddingValues = PaddingValues(0.dp),
+    label: @Composable RowScope.() -> Unit,
+) {
     Row(
         modifier
             .fillMaxWidth()
             .heightIn(min = Zen.target)
             // Only the switch moves, as on the iPad; the row does not light up.
-            .toggleable(value = checked, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange),
+            .toggleable(value = checked, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange)
+            .padding(padding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         label()

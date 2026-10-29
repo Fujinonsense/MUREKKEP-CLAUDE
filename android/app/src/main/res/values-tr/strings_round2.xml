@@ -12,6 +12,15 @@
     <string name="load_ink_newer">Bu not daha yeni bir Mürekkep sürümüyle kaydedilmiş; bu sürüm onu açamıyor. Yazılar dosyada duruyor; görmek için uygulamayı güncelle.</string>
     <string name="load_ink_damaged">Bu notun mürekkep dosyası okunamadı. Dosya olduğu gibi saklandı ve yanına bir kopyası alındı; not salt okunur açıldı.</string>
 
+    <!-- Ayarlar › 3B mürekkep (iPad'in mürekkep bölümü) -->
+    <string name="settings_ink">3B mürekkep</string>
+    <string name="settings_ink_animations">Animasyonlar (dalga, sim, rüzgâr)</string>
+    <string name="settings_ink_battery_saver">Pil tasarrufu (30 fps)</string>
+    <string name="settings_ink_drying">Islak mürekkebin kuruma süresi: %1$d sn</string>
+    <string name="settings_ink_cooling">Lavın soğuyup kora dönme süresi: %1$d sn</string>
+    <string name="settings_ink_flowers">Çimde çiçek</string>
+    <string name="settings_ink_footer">Ekranda hareket eden bir şey yoksa çizim motoru tamamen durur ve pil harcamaz.</string>
+
     <!-- Diğer -->
     <string name="editor_battery_saver">Pil tasarrufu</string>
 </resources>
