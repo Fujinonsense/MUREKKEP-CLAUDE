@@ -788,7 +788,8 @@ private class BesideAnchor(private val edge: PaletteEdge, private val pad: Int, 
 
 /**
  * A popover of the bar on [edge]: paper with a hairline and the float shadow, [width] wide, closed by
- * a tap outside or Back; taller than [maxHeight], it scrolls.
+ * a tap outside (its shadow's margin included, which lies over the bar beside the anchor) or Back;
+ * taller than [maxHeight], it scrolls.
  */
 @Composable
 private fun BarPopover(
@@ -807,7 +808,7 @@ private fun BarPopover(
     // Not clipped to the screen: the shadow's margin may run past its edge while BesideAnchor keeps
     // the card inside, so the system does not push the whole window (and the card) back in.
     Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
-        Box(Modifier.padding(PopoverShadowPad)) {
+        Box(Modifier.dismissInMargin(PopoverShadowPad, onDismiss).padding(PopoverShadowPad)) {
             Column(
                 Modifier
                     .width(width)
