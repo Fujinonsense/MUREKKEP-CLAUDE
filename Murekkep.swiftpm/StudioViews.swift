@@ -635,12 +635,16 @@ struct JobRow: View {
 struct OverviewCard: View {
     let overview: Overview
     @EnvironmentObject private var studio: StudioStore
+    @Environment(\.onPicture) private var onPicture
     @State private var image: UIImage?
 
     var body: some View {
+        // On a Pro theme's picture the poster's corners are the note cover's 10 inside the plate's
+        // 14 (a 16 inside it looked like a mistake); black and white keeps 16.
+        let poster = RoundedRectangle(cornerRadius: onPicture ? 10 : 16, style: .continuous)
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                poster
                     .fill(Theme.ai)
                 if let image {
                     Image(uiImage: image)
@@ -654,7 +658,7 @@ struct OverviewCard: View {
                     .background(.black.opacity(0.45), in: Circle())
             }
             .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(poster)
             .overlay(alignment: .bottomLeading) {
                 HStack(spacing: 5) {
                     Image(systemName: overview.kind.symbol)
