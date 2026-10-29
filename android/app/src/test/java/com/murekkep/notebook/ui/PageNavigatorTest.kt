@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
+import com.murekkep.notebook.data.OutlineEntry
 import com.murekkep.notebook.render.PageSize
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
@@ -26,6 +27,7 @@ import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDoc
 import com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -37,7 +39,8 @@ import org.robolectric.annotation.ConscryptMode
 // The page navigator the page badge opens (PageNavigator.swift): a number typed offers Go, which
 // goes there and closes it; a page's picture goes to its page; the ribbon bookmarks the page in
 // view and Bookmarks lists it (a hint while there are none); only an imported PDF has Contents, its
-// headings open under their disclosure arrow and go to their pages, and a PDF without them says so.
+// headings open under their disclosure arrow and go to their pages, and a PDF without them says so;
+// they are read when Contents is first chosen, not as the navigator opens, and stay with the note.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w1280dp-h800dp")
 // Conscrypt's native library is looked up by a name lower-cased in the machine's language, which a
@@ -113,8 +116,8 @@ class PageNavigatorTest {
         compose.waitUntil(5_000) { compose.onAllNodesWithText("This PDF has no table of contents.").fetchSemanticsNodes().isNotEmpty() }
     }
 
-    @Test
-    fun aPdfsHeadingsOpenAndGoToTheirPages() {
+    /** A three-page PDF whose contents are Chapter 1 (with Section under it) and Chapter 2. */
+    private fun book(): File {
         val file = File(folder.root, "book.pdf")
         PDDocument().use { doc ->
             repeat(3) { doc.addPage(PDPage(PDRectangle.A4)) }
@@ -130,7 +133,12 @@ class PageNavigatorTest {
             doc.documentCatalog.documentOutline = outline
             doc.save(file)
         }
-        show(EditorState(initialPages = List(3) { emptyList() }, pageSizes = List(3) { PageSize.A4 }, pdfFile = file))
+        return file
+    }
+
+    @Test
+    fun aPdfsHeadingsOpenAndGoToTheirPages() {
+        show(EditorState(initialPages = List(3) { emptyList() }, pageSizes = List(3) { PageSize.A4 }, pdfFile = book()))
         compose.onNodeWithText("Contents").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Chapter 2")).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodes(hasText("Section")).assertCountEquals(0)
@@ -138,5 +146,28 @@ class PageNavigatorTest {
         compose.onNode(hasText("Section")).performClick()
         assertEquals(listOf(1), jumps)
         assertEquals(1, closed)
+    }
+
+    @Test
+    fun aPdfsContentsAreReadOnlyOnceContentsIsChosenAndStayWithTheNote() {
+        val state = EditorState(initialPages = List(3) { emptyList() }, pageSizes = List(3) { PageSize.A4 }, pdfFile = book())
+        show(state)
+        compose.onNodeWithText("Pages").assertIsDisplayed()
+        // Opening the navigator does not read them.
+        assertNull(state.outline)
+        compose.onNodeWithText("Contents").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Chapter 2")).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(listOf("Chapter 1", "Chapter 2"), state.outline?.map { it.title })
+    }
+
+    @Test
+    fun contentsOnceReadAreShownWithoutReadingTheFileAgain() {
+        // No file to read: what shows is what the note kept.
+        val state = EditorState(initialPages = List(2) { emptyList() }, pageSizes = listOf(PageSize.A4, PageSize.A4))
+        state.outline = listOf(OutlineEntry("Kept", 1, null))
+        show(state)
+        compose.onNodeWithText("Contents").performClick()
+        compose.onNodeWithText("Kept").performClick()
+        assertEquals(listOf(1), jumps)
     }
 }

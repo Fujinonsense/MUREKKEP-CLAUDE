@@ -12,7 +12,8 @@ import java.util.IdentityHashMap
 // Murekkep.swiftpm/PageNavigator.swift, which PDFKit reads): each heading's title and the page it
 // points at, read with PDFBox, which follows the same destinations (a page, a named destination, a
 // GoTo action's). PdfRenderer has no outline. A heading met twice (a damaged file whose headings run
-// in a loop) is read once.
+// in a loop) is read once; a heading whose named destination sits in a tree that runs in a loop
+// points nowhere, and a file PDFBox cannot read at all, even short of memory, has no contents.
 
 /** One heading of a PDF's table of contents. */
 data class OutlineEntry(
@@ -28,7 +29,8 @@ object PdfOutline {
     private const val MAX_DEPTH = 8
 
     /** The headings of the PDF in [file]; empty when it has none or cannot be read. Reads the file:
-     *  off the main thread. */
+     *  off the main thread. A damaged file's errors (a StackOverflowError, short of memory) end here
+     *  as no contents, never in the caller. */
     fun read(file: File): List<OutlineEntry> = try {
         PDDocument.load(file, MemoryUsageSetting.setupMainMemoryOnly()).use { doc ->
             doc.documentCatalog.documentOutline?.let { outline ->
@@ -38,6 +40,10 @@ object PdfOutline {
             } ?: emptyList()
         }
     } catch (e: Exception) {
+        emptyList()
+    } catch (e: StackOverflowError) {
+        emptyList()
+    } catch (e: OutOfMemoryError) {
         emptyList()
     }
 
@@ -51,9 +57,13 @@ object PdfOutline {
         val result = ArrayList<OutlineEntry>()
         var child = node.firstChild
         while (child != null && seen.add(child.cosObject)) {
+            // A named destination is looked up in the catalogue's name tree, which PDFBox walks
+            // without minding a loop: such a heading points nowhere, the others still read.
             val page = try {
                 child.findDestinationPage(doc)?.let { pages[it.cosObject] }
             } catch (e: Exception) {
+                null
+            } catch (e: StackOverflowError) {
                 null
             }
             val kids = if (depth < MAX_DEPTH) entries(child, doc, pages, depth + 1, seen) else emptyList()

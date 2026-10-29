@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -204,16 +205,21 @@ private fun NavigatorCard(state: EditorState, close: () -> Unit, modifier: Modif
         PageThumbnails(state.pdfFile, state.paper, with(density) { PageThumbnails.WIDTH.roundToPx() })
     }
     DisposableEffect(thumbnails) { onDispose { thumbnails.close() } }
-    // A PDF's contents, read off the main thread as the navigator opens; null until they are.
-    var outline by remember { mutableStateOf<List<OutlineEntry>?>(null) }
-    if (state.isPdf) {
+    // A PDF's contents, read off the main thread the first time İçindekiler is chosen and kept with
+    // the note for the navigator's next openings (the iPad reads them from the PDFKit document its
+    // model keeps open); null until they are.
+    var outline by remember(state) { mutableStateOf(state.outline) }
+    if (state.isPdf && outline == null) {
         LaunchedEffect(state) {
-            outline = withContext(Dispatchers.IO) {
+            snapshotFlow { tab }.first { it == NavigatorTab.CONTENTS }
+            val read = withContext(Dispatchers.IO) {
                 state.pdfFile?.let { file ->
                     PDFBoxResourceLoader.init(context.applicationContext)
                     PdfOutline.read(file)
                 } ?: emptyList()
             }
+            state.outline = read
+            outline = read
         }
     }
     val go = { page: Int ->
@@ -242,8 +248,9 @@ private fun NavigatorCard(state: EditorState, close: () -> Unit, modifier: Modif
                     val marked = state.bookmarks
                     if (marked.isEmpty()) Hint(stringResource(R.string.pages_no_bookmarks)) else PageGrid(state, marked, thumbnails, go)
                 }
-                NavigatorTab.CONTENTS -> outline?.let { entries ->
-                    if (entries.isEmpty()) Hint(stringResource(R.string.pages_no_contents)) else OutlineList(entries, go)
+                NavigatorTab.CONTENTS -> when (val entries = outline) {
+                    null -> Loading()
+                    else -> if (entries.isEmpty()) Hint(stringResource(R.string.pages_no_contents)) else OutlineList(entries, go)
                 }
             }
         }
@@ -500,6 +507,14 @@ private fun OutlineRowView(row: PageNavigation.OutlineRow, expanded: Boolean, on
                 )
             }
         }
+    }
+}
+
+/** A small spinner in the middle of a list still being read (a long PDF's contents). */
+@Composable
+private fun Loading() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(Modifier.size(28.dp), color = Zen.colors.muted, strokeWidth = 2.5.dp)
     }
 }
 

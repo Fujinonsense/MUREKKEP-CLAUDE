@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.murekkep.notebook.data.InkSettings
 import com.murekkep.notebook.data.LoadProblem
+import com.murekkep.notebook.data.OutlineEntry
 import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.data.PenPreferences
 import com.murekkep.notebook.ink.Brush
@@ -815,6 +816,10 @@ class EditorState(
         if (page !in pages.indices) return
         onScrollRequest?.invoke(page)
     }
+
+    /** An imported PDF's contents once the page navigator has read them, kept while the note is open
+     *  (the iPad's PDFKit document, which its model keeps open); null until then. Main thread. */
+    var outline: List<OutlineEntry>? = null
 
     /** The bookmarked pages as the record keeps them (NoteMeta.bookmarks on iPad); observable. */
     private var bookmarkList: List<Int> by mutableStateOf(bookmarks)

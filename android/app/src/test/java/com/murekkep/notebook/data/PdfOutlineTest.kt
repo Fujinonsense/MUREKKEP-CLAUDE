@@ -1,5 +1,6 @@
 package com.murekkep.notebook.data
 
+import com.tom_roush.pdfbox.cos.COSArray
 import com.tom_roush.pdfbox.cos.COSName
 import com.tom_roush.pdfbox.pdmodel.PDDestinationNameTreeNode
 import com.tom_roush.pdfbox.pdmodel.PDDocument
@@ -22,7 +23,7 @@ import org.junit.rules.TemporaryFolder
 // (trimmed, "—" when blank) and the page it points at, by a page destination, a GoTo action's or a
 // named one; nowhere when it points at nothing; headings nest nine deep at most (depth < 8); a
 // file without contents, or one that is no PDF, has none; a damaged file whose headings run in a
-// loop reads each once.
+// loop reads each once, and a heading whose name tree runs in a loop points nowhere.
 class PdfOutlineTest {
     @get:Rule
     val folder = TemporaryFolder()
@@ -111,5 +112,19 @@ class PdfOutlineTest {
             b.cosObject.setItem(COSName.NEXT, a.cosObject)
         }
         assertEquals(listOf(OutlineEntry("A", 0, null), OutlineEntry("B", 1, null)), PdfOutline.read(file))
+    }
+
+    @Test
+    fun aNameTreeThatRunsInALoopLeavesOnlyItsHeadingNowhere() {
+        val file = pdf(2) { doc, outline ->
+            // A damaged Dests tree whose only kid is itself: PDFBox's look-up of a name in it never
+            // ends (a StackOverflowError, which is no Exception).
+            val tree = PDDestinationNameTreeNode()
+            tree.cosObject.setItem(COSName.KIDS, COSArray().apply { add(tree.cosObject) })
+            doc.documentCatalog.names = PDDocumentNameDictionary(doc.documentCatalog).apply { dests = tree }
+            outline.addLast(heading("Lost").apply { destination = PDNamedDestination("lost") })
+            outline.addLast(heading("Found").apply { destination = doc.to(1) })
+        }
+        assertEquals(listOf(OutlineEntry("Lost", null, null), OutlineEntry("Found", 1, null)), PdfOutline.read(file))
     }
 }
