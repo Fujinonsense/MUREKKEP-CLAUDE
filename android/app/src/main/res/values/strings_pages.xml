@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The page navigator the page badge opens (the iPad's PageNavigator) -->
+    <string name="pages_go_to">Go to page</string>
+    <string name="pages_type_number">Type a page number to jump there</string>
+    <string name="pages_go">Go</string>
+    <string name="pages_tab_pages">Pages</string>
+    <string name="pages_tab_bookmarks">Bookmarks</string>
+    <string name="pages_tab_contents">Contents</string>
+    <string name="pages_bookmark">Bookmark this page</string>
+    <string name="pages_remove_bookmark">Remove bookmark</string>
+    <string name="pages_no_bookmarks">No bookmarks yet. Tap the ribbon at the top right to bookmark this page.</string>
+    <string name="pages_no_contents">This PDF has no table of contents.</string>
+    <!-- TalkBack's name for a page's picture in the navigator -->
+    <string name="pages_page">Page %1$d</string>
+</resources>

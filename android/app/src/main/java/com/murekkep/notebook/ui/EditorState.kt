@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.murekkep.notebook.data.InkSettings
 import com.murekkep.notebook.data.LoadProblem
+import com.murekkep.notebook.data.OutlineEntry
 import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.data.PenPreferences
 import com.murekkep.notebook.ink.Brush
@@ -77,6 +78,8 @@ class EditorState(
     val pdfFile: File? = null,
     /** The notebook's page template as it opens. */
     paper: PaperStyle = PaperStyle.LINED,
+    /** The pages marked with the ribbon, as the notebook's record keeps them. */
+    bookmarks: List<Int> = emptyList(),
 ) {
     companion object {
         /** A4 in points. */
@@ -322,6 +325,12 @@ class EditorState(
 
     /** The store saves at once (the screen is leaving, or the app goes to the background). */
     var onSaveNow: (() -> Unit)? = null
+
+    /** The bookmarks changed: the store puts them in the notebook's record. */
+    var onBookmarksChange: ((List<Int>) -> Unit)? = null
+
+    /** The canvas brings a page into view (the page navigator's jumps). */
+    var onScrollRequest: ((Int) -> Unit)? = null
 
     // Selection (lasso)
 
@@ -801,6 +810,33 @@ class EditorState(
     }
 
     // MARK: Pages
+
+    /** Shows page [page] (EditorModel.requestScroll on iPad): the canvas scrolls to it. */
+    fun requestScroll(page: Int) {
+        if (page !in pages.indices) return
+        onScrollRequest?.invoke(page)
+    }
+
+    /** An imported PDF's contents once the page navigator has read them, kept while the note is open
+     *  (the iPad's PDFKit document, which its model keeps open); null until then. Main thread. */
+    var outline: List<OutlineEntry>? = null
+
+    /** The bookmarked pages as the record keeps them (NoteMeta.bookmarks on iPad); observable. */
+    private var bookmarkList: List<Int> by mutableStateOf(bookmarks)
+
+    /** The bookmarked pages the note has, in order, each once: the page navigator's Yer imleri. */
+    val bookmarks: List<Int> get() = bookmarkList.filter { it in 0 until pageCount }.distinct().sorted()
+
+    fun isBookmarked(page: Int): Boolean = page in bookmarkList
+
+    /** Marks a page with the ribbon, or takes it off (EditorModel.toggleBookmark): the record keeps
+     *  the list, in order, at once. A bookmark is the note's, not its ink's: no undo, and a read-only
+     *  note takes one too, as on iPad. */
+    fun toggleBookmark(page: Int) {
+        if (page !in pages.indices) return
+        bookmarkList = (if (page in bookmarkList) bookmarkList - page else bookmarkList + page).sorted()
+        onBookmarksChange?.invoke(bookmarkList)
+    }
 
     /** Adds a blank page at the end (the chrome's "new page"). */
     fun addPage() {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sayfa rozetinin açtığı sayfa gezgini (iPad'in PageNavigator'ı) -->
+    <string name="pages_go_to">Sayfaya git</string>
+    <string name="pages_type_number">Sayfa numarasını yazıp git</string>
+    <string name="pages_go">Git</string>
+    <string name="pages_tab_pages">Sayfalar</string>
+    <string name="pages_tab_bookmarks">Yer imleri</string>
+    <string name="pages_tab_contents">İçindekiler</string>
+    <string name="pages_bookmark">Bu sayfayı işaretle</string>
+    <string name="pages_remove_bookmark">İşareti kaldır</string>
+    <string name="pages_no_bookmarks">Henüz yer imi yok. Sağ üstteki kurdeleye dokunarak bu sayfayı işaretle.</string>
+    <string name="pages_no_contents">Bu PDF\'te içindekiler bölümü yok.</string>
+    <!-- TalkBack'in gezgindeki bir sayfanın resmine dediği -->
+    <string name="pages_page">Sayfa %1$d</string>
+</resources>

@@ -273,6 +273,12 @@ class NotebookStore private constructor(context: Context) {
         scope.launch(Dispatchers.IO) { writeMeta(updated) }
     }
 
+    /** Keeps an open note's bookmarked pages in its record at once, as EditorModel.toggleBookmark does. */
+    fun setBookmarks(id: String, pages: List<Int>) {
+        val updated = update(id) { it.copy(bookmarks = pages) } ?: return
+        scope.launch(Dispatchers.IO) { writeMeta(updated) }
+    }
+
     /** Removes the notebook and its folder; a pending save of it is dropped. */
     fun delete(id: String) {
         saveJobs.remove(id)?.cancel()
@@ -355,9 +361,11 @@ class NotebookStore private constructor(context: Context) {
             pageSizes = sizes,
             pdfFile = if (result.pdfSizes != null) pdfFile(meta.id) else null,
             paper = meta.paper,
+            bookmarks = meta.bookmarks,
         )
         state.title = meta.title
         state.onPaperChange = { setPaper(meta.id, it) }
+        state.onBookmarksChange = { setBookmarks(meta.id, it) }
         state.onDirty = { scheduleSave(state) }
         state.onSaveNow = { saveNow(state) }
         return state

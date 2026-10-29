@@ -52,6 +52,19 @@ class PageScrollTest {
     }
 
     @Test
+    fun aJumpPutsThePageHalfAGapUnderTheTop() {
+        // CanvasView.scrollToPage: the page's top 11 points (half the gap of 22) under the view's
+        // top, at the zoom in force; under a bar along the top, below the bar.
+        assertEquals(22f, PageScroll.pageOriginY(0f, 22f, 2f, Clearance()))
+        val third = 2 * (841.89f + 22f)
+        assertEquals(-(third - 11f) * 0.5f, PageScroll.pageOriginY(third, 22f, 0.5f, Clearance()), 1e-3f)
+        assertEquals(74f + 11f - third, PageScroll.pageOriginY(third, 22f, 1f, Clearance(top = 74f)), 1e-3f)
+        // The last page of a short note cannot rise past the end: the range keeps the canvas's limit.
+        val range = PageScroll.verticalRange(1_000f, 1_705.78f, 28f, Clearance())
+        assertEquals(range.start, PageScroll.pageOriginY(863.89f, 22f, 1f, Clearance()).coerceIn(range))
+    }
+
+    @Test
     fun besideABarDownTheRightSideAFittedPageStaysWhereTheCanvasPutsIt() {
         // The clamp does not centre it (the canvas puts a page it first fits in the middle itself).
         assertEquals(24f, PageScroll.clampX(24f, 800f, 752f, Clearance(right = 76f)))

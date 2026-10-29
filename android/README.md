@@ -122,6 +122,11 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - PDFs: import (files, photos as one PDF, drag and drop) and Paylaş as a PDF, an imported PDF with
   its own pages;
 - notebook pages, pinch and fling; a notebook's template changed from Diğer;
+- the page navigator, a tap on the page badge (`ui/PageNavigator.kt`): a page number typed and Git
+  go there, the ribbon bookmarks the page in view (the badge wears it too, the note's record keeps
+  it as the iPad's does), and three lists: every page as a picture drawn off the main thread
+  (`ui/PageThumbnails.kt`, the paper or the PDF's page with its ink), the bookmarked pages, and an
+  imported PDF's contents (`data/PdfOutline.kt`, read with PDFBox); a tap goes to the page;
 - all 23 pens with the iPad's shading, including 3D inks, shadows, grass blades and flowers;
 - highlighter, eraser (whole stroke and partial), undo/redo;
 - the lasso: select, move, resize, turn, carry to another page, duplicate, apply ink, delete;
@@ -161,6 +166,8 @@ and cooling times, the flowers in the grass) on the same settings the pens' popo
 - the break corner's things to make (Ebru, the living ink pond, the ink mandala) and its levelled
   games (the flying drop, the colour popper); its Yaratıcılık layer shows once they come;
 - the assistant;
+- the page navigator's Tek sayfa görünümü (one page at a time): the canvas scrolls its pages in one
+  run only;
 - Pro with Play Billing.
 
 **Also left:**

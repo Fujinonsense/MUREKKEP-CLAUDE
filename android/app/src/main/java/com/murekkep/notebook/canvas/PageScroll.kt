@@ -25,4 +25,10 @@ internal object PageScroll {
         val middle = (viewWidth - contentWidth) / 2
         return x.coerceIn(min(middle, viewWidth - clear.right - contentWidth), max(middle, 0f))
     }
+
+    /** The document origin's y that puts a page whose top is `pageTop` (document points) half a
+     *  `gap` under the view's top, and under a bar along it (CanvasView.scrollToPage: the page's top
+     *  less half the gap at the top of the scroll view). The caller keeps it in [verticalRange]. */
+    fun pageOriginY(pageTop: Float, gap: Float, zoom: Float, clear: Clearance): Float =
+        clear.top + (gap / 2 - pageTop) * zoom
 }

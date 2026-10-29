@@ -13,6 +13,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,11 +33,14 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Draw
@@ -85,12 +90,14 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -159,7 +166,10 @@ fun EditorScreen(
         }
     }
 
-    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    // The system bars and a cutout, not the keyboard (safeDrawing takes it in): the editor's only
+    // field is the page navigator's number, and should this window be told of its keyboard too, the
+    // badge the navigator hangs from, the bar and the page must not rise behind the navigator.
+    val safe = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
     val layoutDirection = LocalLayoutDirection.current
     val bottomInset = safe.calculateBottomPadding()
     val leftInset = safe.calculateLeftPadding(layoutDirection)
@@ -280,7 +290,16 @@ fun EditorScreen(
                 )
                 // Beside a bar down the right side that came closer to the bottom, the badge stands left of it.
                 val badgeShift = if (edge == PaletteEdge.TRAILING && column < PaletteColumnMargin) PenBarHeight + PaletteSideMargin else 0.dp
-                PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset + badgeShift, bottom = bottomInset + 8.dp + bottomClearance))
+                val badgeBottom = bottomInset + 8.dp + bottomClearance
+                PageBadge(
+                    state,
+                    // The navigator's room above the badge, up to the status bar, as the bar's popovers have.
+                    navigatorRoom = DpSize(
+                        maxWidth - leftInset - rightInset - PopoverMargin * 2,
+                        TopBarHeight + maxHeight - badgeBottom - Zen.target - PopoverGap - PopoverMargin,
+                    ),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset + badgeShift, bottom = badgeBottom),
+                )
                 SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter))
                 // The break corner (ui/games): its tile at the bottom left, its games' panel over the page above it,
                 // clear of the pen bar and of the lasso's bar while that shows.
@@ -547,25 +566,40 @@ private fun MenuSwitch(title: String, icon: ImageVector, on: Boolean, onChange: 
 }
 
 /** "1 / 1": the page under the middle of the view and how many there are, in plain text on the page,
- *  in a 44 dp box with 12 dp at its sides (the iPad's PageBadge). */
+ *  in a 44 dp box with 12 dp at its sides, the ribbon before it while the page is bookmarked (the
+ *  iPad's PageBadge). A tap opens the page navigator above it, [navigatorRoom] at most. */
 @Composable
-private fun PageBadge(state: EditorState, modifier: Modifier) {
+private fun PageBadge(state: EditorState, navigatorRoom: DpSize, modifier: Modifier) {
     val z = Zen.colors
+    var navigatorOpen by rememberSaveable { mutableStateOf(false) }
     val page = state.currentPage + 1
     val count = state.pageCount
+    val label = stringResource(R.string.pages_go_to)
     val description = stringResource(R.string.page_badge_description, page, count)
-    Box(
-        modifier
-            .height(Zen.target)
-            .padding(horizontal = 12.dp)
-            .clearAndSetSemantics { contentDescription = description },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            stringResource(R.string.page_badge, page, count),
-            style = MaterialTheme.typography.bodySmall.merge(TextStyle(fontFeatureSettings = "tnum")),
-            color = z.onPage,
-        )
+    Box(modifier) {
+        Row(
+            Modifier
+                .height(Zen.target)
+                .clip(RoundedCornerShape(Zen.control))
+                .clickable(role = Role.Button) { navigatorOpen = true }
+                .clearAndSetSemantics {
+                    contentDescription = label
+                    stateDescription = description
+                }
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state.isBookmarked(state.currentPage)) {
+                Icon(Icons.Filled.Bookmark, contentDescription = null, tint = z.accent, modifier = Modifier.size(14.dp))
+            }
+            Text(
+                stringResource(R.string.page_badge, page, count),
+                style = MaterialTheme.typography.bodySmall.merge(TextStyle(fontFeatureSettings = "tnum")),
+                color = z.onPage,
+            )
+        }
+        if (navigatorOpen) PageNavigator(state, navigatorRoom.width, navigatorRoom.height) { navigatorOpen = false }
     }
 }
 
