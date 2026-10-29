@@ -1,6 +1,7 @@
 package com.murekkep.notebook.ui
 
 import com.murekkep.notebook.data.NoteKind
+import com.murekkep.notebook.data.NoteSection
 import com.murekkep.notebook.data.NotebookMeta
 import com.murekkep.notebook.data.PaperStyle
 import org.junit.Assert.assertEquals
@@ -103,6 +104,52 @@ class LibraryRulesTest {
     }
 
     @Test
+    fun aSearchFindsTheCoursesAndTheirNotesByName() {
+        val anatomy = NoteSection(ANATOMY, "Anatomi", "heart.text.square", 5, 0)
+        val calculus = NoteSection(CALCULUS, "Calculus", "function", 0, 0)
+        val notes = listOf(
+            note("Kalp", modified = 1).copy(sectionId = ANATOMY), note("İntegral", modified = 2).copy(sectionId = CALCULUS),
+            note("Anatomi atlası", kind = NoteKind.PDF, modified = 3), note("Kimya", modified = 4),
+        )
+        val sections = listOf(anatomy, calculus)
+        // A note whose course's name holds the query is found with the ones whose titles do (SearchPane on iPad).
+        assertEquals(listOf("Anatomi atlası", "Kalp"), LibraryRules.searched(notes, " ANATOMİ ", turkish, sections).map { it.title })
+        assertEquals(listOf(anatomy), LibraryRules.searchedCourses(sections, " ANATOMİ ", turkish))
+        assertEquals(listOf("İntegral"), LibraryRules.searched(notes, "calc", turkish, sections).map { it.title })
+        // Without the courses, a search reads the titles only; a blank one finds no course.
+        assertEquals(listOf("Anatomi atlası"), LibraryRules.searched(notes, "anatomi", turkish).map { it.title })
+        assertEquals(emptyList<NoteSection>(), LibraryRules.searchedCourses(sections, "  ", turkish))
+    }
+
+    @Test
+    fun aCoursesNotesAreItsOwnTheLastChangedFirst() {
+        val notes = listOf(
+            note("Kalp", modified = 1).copy(sectionId = ANATOMY), note("Atlas", kind = NoteKind.PDF, modified = 3).copy(sectionId = ANATOMY),
+            note("İntegral", modified = 2).copy(sectionId = CALCULUS), note("Kimya", modified = 4),
+        )
+        assertEquals(listOf("Atlas", "Kalp"), LibraryRules.courseNotes(notes, ANATOMY).map { it.title })
+        assertEquals(mapOf(ANATOMY to 2, CALCULUS to 1), LibraryRules.courseCounts(notes))
+    }
+
+    @Test
+    fun aCoursesPlaceIsTheIpads() {
+        // "course:" and the course's id, as the iPad's library.place stores it.
+        assertEquals(LibraryPlace(LibrarySection.ALL, ANATOMY), LibraryPlace.fromRaw("course:$ANATOMY"))
+        assertEquals("course:$ANATOMY", LibraryPlace.course(ANATOMY).raw)
+        assertEquals(LibraryPlace.course(ANATOMY), LibraryPlace.fromRaw("course:" + ANATOMY.lowercase()))
+        // A list's place is its own raw value; a course without a UUID is Tüm notlar, as on iPad.
+        assertEquals(LibraryPlace(LibrarySection.PDFS), LibraryPlace.fromRaw("pdfs"))
+        assertEquals("pdfs", LibraryPlace(LibrarySection.PDFS).raw)
+        assertEquals(LibraryPlace(LibrarySection.ALL), LibraryPlace.fromRaw("course:anatomi"))
+        assertEquals(LibraryPlace(LibrarySection.ALL), LibraryPlace.fromRaw(null))
+        // A course's tab: Kaynaklar, Defterler; the iPad's Stüdyo is Kaynaklar here.
+        assertEquals(CourseTab.NOTEBOOKS, CourseTab.fromRaw("notebooks"))
+        assertEquals(CourseTab.SOURCES, CourseTab.fromRaw("studio"))
+        assertEquals(CourseTab.SOURCES, CourseTab.fromRaw(null))
+        assertEquals("sources", CourseTab.SOURCES.raw)
+    }
+
+    @Test
     fun theSidebarCounts() {
         val notes = listOf(note("a"), note("b"), note("p", kind = NoteKind.PDF))
         assertEquals(Triple(3, 2, 1), LibraryRules.counts(notes))
@@ -156,5 +203,10 @@ class LibraryRulesTest {
         assertEquals(RelativeAge(AgeUnit.YEAR, 2), age(at(6, 1, 9, year = 2024)))
         // A clock that ran ahead says now.
         assertEquals(RelativeAge(AgeUnit.SECOND, 0), age(now + 60_000))
+    }
+
+    private companion object {
+        const val ANATOMY = "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
+        const val CALCULUS = "6B29FC40-CA47-1067-B31D-00DD010662DA"
     }
 }
