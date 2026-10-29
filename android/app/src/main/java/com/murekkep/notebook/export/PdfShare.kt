@@ -10,6 +10,7 @@ import android.graphics.RectF
 import androidx.core.content.FileProvider
 import com.murekkep.notebook.R
 import com.murekkep.notebook.data.PdfSource
+import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.render.PageSize
 import com.murekkep.notebook.ui.EditorState
 import kotlinx.coroutines.Dispatchers
@@ -21,9 +22,11 @@ import kotlin.math.sqrt
 
 // The editor's Paylaş (the share sheet of EditorView.swift on iPad): the note written as a PDF by
 // PdfExport into the app's cache, handed to the system's share chooser through a FileProvider
-// (the manifest's provider, res/xml/file_paths.xml). An imported PDF's pages are drawn from the
-// PDF itself under the ink, as pictures: PdfDocument keeps every page's picture until it writes the
-// file, so they get twice their size while all of them fit in memory, fewer pixels for a long PDF.
+// (the manifest's provider, res/xml/file_paths.xml). An imported PDF keeps its own pages, vectors
+// and text, with the ink laid over them (PdfOverlay), as the iPad's exportPDF draws the source
+// pages themselves. Only when that cannot be done are its pages drawn as pictures under the ink:
+// PdfDocument keeps every page's picture until it writes the file, so they get twice their size
+// while all of them fit in memory, fewer pixels for a long PDF.
 
 object PdfShare {
     /** The FileProvider's authority is the application id and this. */
@@ -31,6 +34,9 @@ object PdfShare {
 
     /** Where the shared files wait in the cache (`file_paths.xml` names it). */
     private const val FOLDER = "shared"
+
+    /** PDFBox's files on the way while an imported PDF is rewritten (not shared). */
+    private const val SCRATCH = "pdf-overlay"
 
     /** Pixels per point for an imported page's picture in the file, when memory allows. */
     const val PDF_PAGE_SCALE = 2f
@@ -92,6 +98,9 @@ object PdfShare {
         dir.listFiles()?.forEach { it.delete() }
         val file = File(dir, fileName(state.title))
         val pages = state.pages.map { it.strokes }
+        val pdf = state.pdfFile
+        val shown = state.pageSizes
+        if (pdf != null && shown != null && keepsOwnPages(context, pdf, pages, shown, file)) return@withContext file
         val sizes = (state.pageSizes ?: List(pages.size) { PageSize.A4 }).map { it.width to it.height }
         val source = state.pdfFile?.let { f ->
             try {
@@ -116,6 +125,28 @@ object PdfShare {
             source?.close()
         }
         file
+    }
+
+    /**
+     * Writes an imported PDF with its own pages and the ink over them into `out` (PdfOverlay); false
+     * when that cannot be done (PDFBox reads the file otherwise than PdfRenderer, or not at all, or
+     * runs out of memory), and the pages go as pictures instead.
+     */
+    private fun keepsOwnPages(context: Context, source: File, pages: List<List<Stroke>>, sizes: List<PageSize>, out: File): Boolean {
+        val scratch = File(context.cacheDir, SCRATCH)
+        scratch.deleteRecursively()
+        return try {
+            PdfOverlay.write(context, source, pages, sizes, out, scratch)
+        } catch (e: Exception) {
+            false
+        } catch (e: LinkageError) {
+            // A part of PDFBox this build leaves out (BouncyCastle, for certificate encryption).
+            false
+        } catch (e: OutOfMemoryError) {
+            false
+        } finally {
+            scratch.deleteRecursively()
+        }
     }
 
     /** The imported page's picture at `scale` pixels per point, drawn onto the page's points. */

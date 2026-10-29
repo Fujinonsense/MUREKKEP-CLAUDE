@@ -57,5 +57,10 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.input:input-motionprediction:1.0.0-beta05")
+    // A shared imported PDF keeps its own pages, the ink laid over them (export/PdfOverlay.kt).
+    // BouncyCastle only serves certificate-encrypted PDFs, which PdfRenderer does not open either.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
+        exclude(group = "org.bouncycastle")
+    }
     testImplementation("junit:junit:4.13.2")
 }

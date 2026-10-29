@@ -6,12 +6,14 @@ import android.graphics.pdf.PdfDocument
 import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.ink.Stroke
 import java.io.OutputStream
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 // Port of exportPDF in Murekkep.swiftpm/EditorModel.swift: the note flattened into a vector PDF
 // for sharing. For each page the paper template (or the imported page, when the caller draws it),
 // then the ink as FlatInk draws it. A notebook's blank pages at the end (there is always one) stay
-// out of the shared file; an imported PDF keeps all its pages.
+// out of the shared file; an imported PDF keeps all its pages. For an imported PDF the ink is also
+// written alone (writeInk), for PdfOverlay to lay over the PDF's own pages.
 
 object PdfExport {
     /**
@@ -65,6 +67,34 @@ object PdfExport {
             document.close()
         }
     }
+
+    /**
+     * Writes the ink alone to `out`, one page per entry of `pages` on a clear page (no white, no
+     * paper): `sizes[i]` its width and height in points, rounded up to the whole points PdfDocument
+     * takes ([inkPageSize]), so the page holds all of the page it goes onto. PdfOverlay lays these
+     * pages over an imported PDF's own.
+     */
+    fun writeInk(out: OutputStream, pages: List<List<Stroke>>, sizes: List<Pair<Float, Float>>) {
+        require(pages.size == sizes.size) { "one size per page: ${pages.size} pages, ${sizes.size} sizes" }
+        val document = PdfDocument()
+        try {
+            for (i in pages.indices) {
+                val (width, height) = sizes[i]
+                val page = document.startPage(PdfDocument.PageInfo.Builder(inkPageSize(width), inkPageSize(height), i + 1).create())
+                try {
+                    FlatInk.draw(pages[i], page.canvas)
+                } finally {
+                    document.finishPage(page)
+                }
+            }
+            document.writeTo(out)
+        } finally {
+            document.close()
+        }
+    }
+
+    /** An ink page's edge in whole points, rounded up and never under one. */
+    fun inkPageSize(points: Float): Int = ceil(points).toInt().coerceAtLeast(1)
 
     /**
      * How many pages the file gets: all of an imported PDF; of a notebook, up to the last page
