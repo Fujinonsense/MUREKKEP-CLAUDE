@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -136,8 +137,9 @@ private fun materialScheme(z: ZenColors): ColorScheme {
         surfaceDim = z.paper3,
         surfaceContainerLowest = z.paper,
         surfaceContainerLow = z.paper2,
-        surfaceContainer = z.paper2,
-        surfaceContainerHigh = z.paper3,
+        // Menus and dialogs float, so they are paper (the spec's surfaces).
+        surfaceContainer = z.paper,
+        surfaceContainerHigh = z.paper,
         surfaceContainerHighest = z.paper3,
         inverseSurface = z.ink,
         inverseOnSurface = z.paper,
@@ -169,24 +171,50 @@ private val ZenShapes = Shapes(
     small = RoundedCornerShape(Zen.control),
     medium = RoundedCornerShape(Zen.popover),
     large = RoundedCornerShape(Zen.bar),
-    extraLarge = RoundedCornerShape(24.dp),
+    // Dialogs, which take a pop-up's 16 dp corners.
+    extraLarge = RoundedCornerShape(Zen.popover),
 )
 
 /**
- * The app's theme, from the choice in Ayarlar › Görünüm. Black and white follows the system's
- * light or dark look; a Pro theme (shown only once Pro is bought) brings its own light or dark
- * look and accent, and the pens get their realistic bodies.
+ * The app's theme, from the choice in Ayarlar › Görünüm: the system's light or dark look in every
+ * theme, the pens' realistic bodies in a Pro theme. Only the library takes a picture's own look
+ * ([LibraryLook]). The accent stays the brand's ink blue in every theme, as on the iPad.
  */
 @Composable
 fun MurekkepTheme(theme: AppTheme = AppTheme.BLACK_WHITE, darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val shown = theme.shown
-    val dark = shown.darkLook ?: darkTheme
+    CompositionLocalProvider(LocalAppTheme provides theme) {
+        ZenLook(zenColors(theme, darkTheme), content)
+    }
+}
+
+/**
+ * The library's sidebar and notes in their picture's look ([AppTheme.libraryDark]), so their text
+ * reads on it. The editor, Ayarlar, the sheets and the dialogs stay outside and keep the system's
+ * look, as the iPad sets the picture's look on the library's content only.
+ */
+@Composable
+fun LibraryLook(content: @Composable () -> Unit) {
+    val theme = LocalAppTheme.current
+    val zen = zenColors(theme, theme.libraryDark(Zen.colors.dark))
+    ZenLook(zen) {
+        // Text and icons in ink, as the screen's surface gives the rest of the app.
+        CompositionLocalProvider(LocalContentColor provides zen.ink, content = content)
+    }
+}
+
+/** The tokens of [theme] in the light or the dark look: in a Pro theme the pens get their realistic bodies. */
+private fun zenColors(theme: AppTheme, dark: Boolean): ZenColors {
     val base = if (dark) ZenDark else ZenLight
-    val zen = if (shown == AppTheme.BLACK_WHITE) base else ZenColors(
+    return if (theme.shown == AppTheme.BLACK_WHITE) base else ZenColors(
         base.paper, base.paper2, base.paper3, base.ink, base.ink2, base.muted, base.rule,
-        shown.accent ?: base.accent, base.onPage, base.dark, proTheme = true,
+        base.accent, base.onPage, base.dark, proTheme = true,
     )
-    CompositionLocalProvider(LocalZen provides zen, LocalAppTheme provides theme) {
+}
+
+/** The tokens and Material's roles filled from them. */
+@Composable
+private fun ZenLook(zen: ZenColors, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalZen provides zen) {
         MaterialTheme(
             colorScheme = materialScheme(zen),
             typography = ZenTypography,

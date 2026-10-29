@@ -7,16 +7,15 @@
     <string name="new_notebook">Yeni not</string>
     <string name="notebook_default_title">Not</string>
     <string name="library_empty_title">Henüz not yok</string>
-    <string name="library_empty_hint">“Yeni not”a dokun ve yazmaya başla.</string>
     <string name="more_actions">Daha fazla</string>
     <string name="rename">Yeniden adlandır</string>
     <string name="delete">Sil</string>
-    <string name="rename_title">Defteri yeniden adlandır</string>
-    <string name="notebook_title_label">Başlık</string>
+    <string name="rename_title">Yeniden adlandır</string>
+    <string name="notebook_title_label">Ad</string>
     <string name="ok">Tamam</string>
     <string name="cancel">Vazgeç</string>
-    <string name="delete_title">Bu defter silinsin mi?</string>
-    <string name="delete_message">“%1$s” ve tüm sayfaları silinecek. Bu geri alınamaz.</string>
+    <string name="delete_title">Bu not silinsin mi?</string>
+    <string name="delete_message">Not ve üzerindeki tüm yazılar kalıcı olarak silinir.</string>
     <string name="opening">Açılıyor…</string>
 
     <!-- Düzenleyici -->
@@ -34,8 +33,6 @@
     <string name="shapes_help">Kalemle sürükle. Doğrular 15°\'lerde, kare ve daireler eşit kenarda tık diye oturur; ölçü kalemin yanında görünür. Şekil son seçtiğin mürekkeple çizilir.</string>
     <string name="import_pdf">PDF içe aktar</string>
     <string name="importing_pdf">Aktarılıyor…</string>
-    <string name="pdf_unreadable_title">Bu PDF açılamadı</string>
-    <string name="pdf_unreadable_message">Bozuk ya da parolalı olabilir. Başka bir kopyasını dene.</string>
     <string name="share_pdf">PDF olarak paylaş</string>
     <string name="export_failed">PDF hazırlanamadı.</string>
     <string name="eraser">Silgi</string>
@@ -101,10 +98,7 @@
     <string name="all">Hepsi</string>
     <string name="sort_modified">Son düzenlenen</string>
     <string name="sort_title">Ada göre</string>
-    <string name="sort_created">Oluşturulma</string>
     <string name="pdf_label">PDF</string>
-    <string name="library_section_empty">Burada henüz not yok.</string>
-    <string name="menu">Menü</string>
     <string name="hide_sidebar">Kenar çubuğunu gizle</string>
     <plurals name="pages">
         <item quantity="other">%d sayfa</item>
@@ -113,9 +107,7 @@
     <!-- Zen ayarlar -->
     <string name="settings_appearance">Görünüm</string>
     <string name="settings_theme">Tema</string>
-    <string name="settings_theme_hint">Siyah beyaz, sistemin açık ya da koyu görünümünü izler. Pro temalar kendi görselleri ve vurgu renkleriyle gelir.</string>
     <string name="theme_black_white">Siyah beyaz</string>
-    <string name="theme_free">Ücretsiz</string>
     <string name="theme_ebru">Ebru</string>
     <string name="theme_hokka">Hokka</string>
     <string name="theme_lapis">Lapis</string>
@@ -123,12 +115,12 @@
     <string name="theme_varak">Varak</string>
     <string name="theme_lavi">Lavi</string>
     <string name="theme_ruled">Defter</string>
-    <string name="theme_ferro">Ferro</string>
-    <string name="theme_holo">Holo</string>
+    <string name="theme_ferro">Manyetik sıvı</string>
+    <string name="theme_holo">Hologram</string>
     <string name="theme_silk">İpek</string>
     <string name="theme_molten">Erimiş altın</string>
     <string name="theme_glass">Sıvı cam</string>
-    <string name="theme_pearl">İnci</string>
+    <string name="theme_pearl">Sedef</string>
     <string name="pro_soon_title">Pro yakında</string>
     <string name="pro_soon_message">Pro temalar Play Store sürümüyle geliyor. O zamana kadar görünüm siyah beyaz kalır.</string>
 </resources>

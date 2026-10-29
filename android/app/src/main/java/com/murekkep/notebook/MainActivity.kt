@@ -11,11 +11,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,12 +34,15 @@ import androidx.compose.ui.unit.dp
 import com.murekkep.notebook.data.AppearancePreferences
 import com.murekkep.notebook.data.NotebookStore
 import com.murekkep.notebook.export.PdfShare
+import com.murekkep.notebook.ui.ActivityBars
 import com.murekkep.notebook.ui.AppTheme
 import com.murekkep.notebook.ui.EditorScreen
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.LibraryScreen
 import com.murekkep.notebook.ui.MurekkepTheme
 import com.murekkep.notebook.ui.SettingsScreen
+import com.murekkep.notebook.ui.Zen
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -66,12 +71,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** The library (or the settings), and the editor over it while a notebook is open: plain state, no navigation library. */
+/**
+ * The library, with Ayarlar as a sheet over it, and the editor in its place while a notebook is
+ * open: plain state, no navigation library. The library keeps its section, search and scroll
+ * while a note is open, as the iPad's stays under the pushed editor.
+ */
 @Composable
 private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, onTheme: (AppTheme) -> Unit) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var editor by remember { mutableStateOf<EditorState?>(null) }
+    val library = rememberSaveableStateHolder()
     if (demo) {
         LaunchedEffect(Unit) {
             store.load()
@@ -83,12 +93,24 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
         }
     }
     val id = openId
+    // The bars follow the screen in front: the library in its picture's look, the editor in the system's.
+    val systemDark = Zen.colors.dark
+    ActivityBars(if (id == null) theme.libraryDark(systemDark) else systemDark)
     if (id == null) {
-        if (settingsOpen) {
-            BackHandler { settingsOpen = false }
-            SettingsScreen(theme = theme, onTheme = onTheme, onBack = { settingsOpen = false })
-        } else {
-            LibraryScreen(store = store, onOpen = { openId = it.id }, onSettings = { settingsOpen = true })
+        Box(Modifier.fillMaxSize()) {
+            library.SaveableStateProvider("library") {
+                LibraryScreen(
+                    store = store,
+                    onOpen = {
+                        settingsOpen = false
+                        openId = it.id
+                    },
+                    onSettings = { settingsOpen = true },
+                )
+            }
+            if (settingsOpen) {
+                SettingsScreen(theme = theme, onTheme = onTheme, onBack = { settingsOpen = false })
+            }
         }
         return
     }
@@ -118,9 +140,8 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
     } else {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        val snackbar = remember { SnackbarHostState() }
-        val exportFailed = stringResource(R.string.export_failed)
         var sharing by remember { mutableStateOf(false) }
+        var exportFailed by remember { mutableStateOf(false) }
         EditorScreen(
             state = state,
             onBack = close,
@@ -131,8 +152,10 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                         try {
                             val file = PdfShare.write(context, state)
                             PdfShare.share(context, file, state.title)
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
-                            snackbar.showSnackbar(exportFailed)
+                            exportFailed = true
                         } finally {
                             sharing = false
                         }
@@ -143,8 +166,16 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                 store.rename(id, title)
                 state.title = title
             },
-            snackbar = snackbar,
         )
+        // A failed export is an alert, as on the iPad, and the share button is free again at once.
+        if (exportFailed) {
+            AlertDialog(
+                onDismissRequest = { exportFailed = false },
+                title = { Text(stringResource(R.string.export_failed_title)) },
+                text = { Text(stringResource(R.string.export_failed)) },
+                confirmButton = { TextButton(onClick = { exportFailed = false }) { Text(stringResource(R.string.ok)) } },
+            )
+        }
     }
 }
 

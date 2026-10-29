@@ -183,7 +183,7 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
                 BarButton(stringResource(R.string.more), onClick = { menuOpen = true }) {
                     Icon(Icons.Outlined.MoreHoriz, contentDescription = null, modifier = Modifier.size(22.dp))
                 }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                ZenMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     if (onRename != null) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.rename_note)) },

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kütüphane, iPad'deki gibi (LibraryView, LibraryPanes, TemplateGallery) -->
+    <string name="save">Kaydet</string>
+    <string name="error">Hata</string>
+    <string name="show_sidebar">Kenar çubuğunu göster</string>
+    <string name="clear_search">Aramayı temizle</string>
+    <string name="sort_label">Sıralama</string>
+    <string name="filter_label">Göster</string>
+    <plurals name="search_results">
+        <item quantity="other">%d sonuç</item>
+    </plurals>
+    <string name="search_empty">“%1$s” için sonuç yok</string>
+    <string name="search_empty_hint">Yazımı denetle ya da yeni bir arama dene.</string>
+    <string name="empty_home_text">Yeni bir defter aç ya da PDF içe aktar.</string>
+    <string name="empty_notebooks_title">Defter yok</string>
+    <string name="empty_notebooks_text">Sağ üstteki “Yeni not” ile bir şablon seç.</string>
+    <string name="empty_pdfs_title">PDF yok</string>
+    <string name="empty_pdfs_text">Ders notlarını, kitap bölümlerini ve makaleleri buraya ekle.</string>
+    <string name="drop_title">PDF\'leri buraya sürükle</string>
+    <string name="drop_detail">Dosyalar\'dan ya da başka bir uygulamadan bırakabilirsin.</string>
+    <string name="drop_choose">Dosya seç</string>
+    <string name="drop_release">Bırak, ekleyelim</string>
+    <string name="drop_library">PDF\'leri kütüphaneye bırak</string>
+    <string name="import_title">PDF ya da fotoğraf ekle</string>
+    <string name="import_message">Fotoğraflar tek bir PDF olur, her fotoğraf bir sayfa.</string>
+    <string name="import_from_files">Dosyalar\'dan (PDF ya da fotoğraf)</string>
+    <string name="import_from_photos">Fotoğraflar\'dan</string>
+    <string name="import_photo_progress">Fotoğraflar PDF\'e dönüştürülüyor (%1$d/%2$d)</string>
+    <string name="import_failed">Şu dosyalar açılamadı: %1$s</string>
+    <string name="photo_title">Fotoğraf</string>
+    <string name="new_notebook_title">Yeni defter</string>
+    <string name="template_basic">Temel</string>
+    <string name="template_plain">Düz</string>
+    <string name="template_lined">Çizgili</string>
+    <string name="template_grid">Kareli</string>
+    <string name="template_dotted">Noktalı</string>
+    <string name="export_failed_title">Dışa aktarılamadı</string>
+
+    <!-- Ayarlar › Görünüm -->
+    <string name="settings_theme_footer">Siyah beyaz cihazın açık ya da koyu görünümünü izler. Ultra premium temalar kütüphanenin arkasına Higgsfield ile yapılmış bir görsel koyar; yazılar her birinde okunacak renge geçer.</string>
+    <string name="settings_theme_footer_store">Siyah beyaz ücretsizdir ve cihazın açık ya da koyu görünümünü izler. Ultra premium temalar Mürekkep Pro\'da: her biri Higgsfield ile yapılmış bir görselle gelir.</string>
+    <string name="in_pro">Mürekkep Pro\'da</string>
+    <string name="theme_paper_wave">Kâğıt dalga</string>
+    <string name="theme_reeded">Buzlu cam</string>
+    <string name="theme_orbs">Cam küreler</string>
+    <string name="theme_light_paint">Işık izi</string>
+</resources>
