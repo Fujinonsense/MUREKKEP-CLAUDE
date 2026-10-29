@@ -594,10 +594,11 @@ struct LibraryView: View {
 
 // MARK: - Sidebar
 
-/// The sidebar: the wordmark, search, the lists with their counts, the courses, and pinned at the
-/// bottom the Studio, the voices and Settings. One even surface for its full height, under the
-/// status bar and the home indicator too: paper-2 in black and white (and on the ruled paper), an
-/// even frosted panel on a Pro theme's picture.
+/// The sidebar, its parts 18 points apart: the wordmark with the brain that answers, search, the
+/// quick tiles (a notebook, a PDF or photos, a course), the week, the lists with their counts, the
+/// courses, and pinned at the bottom the Studio, the voices and Settings. One even surface for its
+/// full height, under the status bar and the home indicator too: paper-2 in black and white (and on
+/// the ruled paper), an even frosted panel on a Pro theme's picture.
 struct LibrarySidebar: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var studio: StudioStore
@@ -618,6 +619,7 @@ struct LibrarySidebar: View {
                     brand
                     searchField
                     quickCreate
+                    WeekCard()
                     VStack(alignment: .leading, spacing: 2) {
                         row(.home, Loc.t("Tüm notlar"), "square.grid.2x2", count: store.notes.count)
                         row(.recent, Loc.t("Son açılanlar"), "clock", count: nil)
@@ -909,6 +911,81 @@ private struct EngineStatus: View {
 
     private var ready: Bool {
         settings.engine == .claude ? settings.hasAPIKey : true
+    }
+}
+
+/// This week in the sidebar, as before the zen redesign: today's date, the streak, the seven days
+/// (a day worked in a note filled with ink and a check, today ringed) and how many notes changed
+/// today. A paper card with a hairline; the streak's flame is the one colour it keeps.
+private struct WeekCard: View {
+    @EnvironmentObject private var store: LibraryStore
+
+    private static let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+    /// Monday to Sunday of this week.
+    private var days: [Date] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let weekday = (cal.component(.weekday, from: today) + 5) % 7 // Monday = 0
+        let monday = cal.date(byAdding: .day, value: -weekday, to: today) ?? today
+        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: monday) }
+    }
+
+    var body: some View {
+        let streak = ActivityLog.streak
+        let today = store.notes.filter { Calendar.current.isDateInToday($0.modified) }.count
+        let letters = [Loc.t("Pt"), Loc.t("Sa"), Loc.t("Ça"), Loc.t("Pe"), Loc.t("Cu"), Loc.t("Ct"), Loc.t("Pz")]
+        let week = days
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                if streak > 1 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(Color.orange)
+                        Text(Loc.t("{0} gün", "\(streak)"))
+                            .foregroundStyle(Theme.text)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            HStack(spacing: 0) {
+                ForEach(week.indices, id: \.self) { i in
+                    let day = week[i]
+                    let worked = ActivityLog.worked(on: day)
+                    let isToday = Calendar.current.isDateInToday(day)
+                    VStack(spacing: 4) {
+                        Text(letters[i % 7])
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                        Circle()
+                            .fill(worked ? Theme.ink : Theme.paper3)
+                            .frame(width: 22, height: 22)
+                            .overlay {
+                                Circle().strokeBorder(Theme.ink, lineWidth: isToday ? 2 : 0)
+                            }
+                            .overlay {
+                                if worked {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            Text(today == 0 ? Loc.t("Bugün henüz bir şey yazmadın.") : Loc.t("Bugün {0} not üzerinde çalıştın.", "\(today)"))
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+        }
+        .padding(14)
+        .background(Theme.paper, in: Self.shape)
+        .overlay(Self.shape.strokeBorder(Theme.hairline, lineWidth: 1))
     }
 }
 
