@@ -144,12 +144,14 @@ fun BreakCorner(edge: PaletteEdge, bottomClearance: Dp, canvasWidth: Dp, canvasH
     val startInset = safe.calculateStartPadding(direction)
     val endInset = safe.calculateEndPadding(direction)
     // The room kept clear at each edge (the iPad's gamePanelSize): the pen bar along the top
-    // (10 + 64 + 10) or down the side (12 + 64 + 14), the tile below.
+    // (10 + 64 + 10) or down the side (12 + 64 + 14), the tile below. On a short canvas the panel
+    // comes down over its tile, but never over a pen bar along the bottom.
     val leading = PanelMargin + startInset
     val trailing = (if (edge == PaletteEdge.TRAILING) 90.dp else PanelMargin) + endInset
     val top = if (edge == PaletteEdge.TOP) 84.dp else PanelMargin
     val aboveTile = bottomInset + bottomClearance + TileMargin + TileTarget + PanelGap
-    val bottom = GamePanelSize.bottom(canvasHeight.value.toDouble(), top.value.toDouble(), aboveTile.value.toDouble(), (bottomInset + PanelMargin).value.toDouble()).dp
+    val low = bottomInset + bottomClearance + PanelMargin
+    val bottom = GamePanelSize.bottom(canvasHeight.value.toDouble(), top.value.toDouble(), aboveTile.value.toDouble(), low.value.toDouble()).dp
     val step = if (expanded) {
         GamePanelSize.larger(canvasWidth.value.toDouble(), canvasHeight.value.toDouble(), leading.value.toDouble(), trailing.value.toDouble(), top.value.toDouble(), bottom.value.toDouble())
     } else {

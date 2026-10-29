@@ -24,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import com.murekkep.notebook.games.GameDifficulty
@@ -69,10 +70,10 @@ class GameCornerTest {
         prefs.edit().clear().commit()
     }
 
-    private fun show() {
+    private fun show(width: Dp = 1280.dp, height: Dp = 800.dp) {
         compose.setContent {
             MurekkepTheme {
-                Box(Modifier.size(1280.dp, 800.dp)) { BreakCorner(PaletteEdge.BOTTOM, 90.dp, 1280.dp, 800.dp) }
+                Box(Modifier.size(width, height)) { BreakCorner(PaletteEdge.BOTTOM, 90.dp, width, height) }
             }
         }
     }
@@ -113,6 +114,17 @@ class GameCornerTest {
         assertEquals(340 to 420, size())
         compose.onNodeWithContentDescription("Close").performClick()
         panel.assertDoesNotExist()
+    }
+
+    @Test
+    fun onAShortCanvasTheCardComesDownOverItsTileButNeverOverThePenBar() {
+        // A phone on its side, the pen bar along the bottom (18 + 64 + 8): no room for the card over
+        // its tile, so it comes down over the tile, 12 over the bar, and is cut to the room up to the top.
+        show(800.dp, 330.dp)
+        openGame()
+        val card = panel.getBoundsInRoot()
+        assertEquals(12f, card.top.value, 0.5f)
+        assertEquals(330f - 90f - 12f, card.bottom.value, 0.5f)
     }
 
     @Test
