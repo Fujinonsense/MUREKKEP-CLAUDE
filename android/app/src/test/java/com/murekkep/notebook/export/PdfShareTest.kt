@@ -1,11 +1,13 @@
 package com.murekkep.notebook.export
 
+import com.murekkep.notebook.render.PageSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // The shared file's name from the note's title: what no file system takes becomes "_", an empty
-// title is "Not", ".pdf" once, and a name never longer than a file system takes.
+// title is "Not", ".pdf" once, and a name never longer than a file system takes. The imported
+// pages' pictures: twice their size while all of them fit in memory.
 class PdfShareTest {
     @Test
     fun theTitleBecomesTheFileName() {
@@ -62,5 +64,37 @@ class PdfShareTest {
     fun aCutTitleKeepsItsExtensionAndLosesTrailingSpaces() {
         assertEquals("x".repeat(PdfShare.NAME_BYTES) + ".PDF", PdfShare.fileName("x".repeat(300) + ".PDF"))
         assertEquals("b".repeat(239) + ".pdf", PdfShare.fileName("b".repeat(239) + " c d e"))
+    }
+
+    // An imported PDF's pages are pictures PdfDocument keeps until it writes the file.
+
+    private fun a4(pages: Int) = List(pages) { PageSize.A4 }
+
+    private fun pictureBytes(sizes: List<PageSize>, scale: Float) =
+        sizes.sumOf { 4.0 * it.width * scale * it.height * scale }
+
+    @Test
+    fun aShortPdfKeepsTwiceItsSize() {
+        assertEquals(PdfShare.PDF_PAGE_SCALE, PdfShare.importedPageScale(a4(20), 1_000_000_000L), 0f)
+        assertEquals(PdfShare.PDF_PAGE_SCALE, PdfShare.importedPageScale(emptyList(), 1_000_000_000L), 0f)
+    }
+
+    @Test
+    fun aLongPdfsPicturesFitTheBudget() {
+        val budget = 400_000_000L
+        val pages = a4(300)
+        val scale = PdfShare.importedPageScale(pages, budget)
+        assertTrue(scale < PdfShare.PDF_PAGE_SCALE)
+        assertTrue(pictureBytes(pages, scale) <= budget * 1.0001)
+        // It uses the budget: a tenth more per point would not fit.
+        assertTrue(pictureBytes(pages, scale * 1.1f) > budget)
+    }
+
+    @Test
+    fun slidesAndA4PagesShareOneScale() {
+        val pages = a4(40) + List(60) { PageSize(960f, 540f) }
+        val scale = PdfShare.importedPageScale(pages, 200_000_000L)
+        assertTrue(pictureBytes(pages, scale) <= 200_000_000L * 1.0001)
+        assertEquals(PdfShare.PDF_PAGE_SCALE, PdfShare.importedPageScale(pages, 2_000_000_000L), 0f)
     }
 }
