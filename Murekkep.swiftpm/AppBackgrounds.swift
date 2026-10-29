@@ -118,30 +118,20 @@ enum AppBackground: String, CaseIterable, Identifiable, Codable {
     /// How much paper (or, on a dark picture, night) lies over the picture so the library reads on
     /// it: with these, light text (#F2F3F5) or ink (#141414) reaches 4.5:1 over the darkest or
     /// brightest part of the sidebar and the title area. The bright reeded glass takes the most, so
-    /// light text stays clear on its orange and pink.
+    /// light text stays clear on its orange and pink. Marbling keeps only what its big title needs
+    /// (the sidebar has its own surface, the notes their plates): at 0.10 the title keeps 12.8:1
+    /// over 95 % of its area in landscape and 4.7:1 in portrait, past the 3:1 of large text.
     var wash: Double {
         switch self {
         case .reeded: return 0.28
-        case .ebru: return 0.20
         case .molten: return 0.18
         case .silk: return 0.16
         case .ferro: return 0.15
         case .lightPaint, .lavi: return 0.12
-        case .glass, .paperWave, .holo, .pearl, .hokka, .lapis, .cini, .varak: return 0.10
+        case .ebru, .glass, .paperWave, .holo, .pearl, .hokka, .lapis, .cini, .varak: return 0.10
         case .orbs: return 0.08
         default: return 0
         }
-    }
-
-    /// The notes' own wash (NotesWash): warm paper at 0.88 on a light picture, night at 0.65 on a
-    /// dark one, under the covers, their captions and the empty state. Measured over every pixel of
-    /// each picture, so whatever the crop: the grey captions ("3 sayfa, dün") keep at least 5.5:1 on
-    /// the light pictures and 4.5:1 on at least 96 % of each dark one, down to 3.5:1 on the
-    /// brightest gold and light (night at 0.72 would keep 4.5:1 everywhere). None without a
-    /// picture: black and white and the ruled paper are paper already.
-    var notesWash: Double {
-        guard imageName != nil else { return 0 }
-        return isDark ? 0.65 : 0.88
     }
 
     /// The theme's own accent, from its palette: gold on the dark pictures of the zen set, the
@@ -224,7 +214,8 @@ struct AppBackgroundView: View {
 
 /// The chosen theme behind the library, with the text colours that read on it: light text on a
 /// dark picture, dark text on a light one, the system's choice in black and white. A Pro theme
-/// shows as black and white while Pro is locked.
+/// shows as black and white while Pro is locked. Whether a picture lies there goes down to the
+/// library as `onPicture`.
 struct LibraryBackdrop: ViewModifier {
     @EnvironmentObject private var settings: AppSettings
     @ObservedObject private var pro = ProStore.shared
@@ -235,6 +226,7 @@ struct LibraryBackdrop: ViewModifier {
         let textScheme: ColorScheme = kind.isDark ? .dark : (kind.imageName != nil ? .light : scheme)
         content
             .environment(\.colorScheme, textScheme)
+            .environment(\.onPicture, kind.imageName != nil)
             .background {
                 AppBackgroundView(kind: kind)
                     .ignoresSafeArea()
@@ -242,33 +234,57 @@ struct LibraryBackdrop: ViewModifier {
     }
 }
 
-/// The wash the notes lie on over a Pro theme's picture (`notesWash`). The picture stays clear
-/// behind the sidebar and the pane's header; the wash lies behind the view it modifies (PaneScroll
-/// gives that the pane's full width) and fades in over its top 40 points. `reach` is twice the
-/// pane's height: the wash runs that far past the notes, so it reaches the bottom of the pane when
-/// there are only a few, even while a short page is pulled up past its end (the scroll view clips
-/// the rest).
-struct NotesWash: ViewModifier {
-    @EnvironmentObject private var settings: AppSettings
-    @ObservedObject private var pro = ProStore.shared
-    let reach: CGFloat
+/// Whether the library lies on a Pro theme's picture (LibraryBackdrop sets it). Black and white and
+/// the ruled paper are paper already.
+private struct OnPictureKey: EnvironmentKey {
+    static let defaultValue = false
+}
 
+extension EnvironmentValues {
+    var onPicture: Bool {
+        get { self[OnPictureKey.self] }
+        set { self[OnPictureKey.self] = newValue }
+    }
+}
+
+/// What would sit straight on a Pro theme's picture in the library's panes stands on a plate of its
+/// own: paper at 0.92 (Theme.plate) with a one-point hairline and a small soft shadow (plateShadow).
+/// No wash darkens the notes' side, so the picture stays clear and vivid between the plates. A note
+/// with its cover, an overview, an empty state: radius 14, 10 points round. A line of text (a
+/// section title, a count): radius 10, 12 by 6 (`pictureLabel`). `maxWidth` keeps a wide one (an
+/// empty state) to a card's width. Nothing at all in black and white and on the ruled paper.
+struct PicturePlate: ViewModifier {
+    @Environment(\.onPicture) private var onPicture
+    var radius: CGFloat
+    var horizontal: CGFloat
+    var vertical: CGFloat
+    var maxWidth: CGFloat?
+
+    @ViewBuilder
     func body(content: Content) -> some View {
-        let kind = settings.shownBackground(locked: pro.locks)
-        let tone: Color = (kind.isDark ? Color.black : Theme.paperWarm).opacity(kind.notesWash)
-        content
-            .background(alignment: .top) {
-                if kind.notesWash > 0 {
-                    VStack(spacing: 0) {
-                        LinearGradient(colors: [tone.opacity(0), tone], startPoint: .top, endPoint: .bottom)
-                            .frame(height: 40)
-                        tone
-                    }
-                    .padding(.bottom, -reach)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                }
-            }
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        if onPicture {
+            content
+                .frame(maxWidth: maxWidth)
+                .padding(.horizontal, horizontal)
+                .padding(.vertical, vertical)
+                .background(shape.fill(Theme.plate).plateShadow())
+                .overlay(shape.strokeBorder(Theme.hairline, lineWidth: 1))
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    /// A plate under a card on a Pro theme's picture (radius 14, padding 10).
+    func picturePlate(maxWidth: CGFloat? = nil) -> some View {
+        modifier(PicturePlate(radius: 14, horizontal: 10, vertical: 10, maxWidth: maxWidth))
+    }
+
+    /// A plate under a line of text on a Pro theme's picture (radius 10, padding 12 by 6).
+    func pictureLabel() -> some View {
+        modifier(PicturePlate(radius: 10, horizontal: 12, vertical: 6, maxWidth: nil))
     }
 }
 

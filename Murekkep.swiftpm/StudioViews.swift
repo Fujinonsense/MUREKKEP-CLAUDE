@@ -880,8 +880,8 @@ struct StudioPane: View {
     let actions: LibraryActions
     let showToggle: Bool
 
-    /// Like the other panes (PaneScroll): the header on the theme's picture, the cards and the
-    /// overviews on the notes' wash.
+    /// Like the other panes (PaneScroll): the header on the theme's picture, the overviews on
+    /// plates of their own there.
     var body: some View {
         PaneScroll {
             PaneHeader(title: Loc.t("Stüdyo"), subtitle: Loc.t("Kaynaklarından video ve sesli özetler"), showToggle: showToggle, actions: actions) {

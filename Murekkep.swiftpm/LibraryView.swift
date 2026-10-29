@@ -844,7 +844,9 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// A note in the library: its first page as the cover, its name, and "3 sayfa, dün" under it.
+/// A note in the library: its first page as the cover, its name, and "3 sayfa, dün" under it. On a
+/// Pro theme's picture the three stand on a plate of their own (PicturePlate); in black and white
+/// they lie straight on the paper.
 struct NoteCard: View {
     let note: NoteMeta
     @EnvironmentObject private var store: LibraryStore
@@ -895,6 +897,7 @@ struct NoteCard: View {
                     .lineLimit(1)
             }
         }
+        .picturePlate()
         .contentShape(Rectangle())
         .task(id: version) {
             image = await store.loadThumbnail(note.id, version: version)

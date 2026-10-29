@@ -56,30 +56,27 @@ struct SidebarToggle: View {
     }
 }
 
-/// A pane's page (the notes, a course, the search): its header (title, buttons, filter and sort) on
-/// the theme's picture, then what it holds on the notes' wash (NotesWash), which runs the pane's
-/// full width from just above the first row to the bottom of the pane and scrolls with the notes.
+/// A pane's page (the notes, a course, the search, the Studio): its header (title, buttons, filter
+/// and sort), then what it holds. On a Pro theme's picture nothing darkens the picture: the header
+/// stands on it as it is, and the notes and the rest stand on plates of their own (PicturePlate).
 struct PaneScroll<Header: View, Content: View>: View {
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        GeometryReader { pane in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        header()
-                    }
-                    .padding(.horizontal, 40)
-                    VStack(alignment: .leading, spacing: 24) {
-                        content()
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.top, 24)
-                    .padding(.bottom, 40)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .modifier(NotesWash(reach: pane.size.height * 2))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 24) {
+                    header()
                 }
+                .padding(.horizontal, 40)
+                VStack(alignment: .leading, spacing: 24) {
+                    content()
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 24)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

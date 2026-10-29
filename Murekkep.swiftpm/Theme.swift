@@ -4,8 +4,9 @@ import UIKit
 /// The app's look: black ink on plain paper, greys with no colour in them, and the brand's ink blue
 /// only where something is chosen or in focus. Everything is set in the system font. Surfaces lie
 /// flat with a one-point hairline; a shadow falls only from what floats (the pen bar, a popover, a
-/// menu). The values are the zen spec's (docs/superpowers/specs/2026-10-29-zen-arayuz-design.md);
-/// a Pro theme lays its picture behind the library and may use a material over it.
+/// menu), and a small one from the plates on a Pro theme's picture. The values are the zen spec's
+/// (docs/superpowers/specs/2026-10-29-zen-arayuz-design.md); a Pro theme lays its picture behind the
+/// library and may use a material over it.
 enum Theme {
     /// Wet ink, the accent of every control: #2457D6, lighter at night (#4D7BEA) so it still reads on
     /// the dark paper (contrast 6.2 by day, 4.6 at night).
@@ -52,6 +53,14 @@ enum Theme {
     /// What floats casts this: 0 12 32 at 12 % with an edge of 0 1 2 at 8 %, deeper at night.
     static let floatShadow = dynamic(light: UIColor(white: 0, alpha: 0.12), dark: UIColor(white: 0, alpha: 0.45))
     static let floatShadowEdge = dynamic(light: UIColor(white: 0, alpha: 0.08), dark: UIColor(white: 0, alpha: 0.30))
+
+    // MARK: On a Pro theme's picture
+
+    /// The plate under what would sit straight on a Pro theme's picture in the library (PicturePlate):
+    /// paper at 0.92, so the picture stays clear around it.
+    static let plate: Color = paper.opacity(0.92)
+    /// The plate's small soft shadow, 0 2 12 (radius 6, y 2): black at 12 %, 30 % at night.
+    static let plateShadow = dynamic(light: UIColor(white: 0, alpha: 0.12), dark: UIColor(white: 0, alpha: 0.30))
 
     /// Behind the library: plain paper (a Pro theme's picture comes from AppBackgroundView instead).
     static var libraryBackground: some View { paper }
@@ -139,6 +148,12 @@ extension View {
     func floatingShadow() -> some View {
         shadow(color: Theme.floatShadow, radius: 16, y: 12)
             .shadow(color: Theme.floatShadowEdge, radius: 1, y: 1)
+    }
+
+    /// The small soft shadow of a plate on a Pro theme's picture: 0 2 12 (radius 6, y 2), black at
+    /// 12 % (30 % at night).
+    func plateShadow() -> some View {
+        shadow(color: Theme.plateShadow, radius: 6, y: 2)
     }
 }
 
