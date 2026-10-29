@@ -1,14 +1,20 @@
 package com.murekkep.notebook.ink
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.sin
 import kotlin.math.sqrt
 
-// StrokeBuilder has no check in tools/swiftcheck; these are the iPad numbers worked out by hand.
+// The freehand half of StrokeBuilder has no check in tools/swiftcheck; those are the iPad numbers
+// worked out by hand. Hold-to-shape is held to the fixture of tools/shapecheck, which ran the real
+// Swift StrokeBuilder over the same pen samples.
 class StrokeBuilderTest {
     private val black = InkColor(0f, 0f, 0f)
     private val upright = 1.5707964f
@@ -221,5 +227,269 @@ class StrokeBuilderTest {
         assertEquals(0f, InputSample.force(0.5f, stylus = false), 0f)
         assertEquals(0f, InputSample.force(0f, stylus = true), 0f)
         assertTrue(abs(InputSample(0f, 0f, 0f, 0.0).altitude - 1.5707964f) < 1e-7f)
+    }
+
+    // MARK: Hold-to-shape
+
+    /** Runs a fixture case's pen samples, snaps and checks through the builder, as the iPad's ran. */
+    private fun replay(c: FixtureCase) {
+        val head = c.first("brush").tokens
+        val b = StrokeBuilder(Brush.fromRaw(head[0].toInt()), black, head[1].toFloat(), 0.5f)
+        b.nibAngle = head[2].toFloat()
+        b.useRoll = head[3] == "1"
+        val records = c.records
+        var i = 1
+        while (i < records.size) {
+            val r = records[i]
+            val what = "${c.name}: ${r.key} at $i"
+            when (r.key) {
+                "sample" -> {
+                    val t = r.tokens
+                    b.add(
+                        InputSample(
+                            t[0].toFloat(), t[1].toFloat(), t[2].toFloat(), t[3].toDouble(),
+                            altitude = t[4].toFloat(), roll = t[6].toFloat(), isPencil = t[5] == "1",
+                        ),
+                    )
+                    i++
+                }
+                "snapline" -> {
+                    val got = b.snapToLine()
+                    assertEquals(what, records[i + 1].value == "1", got)
+                    i += 2
+                }
+                "snapshape" -> {
+                    val got = b.snapToShape()
+                    val want = records[i + 1].value
+                    assertEquals(what, want, got?.titleTr ?: "-")
+                    i += 2
+                }
+                "points" -> {
+                    Same.ink(what, r.inkPoints(), b.points)
+                    i++
+                }
+                "straight" -> {
+                    assertEquals(what, r.value == "1", b.isStraight)
+                    i++
+                }
+                "adjust" -> {
+                    if (r.value == "-") {
+                        assertNull(what, b.shapeAdjustment)
+                    } else {
+                        val a = b.shapeAdjustment
+                        assertNotNull(what, a)
+                        Same.value("$what scale", r.doubles()[0], a!!.scale)
+                        assertEquals("$what degrees", r.tokens[1].toInt(), a.degrees)
+                    }
+                    i++
+                }
+                "editable" -> {
+                    assertNull(what, b.editable)
+                    i++
+                }
+                "shape" -> {
+                    val (block, after) = ShapeBlock.parse(records, i)
+                    val e = b.editable
+                    assertNotNull(what, e)
+                    block.check(what, e!!)
+                    i = after
+                }
+                "drawn" -> {
+                    Same.points(what, r.points(), b.drawnPath)
+                    i++
+                }
+                "tip" -> {
+                    if (r.value == "-") {
+                        assertNull(what, b.tip)
+                    } else {
+                        Same.vec(what, r.vecs()[0], b.tip!!)
+                    }
+                    i++
+                }
+                "preview" -> {
+                    Same.ink(what, r.inkPoints(), b.preview(emptyList()))
+                    i++
+                }
+                "finish" -> {
+                    val got = b.finish()
+                    assertEquals(what, "points", records[i + 1].key)
+                    Same.ink("$what points", records[i + 1].inkPoints(), got)
+                    i += 2
+                }
+                else -> error("$what: unknown record")
+            }
+        }
+    }
+
+    @Test
+    fun holdToShapeMatchesTheIPad() {
+        val cases = ShapeFixture.cases("builder")
+        assertTrue("${cases.size} strokes", cases.size >= 10)
+        for (c in cases) replay(c)
+        // Lines, a square, a circle, a triangle, a curve and a scribble that stays as it is.
+        val results = cases.map { c -> c.records.firstOrNull { it.key == "result" }?.value }
+        assertTrue(results.contains("Doğru") && results.contains("Kare") && results.contains("Daire") && results.contains("Eğri") && results.contains("-"))
+    }
+
+    /** Pen samples 2 points apart along the corners (and back to the first), `dt` apart. */
+    private fun trace(b: StrokeBuilder, corners: List<Pt>, closed: Boolean, t0: Double = 0.0): Pt {
+        val stops = if (closed) corners + corners[0] else corners
+        var n = 0
+        var last = corners[0]
+        for (i in 0 until stops.size - 1) {
+            val a = stops[i]
+            val c = stops[i + 1]
+            val steps = (Geo.dist(a, c) / 2).toInt()
+            for (k in 0 until steps) {
+                val t = k.toDouble() / steps
+                last = Pt(a.x + (c.x - a.x) * t, a.y + (c.y - a.y) * t)
+                b.add(sample(last.x.toFloat(), last.y.toFloat(), t0 + n / 240.0))
+                n++
+            }
+        }
+        last = stops.last()
+        b.add(sample(last.x.toFloat(), last.y.toFloat(), t0 + n / 240.0))
+        return last
+    }
+
+    @Test
+    fun aHeldStrokeBecomesALineThatFollowsThePen() {
+        val b = builder(Brush.PEN)
+        assertFalse(b.snapToLine()) // nothing drawn yet
+        trace(b, listOf(Pt(10.0, 10.0), Pt(90.0, 60.0)), closed = false)
+        val before = b.points.size
+        assertTrue(before > 10)
+        assertTrue(b.snapToLine())
+        assertTrue(b.isStraight)
+        assertFalse(b.snapToLine()) // only once
+        // Two points, the average width and ink, from the start to the pen.
+        assertEquals(2, b.points.size)
+        assertEquals(Vec2(10f, 10f), b.points[0].position)
+        assertEquals(Vec2(90f, 60f), b.points[1].position)
+        assertEquals(1.1f, b.points[0].r, 1e-5f)
+        assertEquals(b.points[0].r, b.points[1].r, 0f)
+        assertEquals(b.points[0].ink, b.points[1].ink, 0f)
+        val line = b.editable!!
+        assertEquals(EditableShape.Kind.Polyline, line.kind)
+        assertEquals(ShapeName.LINE, line.name)
+        assertEquals(listOf(Pt(10.0, 10.0), Pt(90.0, 60.0)), line.points)
+        assertNull(b.shapeAdjustment)
+        // The pen moves on: the end follows, nothing else is added, the preview shows no tip.
+        b.add(sample(120f, 40f, 1.0))
+        assertEquals(2, b.points.size)
+        assertEquals(Vec2(120f, 40f), b.points[1].position)
+        assertEquals(listOf(Pt(10.0, 10.0), Pt(120.0, 40.0)), b.editable!!.points)
+        assertEquals(2, b.preview(listOf(InputSample(200f, 200f, 1f, 1.1, predicted = true))).size)
+        assertEquals(listOf(Pt(10.0, 10.0), Pt(120.0, 40.0)), b.drawnPath)
+        assertEquals(2, b.finish().size)
+    }
+
+    @Test
+    fun aLineNeedsSixPointsOfInk() {
+        val b = builder(Brush.PEN)
+        b.add(sample(10f, 10f, 0.0))
+        b.add(sample(12f, 11f, 1.0 / 240))
+        b.add(sample(14f, 12f, 2.0 / 240))
+        assertFalse(b.snapToLine())
+        assertFalse(b.isStraight)
+        assertNull(b.editable)
+    }
+
+    @Test
+    fun aHeldSquareSnapsAndThePenTurnsItInFifteenDegreeClicks() {
+        val b = builder(Brush.PEN)
+        val corners = listOf(Pt(50.0, 50.0), Pt(130.0, 50.0), Pt(130.0, 130.0), Pt(50.0, 130.0))
+        val grab = trace(b, corners, closed = true)
+        val freehand = b.points.size
+        assertEquals(ShapeName.SQUARE, b.snapToShape())
+        assertTrue(b.isStraight)
+        assertNull(b.snapToShape()) // only once
+        // The stroke is now the square's outline, denser than the pen's own samples, in the same ink.
+        assertTrue(b.points.size > freehand)
+        assertTrue(b.points.all { abs(it.r - 1.1f) < 1e-6f })
+        assertEquals(ShapeAdjustment(1.0, 0), b.shapeAdjustment)
+        val square = b.editable!!
+        assertEquals(EditableShape.Kind.Polygon, square.kind)
+        assertEquals(4, square.points.size)
+        // The pen swings round the middle by 14°: the square turns 15°, as big as before.
+        val anchor = square.middle
+        fun at(degrees: Double, scale: Double): InputSample {
+            val a = degrees * Math.PI / 180
+            val dx = (grab.x - anchor.x) * scale
+            val dy = (grab.y - anchor.y) * scale
+            return sample((anchor.x + dx * cos(a) - dy * sin(a)).toFloat(), (anchor.y + dx * sin(a) + dy * cos(a)).toFloat(), 1.0)
+        }
+        b.add(at(14.0, 1.0))
+        assertEquals(15, b.shapeAdjustment!!.degrees)
+        assertEquals(1.0, b.shapeAdjustment!!.scale, 0.01)
+        // By 7° only, half as far out: no click, half the size.
+        b.add(at(7.0, 0.5))
+        assertEquals(7, b.shapeAdjustment!!.degrees)
+        assertEquals(0.5, b.shapeAdjustment!!.scale, 0.01)
+        // Backwards, between two clicks: -23°.
+        b.add(at(-22.6, 1.0))
+        assertEquals(-23, b.shapeAdjustment!!.degrees)
+        // The handles follow the pen.
+        val turned = b.editable!!
+        assertEquals(4, turned.points.size)
+        Same.point("middle", anchor, turned.middle, 1e-6)
+        assertTrue(Geo.dist(turned.points[0], square.points[0]) > 10)
+        assertTrue(b.finish().size > 4)
+    }
+
+    @Test
+    fun aWobbleWhileLiftingThePenChangesNothing() {
+        val b = builder(Brush.PEN)
+        val grab = trace(b, listOf(Pt(50.0, 50.0), Pt(130.0, 50.0), Pt(130.0, 130.0), Pt(50.0, 130.0)), closed = true)
+        assertEquals(ShapeName.SQUARE, b.snapToShape())
+        val points = b.points.toList()
+        b.add(sample((grab.x + 3).toFloat(), (grab.y - 2).toFloat(), 1.0))
+        assertEquals(points, b.points)
+        assertEquals(ShapeAdjustment(1.0, 0), b.shapeAdjustment)
+    }
+
+    @Test
+    fun aScribbleStaysAsItIs() {
+        val b = builder(Brush.PEN)
+        // A scrawl within 6 points: long enough, but too small across to be anything.
+        for (i in 0 until 40) {
+            b.add(sample(100f + 3f * cos(i * 1.0).toFloat(), 100f + 3f * sin(i * 1.7).toFloat(), i / 240.0))
+        }
+        val before = b.points.toList()
+        assertTrue(before.size > 10)
+        assertNull(b.snapToShape())
+        assertFalse(b.isStraight)
+        assertNull(b.editable)
+        assertNull(b.shapeAdjustment)
+        assertEquals(before, b.points)
+        // The lift still adds the tip.
+        b.add(sample(110f, 100f, 1.0))
+        assertTrue(b.finish().size > before.size)
+    }
+
+    @Test
+    fun applyReplacesTheStrokeWithAPathInItsOwnInk() {
+        val b = builder(Brush.WET) // width 3.8, sensitivity 0.65
+        line(b, 21, 2f, 1.0 / 240, force = 2.25f)
+        val r = b.points.map { it.r }.average().toFloat()
+        val ink = b.points.map { it.ink }.average().toFloat()
+        b.apply(listOf(Pt(0.0, 0.0), Pt(30.0, 0.0), Pt(30.0, 40.0)))
+        assertTrue(b.isStraight)
+        // Corners stay points of the stroke; the spacing is max(1.5, 0.7 r).
+        assertEquals(Vec2(0f, 0f), b.points.first().position)
+        assertEquals(Vec2(30f, 40f), b.points.last().position)
+        assertTrue(b.points.any { it.position == Vec2(30f, 0f) })
+        for (p in b.points) {
+            assertEquals(r, p.r, 1e-5f)
+            assertEquals(ink, p.ink, 1e-5f)
+        }
+        // A path with one point, or an empty stroke, is left alone.
+        val count = b.points.size
+        b.apply(listOf(Pt(5.0, 5.0)))
+        assertEquals(count, b.points.size)
+        val empty = builder(Brush.PEN)
+        empty.apply(listOf(Pt(0.0, 0.0), Pt(10.0, 0.0)))
+        assertTrue(empty.points.isEmpty())
+        assertFalse(empty.isStraight)
     }
 }
