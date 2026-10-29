@@ -63,7 +63,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -569,19 +569,21 @@ private val RibbonShape = GenericShape { size, _ ->
 private fun systemRed(dark: Boolean): Color = if (dark) Color(0xFFFF453A) else Color(0xFFFF3B30)
 
 /** A page's soft shadow, a point down, deeper under the current page (the iPad's black at 18 %
- *  blurred 6 points against 8 % blurred 2). Android 9 and up draw it as a blurred copy of the page;
- *  older systems get Compose's elevation shadow. */
+ *  blurred 6 points against 8 % blurred 2). Android 9 and up draw it as a blurred copy of the page,
+ *  its paint made once for the tile's size, not on every frame of a scroll; older systems get
+ *  Compose's elevation shadow. */
 private fun Modifier.tileShadow(current: Boolean): Modifier {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return shadow(if (current) 3.dp else 1.dp, RoundedCornerShape(3.dp))
-    return drawBehind {
+    return drawWithCache {
         // A blur of b points is a Gaussian of sigma b / 2, which Android's radius reaches as 0.57735 r + 0.5.
         val sigma = (if (current) 6.dp else 2.dp).toPx() / 2f
         val r = 3.dp.toPx()
-        drawIntoCanvas { canvas ->
-            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-            paint.color = android.graphics.Color.WHITE
-            paint.setShadowLayer(max(sigma - 0.5f, 0.1f) / 0.57735f, 0f, 1.dp.toPx(), Color.Black.copy(alpha = if (current) 0.18f else 0.08f).toArgb())
-            canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, r, r, paint)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            setShadowLayer(max(sigma - 0.5f, 0.1f) / 0.57735f, 0f, 1.dp.toPx(), Color.Black.copy(alpha = if (current) 0.18f else 0.08f).toArgb())
+        }
+        onDrawBehind {
+            drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, r, r, paint) }
         }
     }
 }
