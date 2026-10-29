@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,20 +42,24 @@ private val MenuShadowPad = 44.dp
 
 /**
  * A menu under its anchor (the composable it is called in), starting at the anchor's start, or
- * ending at its end where there is no room; above the anchor where there is no room below.
- * Closed by a tap outside it (its shadow's margin included) or Back.
+ * ending at its end where there is no room ([alignEnd] ends it at the anchor's end, as an iOS menu
+ * picker opens under its value); above the anchor where there is no room below, and always inside
+ * the window, clear of the navigation bar. Closed by a tap outside it (its shadow's margin
+ * included) or Back.
  */
 @Composable
 fun ZenMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    alignEnd: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!expanded) return
     val density = LocalDensity.current
-    val provider = remember(density) {
-        with(density) { BelowAnchor(MenuShadowPad.roundToPx(), 4.dp.roundToPx(), 8.dp.roundToPx()) }
+    val bottomInset = WindowInsets.safeDrawing.getBottom(density)
+    val provider = remember(density, bottomInset, alignEnd) {
+        with(density) { BelowAnchor(MenuShadowPad.roundToPx(), 4.dp.roundToPx(), 8.dp.roundToPx(), bottomInset, alignEnd) }
     }
     // Not clipped to the screen, so the shadow's margin may run past its edge while the menu stays inside.
     Popup(popupPositionProvider = provider, onDismissRequest = onDismissRequest, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
@@ -93,7 +99,14 @@ fun Modifier.dismissInMargin(margin: Dp, onDismiss: () -> Unit): Modifier = poin
 }
 
 /** Places a menu [gap] under its anchor, kept inside the window by [margin]; [pad] is its shadow's margin. */
-private class BelowAnchor(private val pad: Int, private val gap: Int, private val margin: Int) : PopupPositionProvider {
+private class BelowAnchor(
+    private val pad: Int,
+    private val gap: Int,
+    private val margin: Int,
+    /** The navigation bar's height: the menu never lies under it. */
+    private val bottomInset: Int,
+    private val alignEnd: Boolean,
+) : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
         val w = popupContentSize.width - 2 * pad
         val h = popupContentSize.height - 2 * pad
@@ -101,9 +114,13 @@ private class BelowAnchor(private val pad: Int, private val gap: Int, private va
         val start = if (ltr) anchorBounds.left else anchorBounds.right - w
         val end = if (ltr) anchorBounds.right - w else anchorBounds.left
         val fitsAtStart = start >= margin && start + w <= windowSize.width - margin
-        val x = (if (fitsAtStart) start else end).coerceIn(margin, max(margin, windowSize.width - w - margin))
+        val fitsAtEnd = end >= margin && end + w <= windowSize.width - margin
+        val x = (if (alignEnd && fitsAtEnd || !fitsAtStart) end else start).coerceIn(margin, max(margin, windowSize.width - w - margin))
+        // Under the anchor, else over it; either way inside the window and above the navigation bar
+        // (an anchor near or past the bottom edge would otherwise put the menu's last items under it).
+        val bottom = windowSize.height - bottomInset - margin
         val below = anchorBounds.bottom + gap
-        val y = if (below + h <= windowSize.height - margin) below else max(margin, anchorBounds.top - gap - h)
+        val y = (if (below + h <= bottom) below else anchorBounds.top - gap - h).coerceIn(margin, max(margin, bottom - h))
         return IntOffset(x - pad, y - pad)
     }
 }

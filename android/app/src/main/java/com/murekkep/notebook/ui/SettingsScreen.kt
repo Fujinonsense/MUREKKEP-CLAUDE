@@ -181,25 +181,30 @@ private fun LanguageRow(language: AppLanguage, onPick: (AppLanguage) -> Unit) {
             }
             Spacer(Modifier.width(12.dp))
             Text(title, style = MaterialTheme.typography.bodyLarge, color = z.ink, modifier = Modifier.weight(1f))
-            Text(value, style = MaterialTheme.typography.bodyLarge, color = z.accent, maxLines = 1)
-            Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = z.accent, modifier = Modifier.padding(start = 2.dp).size(18.dp))
-        }
-        ZenMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (option in AppLanguage.entries) {
-                DropdownMenuItem(
-                    text = { Text(option.title()) },
-                    leadingIcon = {
-                        if (option == language) {
-                            Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                        } else {
-                            Spacer(Modifier.size(18.dp))
-                        }
-                    },
-                    onClick = {
-                        open = false
-                        onPick(option)
-                    },
-                )
+            // The menu opens under the value, ending at its end, as the iPad's menu picker does.
+            Box {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(value, style = MaterialTheme.typography.bodyLarge, color = z.accent, maxLines = 1)
+                    Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = z.accent, modifier = Modifier.padding(start = 2.dp).size(18.dp))
+                }
+                ZenMenu(expanded = open, onDismissRequest = { open = false }, alignEnd = true) {
+                    for (option in AppLanguage.entries) {
+                        DropdownMenuItem(
+                            text = { Text(option.title()) },
+                            leadingIcon = {
+                                if (option == language) {
+                                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                } else {
+                                    Spacer(Modifier.size(18.dp))
+                                }
+                            },
+                            onClick = {
+                                open = false
+                                onPick(option)
+                            },
+                        )
+                    }
+                }
             }
         }
     }

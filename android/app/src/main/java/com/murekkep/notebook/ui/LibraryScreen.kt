@@ -904,7 +904,7 @@ private class PaneContent(
 )
 
 /** Where the wash under the notes begins: just above the first row, in the 24 dp gap over it. */
-private val WashLead = 12.dp
+private val WashLead = 24.dp
 
 /** How far the wash's top edge fades in. */
 private val WashFade = 40.dp
@@ -1091,11 +1091,15 @@ private fun SortMenu(sort: LibrarySort, onSort: (LibrarySort) -> Unit, modifier:
     val z = Zen.colors
     var open by remember { mutableStateOf(false) }
     val label = stringResource(R.string.sort_label)
+    // Over a Pro theme's picture the label stands on a soft paper of its own, like the filter's
+    // track, so it reads on any part of the picture (the iPad's sortMenu does the same).
+    val onPicture = LocalAppTheme.current.shown.picture != null
     Box(modifier) {
         Row(
             Modifier
                 .height(36.dp)
                 .clip(RoundedCornerShape(Zen.control))
+                .background(if (onPicture) z.paper2.copy(alpha = 0.85f) else Color.Transparent)
                 .clickable(role = Role.DropdownList) { open = true }
                 .semantics { contentDescription = label }
                 .padding(horizontal = 10.dp),
