@@ -44,47 +44,42 @@ private val Numbers = Color(0.15f, 0.15f, 0.15f, 0.9f)
 /** A millimetre of the page in points. */
 private val MM = POINTS_PER_MILLIMETRE.toFloat()
 
-/** The numbers' face: the system font's medium weight (the iPad's monospaced digits are the system's too). */
-private val NumberFace: Typeface by lazy { Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+/** The body's paint, the pale blue with its shadow; made once (Compose draws on the main thread only). */
+private val BodyPaint: Paint by lazy { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Body.toArgb() } }
 
-/** A number on the instrument: where its middle is in the instrument's own frame and how tall it is (points). */
-private class Mark(val text: String, val x: Float, val y: Float, val size: Float, val color: Color)
-
-/** The instrument [o] with its ticks and numbers, its outline in [accent]. */
-internal fun DrawScope.drawInstrument(o: InstrumentOverlay, accent: Color) {
-    val z = o.zoom
-    val c = cos(o.angle)
-    val s = sin(o.angle)
-    val outline = Instrument(o.kind, Pt.ZERO, 0.0).localOutline
-    val body = Path()
-    for ((i, p) in outline.withIndex()) {
-        val lx = p.x.toFloat()
-        val ly = p.y.toFloat()
-        val vx = o.x + (lx * c - ly * s) * z
-        val vy = o.y + (lx * s + ly * c) * z
-        if (i == 0) body.moveTo(vx, vy) else body.lineTo(vx, vy)
+/** The numbers' paint: the system font's medium weight (the iPad's monospaced digits are the system's
+ *  too), centred on their point; made once. */
+private val NumberPaint: Paint by lazy {
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        textAlign = Paint.Align.CENTER
+        // Every digit as wide as the others, as the iPad's monospaced digits.
+        fontFeatureSettings = "tnum"
     }
-    body.close()
-    // The body's shadow falls down the screen however the instrument is turned.
-    drawIntoCanvas { canvas ->
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        paint.color = Body.toArgb()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            paint.setShadowLayer(shadowRadius(5.dp.toPx()), 0f, 3.dp.toPx(), Color.Black.copy(alpha = 0.18f).toArgb())
-        }
-        canvas.nativeCanvas.drawPath(body.asAndroidPath(), paint)
-    }
-    drawPath(body, accent.copy(alpha = 0.55f), style = Stroke(width = 1.1.dp.toPx()))
+}
 
-    val ticks = Path()
+/** A number on the instrument: where its middle is in the instrument's own frame and how tall it is
+ *  (points); an [inner] one (the protractor's inner scale) is in the accent. */
+private class Mark(val text: String, val x: Float, val y: Float, val size: Float, val inner: Boolean)
+
+/** What an instrument of a kind shows in its own frame, level (points): its ticks as segments (x0, y0,
+ *  x1, y1 each) and its numbers. */
+private class Face(val ticks: FloatArray, val marks: List<Mark>)
+
+/** Every kind's face, worked out once: a redraw only places it. */
+private val Faces: Map<InstrumentKind, Face> by lazy { InstrumentKind.entries.associateWith(::faceOf) }
+
+private fun faceOf(kind: InstrumentKind): Face {
+    val ticks = ArrayList<Float>()
     val marks = ArrayList<Mark>()
-    // In the instrument's own frame, level: the canvas turns it into place below.
     fun tick(x0: Float, y0: Float, x1: Float, y1: Float) {
-        ticks.moveTo(o.x + x0 * z, o.y + y0 * z)
-        ticks.lineTo(o.x + x1 * z, o.y + y1 * z)
+        ticks.add(x0)
+        ticks.add(y0)
+        ticks.add(x1)
+        ticks.add(y1)
     }
-    fun mark(text: String, x: Float, y: Float, size: Float, color: Color = Numbers) {
-        marks.add(Mark(text, x, y, size, color))
+    fun mark(text: String, x: Float, y: Float, size: Float, inner: Boolean = false) {
+        marks.add(Mark(text, x, y, size, inner))
     }
     /** Ticks along a set square's leg from its right-angled corner, a millimetre apart, standing [ix], [iy] inwards. */
     fun legTicks(a: Pt, b: Pt, ix: Float, iy: Float) {
@@ -101,7 +96,8 @@ internal fun DrawScope.drawInstrument(o: InstrumentOverlay, accent: Color) {
             tick(px, py, px + ix * len, py + iy * len)
         }
     }
-    when (o.kind) {
+    val outline = Instrument(kind, Pt.ZERO, 0.0).localOutline
+    when (kind) {
         InstrumentKind.RULER -> {
             val half = (Instrument.RULER_LENGTH / 2).toFloat()
             val h = (Instrument.RULER_WIDTH / 2).toFloat()
@@ -121,7 +117,7 @@ internal fun DrawScope.drawInstrument(o: InstrumentOverlay, accent: Color) {
             val top = outline[2]
             legTicks(a, b, 0f, -1f)
             legTicks(a, top, 1f, 0f)
-            val square45 = o.kind == InstrumentKind.SET_SQUARE_45
+            val square45 = kind == InstrumentKind.SET_SQUARE_45
             mark(if (square45) "45°" else "30°", b.x.toFloat() - 16 * MM, b.y.toFloat() - 4 * MM, 3 * MM)
             mark(if (square45) "45°" else "60°", top.x.toFloat() + 5 * MM, top.y.toFloat() + 14 * MM, 3 * MM)
             mark("90°", a.x.toFloat() + 7 * MM, a.y.toFloat() - 6 * MM, 3 * MM)
@@ -143,23 +139,56 @@ internal fun DrawScope.drawInstrument(o: InstrumentOverlay, accent: Color) {
                 val dx = cos(ang).toFloat()
                 val dy = -sin(ang).toFloat()
                 mark("$d", dx * (r - 8.5f * MM), dy * (r - 8.5f * MM), 2.5f * MM)
-                mark("${180 - d}", dx * (r - 13 * MM), dy * (r - 13 * MM), 2 * MM, accent)
+                mark("${180 - d}", dx * (r - 13 * MM), dy * (r - 13 * MM), 2 * MM, inner = true)
             }
         }
+    }
+    return Face(ticks.toFloatArray(), marks)
+}
+
+/** The instrument [o] with its ticks and numbers, its outline in [accent]. */
+internal fun DrawScope.drawInstrument(o: InstrumentOverlay, accent: Color) {
+    val z = o.zoom
+    val c = cos(o.angle)
+    val s = sin(o.angle)
+    val outline = Instrument(o.kind, Pt.ZERO, 0.0).localOutline
+    val body = Path()
+    for ((i, p) in outline.withIndex()) {
+        val lx = p.x.toFloat()
+        val ly = p.y.toFloat()
+        val vx = o.x + (lx * c - ly * s) * z
+        val vy = o.y + (lx * s + ly * c) * z
+        if (i == 0) body.moveTo(vx, vy) else body.lineTo(vx, vy)
+    }
+    body.close()
+    // The body's shadow falls down the screen however the instrument is turned.
+    drawIntoCanvas { canvas ->
+        val paint = BodyPaint
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            paint.setShadowLayer(shadowRadius(5.dp.toPx()), 0f, 3.dp.toPx(), Color.Black.copy(alpha = 0.18f).toArgb())
+        }
+        canvas.nativeCanvas.drawPath(body.asAndroidPath(), paint)
+    }
+    drawPath(body, accent.copy(alpha = 0.55f), style = Stroke(width = 1.1.dp.toPx()))
+
+    val face = Faces.getValue(o.kind)
+    // Level round the instrument's middle: the canvas turns them into place below.
+    val ticks = Path()
+    val t = face.ticks
+    for (k in t.indices step 4) {
+        ticks.moveTo(o.x + t[k] * z, o.y + t[k + 1] * z)
+        ticks.lineTo(o.x + t[k + 2] * z, o.y + t[k + 3] * z)
     }
     rotate(o.angle * 180f / PI.toFloat(), pivot = Offset(o.x, o.y)) {
         drawPath(ticks, Ticks, style = Stroke(width = 0.7.dp.toPx()))
         drawIntoCanvas { canvas ->
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            paint.typeface = NumberFace
-            paint.textAlign = Paint.Align.CENTER
-            // Every digit as wide as the others, as the iPad's monospaced digits.
-            paint.fontFeatureSettings = "tnum"
-            for (m in marks) {
-                paint.color = m.color.toArgb()
+            val paint = NumberPaint
+            val numbers = Numbers.toArgb()
+            val inner = accent.toArgb()
+            for (m in face.marks) {
+                paint.color = if (m.inner) inner else numbers
                 paint.textSize = m.size * z
-                val fm = paint.fontMetrics
-                canvas.nativeCanvas.drawText(m.text, o.x + m.x * z, o.y + m.y * z - (fm.ascent + fm.descent) / 2, paint)
+                canvas.nativeCanvas.drawText(m.text, o.x + m.x * z, o.y + m.y * z - (paint.ascent() + paint.descent()) / 2, paint)
             }
         }
     }

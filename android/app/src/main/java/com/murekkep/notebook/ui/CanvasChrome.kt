@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.murekkep.notebook.R
 import com.murekkep.notebook.canvas.CanvasOverlay
+import com.murekkep.notebook.canvas.InstrumentOverlay
 import com.murekkep.notebook.ink.Lasso
 import kotlin.math.PI
 import kotlin.math.cos
@@ -74,8 +75,8 @@ private val Accent = Color(0xFF2457D6)
 fun CanvasOverlayLayer(overlay: CanvasOverlay) {
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = Color.White, fontSize = 13.sp)
+    overlay.instrument?.let { InstrumentLayer(it) }
     Canvas(Modifier.fillMaxSize().clipToBounds()) {
-        overlay.instrument?.let { drawInstrument(it, Accent) }
         val dash = PathEffect.dashPathEffect(floatArrayOf(Lasso.DASH.dp.toPx(), Lasso.GAP.dp.toPx()))
         overlay.lasso?.let { a ->
             val path = Path()
@@ -108,6 +109,14 @@ fun CanvasOverlayLayer(overlay: CanvasOverlay) {
             ins.label?.let { drawBubble(measurer.measure(it, labelStyle), ins.x, ins.y - 54.dp.toPx()) }
         }
     }
+}
+
+/** The instrument under the rest, in a layer of its own that Compose leaves as it is while [o] is
+ *  unchanged: the reading beside a pen along its edge, the lasso's loop or the compass redraw the
+ *  rest, not the instrument. */
+@Composable
+private fun InstrumentLayer(o: InstrumentOverlay) {
+    Canvas(Modifier.fillMaxSize().clipToBounds()) { drawInstrument(o, Accent) }
 }
 
 /** A measurement in a dark capsule centred on [x], [y], kept inside the canvas. */
