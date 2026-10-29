@@ -44,6 +44,7 @@ alçak ve sessiz durur, renk yalnızca mürekkepte ve seçili durumda görünür
   `on-page` (#565656) ile yazılır.
 - Gölge yalnızca yüzen şeyde (kalem rafı, açılır pencere, menü): 0 12 32 siyah %12 + 0 1 2 siyah %8.
   Duran yüzeyde gölge yok; cam/malzeme yok (Pro temalar görselin üstünde malzeme kullanabilir).
+  Tek istisna Pro tema görselinin üstündeki levhalar (aşağıda): 0 2 12 siyah %12 (gece %30).
 - Yazı: her yerde sistem yazısı (iPad SF Pro, Android Roboto). Başlıklar kalın sistem yazısı,
   sıkı aralık; tırnaklı (serif) başlık yok. Etiketler cümle düzeninde, harf aralığı açılmamış,
   büyük harf yok.
@@ -69,8 +70,37 @@ kaleme özel ayarlar (Soğuma süresi, Çiçekler, Uç açısı...), animasyon a
 Son açılanlar, Favoriler, Defterler, PDF'ler (sayılarıyla), Kurslar (+), altta Stüdyo, Sesler,
 Ayarlar. Ana alan: "Tüm notlar" başlığı, sağda "PDF içe aktar" (kenarlı) ve "Yeni not" (dolu
 siyah); Hepsi / Defterler / PDF'ler seçici, sıralama; notlar ilk sayfalarının kapağıyla 4 sütun,
-altında başlık ve "3 sayfa, dün". Selamlama, sayı kartları, seri kartı, renkli düğmeler ve duvar
+altında başlık ve "3 sayfa, dün". Selamlama, sayı kartları, renkli geçişli düğmeler ve duvar
 kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve başlık alanında durur).
+
+**Kütüphane, 2026-10-30 düzeltmesi** (kullanıcı: kenar çubuğunun altı üstü dengesiz, notların
+üstündeki karartma hoş değil, eski seri kartı ve hızlı oluşturma kayboldu):
+- Kenar çubuğu tam boy tek düz yüzey: arka planı güvenli alanı yok sayar (durum çubuğunun ve ev
+  çizgisinin altına da uzanır). Siyah beyazda (ve çizgili kâğıtta) paper-2; Pro tema görselinde
+  eşit buzlu panel: ultraThinMaterial üstünde paper-2 %80 (alt blok dahil hiçbir bant açık ya da
+  koyu görünmez). Parçalar 18 aralıklı, yukarıdan aşağı:
+  - "Mürekkep" (title2 kalın) ve altında yapay zekâ durumu: 6 nokta (hazırsa yeşil, değilse turuncu;
+    gerçek durum olduğu için renkli) + caption muted: "Claude · <model>", "Cihazda yapay zekâ"
+    (Apple'ın modeli ya da indirilen model hazırsa), "Yerel sunucu", "Çevrimdışı asistan"; sağda
+    kenar çubuğunu gizle.
+  - Ara (bugünkü gibi).
+  - Üç sessiz hızlı oluşturma kutusu, 10 aralıklı: Defter (square.and.pencil, yeni defter), PDF /
+    Foto (doc.badge.plus), Ders (folder.badge.plus, yeni ders); açık dersin içine. Simge (18,
+    medium, ink-2) üstte, ad altta (caption semibold, ink); 58 yüksek, paper + 1 rule, köşe 12.
+  - Hafta kartı: paper + 1 rule, köşe 14, iç boşluk 14, satırlar 10 aralıklı. Tarih satırı (gün adı,
+    gün, ay; subheadline semibold ink); seri 1 günü geçince turuncu alev + "{0} gün" (caption
+    semibold ink); yedi sütun Pt Sa Ça Pe Cu Ct Pz (10 semibold muted) üstünde 22'lik daireler:
+    çalışılan gün accent dolu + beyaz tik, diğerleri paper-3, bugün 2'lik accent halka; altında
+    "Bugün henüz bir şey yazmadın." / "Bugün {0} not üzerinde çalıştın." (caption muted).
+  - Listeler ve Kurslar (bugünkü gibi); altta sabit blok: rule çizgisi, Stüdyo, Sesler, Ayarlar.
+- Notların tarafında karartma yok: notların örtüsü kalktı, Ebru'nun görsel örtüsü 0,20'den 0,10'a
+  indi (büyük başlık 3:1'i rahat geçer). Pro tema görselinde görselin üstüne doğrudan gelecek her
+  şey kendi levhasında durur, görsel aralarında canlı kalır. Levha: paper %92, 1 rule, gölge
+  0 2 12 siyah %12 (gece %30). Kart levhası (not kapağı ve altyazısı, Stüdyo özet kartı, boş
+  durumlar en çok 440 genişlik): köşe 14, iç boşluk 10. Yazı levhası (bölüm başlıkları, başlık
+  altındaki gri satır, dersin sayı satırı, boş satırlar): köşe 10, iç boşluk 12 × 6. Bırakma
+  kutusu kesikli kenarını korur, levhanın kâğıdı ve gölgesi üstünde durur. Başlık, iki düğme,
+  seçici ve sıralama görselin üstünde kalır. Siyah beyazda levha yok.
 
 **Ayarlar.** Gruplu liste; Görünüm › Tema seçici (yukarıda).
 
