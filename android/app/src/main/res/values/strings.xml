@@ -112,11 +112,9 @@
     </plurals>
 
     <!-- Zen settings -->
-    <string name="settings_appearance">Appearance</string>
+    <string name="settings_appearance">Look</string>
     <string name="settings_theme">Theme</string>
-    <string name="settings_theme_hint">Black and white follows the system’s light or dark look. The Pro themes come with their own pictures and accents.</string>
     <string name="theme_black_white">Black and white</string>
-    <string name="theme_free">Free</string>
     <string name="theme_ebru">Marbling</string>
     <string name="theme_hokka">Inkwell</string>
     <string name="theme_lapis">Lapis</string>

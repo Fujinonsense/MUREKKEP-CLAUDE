@@ -4,6 +4,9 @@
     <string name="export_failed_title">Dışa aktarılamadı</string>
 
     <!-- Ayarlar › Görünüm -->
+    <string name="settings_theme_footer">Siyah beyaz cihazın açık ya da koyu görünümünü izler. Ultra premium temalar kütüphanenin arkasına Higgsfield ile yapılmış bir görsel koyar; yazılar her birinde okunacak renge geçer.</string>
+    <string name="settings_theme_footer_store">Siyah beyaz ücretsizdir ve cihazın açık ya da koyu görünümünü izler. Ultra premium temalar Mürekkep Pro\'da: her biri Higgsfield ile yapılmış bir görselle gelir.</string>
+    <string name="in_pro">Mürekkep Pro\'da</string>
     <string name="theme_paper_wave">Kâğıt dalga</string>
     <string name="theme_reeded">Buzlu cam</string>
     <string name="theme_orbs">Cam küreler</string>

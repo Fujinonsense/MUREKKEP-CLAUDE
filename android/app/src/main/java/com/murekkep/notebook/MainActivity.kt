@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,12 +90,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** The library (or the settings), and the editor over it while a notebook is open: plain state, no navigation library. */
+/**
+ * The library, with Ayarlar as a sheet over it, and the editor in its place while a notebook is
+ * open: plain state, no navigation library. The library keeps its section, search and scroll
+ * while a note is open, as the iPad's stays under the pushed editor.
+ */
 @Composable
 private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, onTheme: (AppTheme) -> Unit) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var editor by remember { mutableStateOf<EditorState?>(null) }
+    val library = rememberSaveableStateHolder()
     if (demo) {
         LaunchedEffect(Unit) {
             store.load()
@@ -107,11 +113,20 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
     }
     val id = openId
     if (id == null) {
-        if (settingsOpen) {
-            BackHandler { settingsOpen = false }
-            SettingsScreen(theme = theme, onTheme = onTheme, onBack = { settingsOpen = false })
-        } else {
-            LibraryScreen(store = store, onOpen = { openId = it.id }, onSettings = { settingsOpen = true })
+        Box(Modifier.fillMaxSize()) {
+            library.SaveableStateProvider("library") {
+                LibraryScreen(
+                    store = store,
+                    onOpen = {
+                        settingsOpen = false
+                        openId = it.id
+                    },
+                    onSettings = { settingsOpen = true },
+                )
+            }
+            if (settingsOpen) {
+                SettingsScreen(theme = theme, onTheme = onTheme, onDone = { settingsOpen = false })
+            }
         }
         return
     }

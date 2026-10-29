@@ -4,6 +4,7 @@ import com.murekkep.notebook.data.NoteKind
 import com.murekkep.notebook.data.NotebookMeta
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.min
 
 // The library's pure rules: which notes a section shows, in what order, and what a cover's line
 // says ("3 sayfa, dün").
@@ -44,6 +45,16 @@ object LibraryRules {
         LibrarySort.MODIFIED -> notes.sortedByDescending { it.modified }
         LibrarySort.CREATED -> notes.sortedByDescending { it.created }
         LibrarySort.TITLE -> notes.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+    }
+
+    /**
+     * An adaptive grid's columns (GridItem.adaptive on iPad): as many as fit at [minWidth] with
+     * [spacing] between them, at least one, each then as wide as the row allows up to [maxWidth].
+     * The count and the width, in the units given.
+     */
+    fun adaptiveColumns(available: Float, minWidth: Float, maxWidth: Float, spacing: Float): Pair<Int, Float> {
+        val n = max(1, ((available + spacing) / (minWidth + spacing)).toInt())
+        return n to min((available - spacing * (n - 1)) / n, maxWidth)
     }
 
     /** The sidebar's counts: all notes, notebooks, PDFs. */

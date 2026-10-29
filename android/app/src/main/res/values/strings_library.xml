@@ -4,6 +4,9 @@
     <string name="export_failed_title">Couldn\'t export</string>
 
     <!-- Ayarlar › Görünüm -->
+    <string name="settings_theme_footer">Black and white follows the device\'s light or dark look. The ultra premium themes lay a picture made with Higgsfield behind the library; the text switches to a colour that reads on each one.</string>
+    <string name="settings_theme_footer_store">Black and white is free and follows the device\'s light or dark look. The ultra premium themes come with Mürekkep Pro: each one brings a picture made with Higgsfield.</string>
+    <string name="in_pro">In Mürekkep Pro</string>
     <string name="theme_paper_wave">Paper waves</string>
     <string name="theme_reeded">Reeded glass</string>
     <string name="theme_orbs">Glass orbs</string>

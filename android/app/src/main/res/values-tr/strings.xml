@@ -113,9 +113,7 @@
     <!-- Zen ayarlar -->
     <string name="settings_appearance">Görünüm</string>
     <string name="settings_theme">Tema</string>
-    <string name="settings_theme_hint">Siyah beyaz, sistemin açık ya da koyu görünümünü izler. Pro temalar kendi görselleri ve vurgu renkleriyle gelir.</string>
     <string name="theme_black_white">Siyah beyaz</string>
-    <string name="theme_free">Ücretsiz</string>
     <string name="theme_ebru">Ebru</string>
     <string name="theme_hokka">Hokka</string>
     <string name="theme_lapis">Lapis</string>
