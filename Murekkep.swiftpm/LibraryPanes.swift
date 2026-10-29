@@ -314,6 +314,8 @@ struct NewMenu: View {
 /// first page.
 struct NotesPane: View {
     @EnvironmentObject private var store: LibraryStore
+    @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var pro = ProStore.shared
     let place: LibraryPlace
     let actions: LibraryActions
     let showToggle: Bool
@@ -450,6 +452,10 @@ struct NotesPane: View {
             .foregroundStyle(Theme.text2)
             .padding(.horizontal, 10)
             .frame(height: 36)
+            // Over a Pro theme's picture the label stands on a soft paper of its own, like the
+            // filter's track, so it reads on any part of the picture.
+            .background(settings.shownBackground(locked: pro.locks).imageName != nil ? Theme.paper2.opacity(0.85) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .contentShape(Rectangle())
         }
         .accessibilityLabel(Loc.t("Sıralama"))
