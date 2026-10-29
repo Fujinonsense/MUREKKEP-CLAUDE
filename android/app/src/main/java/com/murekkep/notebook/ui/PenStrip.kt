@@ -1030,9 +1030,9 @@ private fun ShapeSettings(state: EditorState, close: () -> Unit) {
             )
             Stepper(
                 canDecrease = sides > 3,
-                onDecrease = { state.polygonSides = (sides - 1).coerceAtLeast(3) },
+                onDecrease = { state.polygonSides = (state.polygonSides - 1).coerceAtLeast(3) },
                 canIncrease = sides < 12,
-                onIncrease = { state.polygonSides = (sides + 1).coerceAtMost(12) },
+                onIncrease = { state.polygonSides = (state.polygonSides + 1).coerceAtMost(12) },
             )
         }
     }
