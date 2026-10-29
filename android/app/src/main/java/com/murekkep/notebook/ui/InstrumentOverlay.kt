@@ -44,6 +44,9 @@ private val Numbers = Color(0.15f, 0.15f, 0.15f, 0.9f)
 /** A millimetre of the page in points. */
 private val MM = POINTS_PER_MILLIMETRE.toFloat()
 
+/** The numbers' face: the system font's medium weight (the iPad's monospaced digits are the system's too). */
+private val NumberFace: Typeface by lazy { Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+
 /** A number on the instrument: where its middle is in the instrument's own frame and how tall it is (points). */
 private class Mark(val text: String, val x: Float, val y: Float, val size: Float, val color: Color)
 
@@ -148,7 +151,7 @@ internal fun DrawScope.drawInstrument(o: InstrumentOverlay, accent: Color) {
         drawPath(ticks, Ticks, style = Stroke(width = 0.7.dp.toPx()))
         drawIntoCanvas { canvas ->
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-            paint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            paint.typeface = NumberFace
             paint.textAlign = Paint.Align.CENTER
             // Every digit as wide as the others, as the iPad's monospaced digits.
             paint.fontFeatureSettings = "tnum"
