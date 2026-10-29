@@ -56,8 +56,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Architecture
 import androidx.compose.material.icons.outlined.DensityMedium
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.HeartBroken
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.Remove
@@ -149,7 +151,7 @@ import kotlin.math.roundToInt
 // Murekkep.swiftpm/ToolPalette.swift and PenStrip.swift), along the bottom by default, along the top
 // or upright down the right side: its grip, Geri al and Yinele | the pens (the favourites, a hairline,
 // the pens used last) and the eraser standing in a low tray, the picked one raised, Tüm kalemler | the
-// ink's colour | Kement, Şekiller, Sayfa ekle, and the fold. Folded it keeps the grip, undo and redo
+// ink's colour | Kement, Şekiller, Araçlar, Sayfa ekle, and the fold. Folded it keeps the grip, undo and redo
 // and the ink and tool in hand. The grip carries the bar to another edge; a long press on it offers
 // the three. In black and white the pens are flat silhouettes (PenSilhouettes.kt); a Pro theme draws
 // the iPad's realistic bodies (ToolArt.kt). A second tap on the picked pen, or a tap on the colour,
@@ -214,7 +216,7 @@ internal fun rememberSelectionTick(): () -> Unit {
 // MARK: The bar
 
 /** What the bar has open; one thing at a time. */
-private enum class Sheet { PEN_FROM_SLOT, PEN_FROM_DOT, ERASER, SHAPES, ALL_PENS }
+private enum class Sheet { PEN_FROM_SLOT, PEN_FROM_DOT, ERASER, SHAPES, ALL_PENS, TOOLS }
 
 /**
  * The floating pen bar on `state.paletteEdge`: a row along the top or the bottom, a column down the
@@ -314,6 +316,14 @@ fun PenBar(
                     }
                 }
             }
+            BarButton(
+                stringResource(R.string.tools_menu),
+                selected = tool is Tool.Compass || state.instrumentKind != null,
+                onClick = { sheet = Sheet.TOOLS },
+            ) {
+                Icon(Icons.Outlined.GridView, contentDescription = null, modifier = Modifier.size(22.dp))
+                ToolsMenu(state, expanded = sheet == Sheet.TOOLS, onDismiss = close)
+            }
             if (!state.isPdf) {
                 BarButton(stringResource(R.string.add_page), enabled = !state.readOnly, onClick = state::addPage) {
                     Icon(Icons.Outlined.NoteAdd, contentDescription = null, modifier = Modifier.size(22.dp))
@@ -339,9 +349,9 @@ private val BarGap = 2.dp
 private val MinPensRoom = 72.dp
 
 /** The full bar's length without its pens: grip, undo and redo, three dividers, every pen, the
- *  colour, the lasso, the shapes, Sayfa ekle, the fold and the gaps between them. */
+ *  colour, the lasso, the shapes, Araçlar, Sayfa ekle, the fold and the gaps between them. */
 private fun fixedLength(addPage: Boolean): Dp {
-    val buttons = if (addPage) 7 else 6
+    val buttons = if (addPage) 8 else 7
     val items = buttons + 5
     return BarPadding * 2 + GripLength + Zen.target * buttons + DividerLength * 3 + FoldLength + BarGap * (items - 1)
 }
@@ -732,6 +742,7 @@ private fun ToolInHand(state: EditorState) {
         Tool.Eraser -> if (z.proTheme) ToolIcon(null, Color.Transparent, side = 30.dp) else CompactSymbol(EraserGlyph)
         Tool.Lasso -> LassoGlyph(Modifier.size(18.dp), z.ink2)
         Tool.Shape -> ShapeToolGlyph(z.ink2)
+        Tool.Compass -> CompactSymbol(Icons.Outlined.Architecture)
     }
 }
 

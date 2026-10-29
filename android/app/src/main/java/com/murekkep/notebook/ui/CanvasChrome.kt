@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.murekkep.notebook.R
 import com.murekkep.notebook.canvas.CanvasOverlay
+import com.murekkep.notebook.canvas.InstrumentOverlay
 import com.murekkep.notebook.ink.Lasso
 import kotlin.math.PI
 import kotlin.math.cos
@@ -55,20 +58,25 @@ import kotlin.math.sin
 
 // What the canvas shows over the ink and the lasso's bar (CanvasOverlay.swift and DraftingTools.swift
 // SelectionBar on iPad): the lasso's loop, the selection's frame, a recognized shape's handles, the
-// shape tool's preview and the measurement next to the pen; the bar of what can be done with the
-// selection; the lasso's glyph for the pen dock.
+// shape tool's preview, the drafting instrument and the compass (InstrumentOverlay.kt) and the
+// measurement next to the pen; the bar of what can be done with the selection; the lasso's glyph
+// for the pen dock.
 
 /** The overlay's blue: the brand's ink blue (the iPad's overlay colour). */
 private val Accent = Color(0xFF2457D6)
 
 /** The lasso's loop, the selection's dashed frame with its turn handle and corner handles, the
  *  shape tool's preview, a recognized shape's handles and the measurement next to the pen, as the
- *  canvas reports them in view pixels. Touches go through. */
+ *  canvas reports them in view pixels; under them a drafting instrument, over them the compass and
+ *  the instrument's angle while it turns. Touches go through. Kept inside the canvas, as the iPad's
+ *  overlay view: an instrument, a compass or a frame running past the pages' top edge stays off the
+ *  editor's top bar. */
 @Composable
 fun CanvasOverlayLayer(overlay: CanvasOverlay) {
     val measurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = Color.White, fontSize = 13.sp)
-    Canvas(Modifier.fillMaxSize()) {
+    overlay.instrument?.let { InstrumentLayer(it) }
+    Canvas(Modifier.fillMaxSize().clipToBounds()) {
         val dash = PathEffect.dashPathEffect(floatArrayOf(Lasso.DASH.dp.toPx(), Lasso.GAP.dp.toPx()))
         overlay.lasso?.let { a ->
             val path = Path()
@@ -91,19 +99,36 @@ fun CanvasOverlayLayer(overlay: CanvasOverlay) {
             }
         }
         overlay.shapeHandles?.let { drawShapeHandles(it) }
+        overlay.compass?.let { drawCompass(it, Accent) }
         overlay.label?.let { label ->
-            val text = measurer.measure(label.text, labelStyle)
-            val padX = 8.dp.toPx()
-            val padY = 4.dp.toPx()
-            val w = text.size.width + 2 * padX
-            val h = text.size.height + 2 * padY
             // Above and to the right of the pen, clear of the hand.
-            val left = (label.x + 26.dp.toPx() - w / 2).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
-            val top = (label.y - 30.dp.toPx() - h / 2).coerceAtLeast(0f)
-            drawRoundRect(Color(0xE6202124), Offset(left, top), Size(w, h), CornerRadius(h / 2))
-            drawText(text, topLeft = Offset(left + padX, top + padY))
+            drawBubble(measurer.measure(label.text, labelStyle), label.x + 26.dp.toPx(), label.y - 30.dp.toPx())
+        }
+        overlay.instrument?.let { ins ->
+            // Upright over the instrument's middle while it turns.
+            ins.label?.let { drawBubble(measurer.measure(it, labelStyle), ins.x, ins.y - 54.dp.toPx()) }
         }
     }
+}
+
+/** The instrument under the rest, in a layer of its own that Compose leaves as it is while [o] is
+ *  unchanged: the reading beside a pen along its edge, the lasso's loop or the compass redraw the
+ *  rest, not the instrument. */
+@Composable
+private fun InstrumentLayer(o: InstrumentOverlay) {
+    Canvas(Modifier.fillMaxSize().clipToBounds()) { drawInstrument(o, Accent) }
+}
+
+/** A measurement in a dark capsule centred on [x], [y], kept inside the canvas. */
+private fun DrawScope.drawBubble(text: TextLayoutResult, x: Float, y: Float) {
+    val padX = 8.dp.toPx()
+    val padY = 4.dp.toPx()
+    val w = text.size.width + 2 * padX
+    val h = text.size.height + 2 * padY
+    val left = (x - w / 2).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
+    val top = (y - h / 2).coerceAtLeast(0f)
+    drawRoundRect(Color(0xE6202124), Offset(left, top), Size(w, h), CornerRadius(h / 2))
+    drawText(text, topLeft = Offset(left + padX, top + padY))
 }
 
 /** The frame round the selection: a light fill, a dashed outline, a turn handle on a short stem

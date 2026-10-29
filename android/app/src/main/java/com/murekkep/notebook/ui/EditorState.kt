@@ -10,10 +10,14 @@ import com.murekkep.notebook.data.OutlineEntry
 import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.data.PenPreferences
 import com.murekkep.notebook.ink.Brush
+import com.murekkep.notebook.ink.CompassState
 import com.murekkep.notebook.ink.EraserMode
 import com.murekkep.notebook.ink.InkColor
 import com.murekkep.notebook.ink.InkEraser
+import com.murekkep.notebook.ink.InkPoint
 import com.murekkep.notebook.ink.InkSelection
+import com.murekkep.notebook.ink.Instrument
+import com.murekkep.notebook.ink.InstrumentKind
 import com.murekkep.notebook.ink.Lasso
 import com.murekkep.notebook.ink.EditableShape
 import com.murekkep.notebook.ink.GrassGenerator
@@ -53,6 +57,9 @@ sealed class Tool {
 
     /** Drag a line, arrow, box, oval, triangle or regular polygon (`EditorState.shapeKind`). */
     data object Shape : Tool()
+
+    /** A compass: drag its center and radius, then draw arcs (`EditorState.compass`). */
+    data object Compass : Tool()
 
     val selectedBrush: com.murekkep.notebook.ink.Brush?
         get() = (this as? Brush)?.brush
@@ -158,6 +165,7 @@ class EditorState(
             }
             if (value !is Tool.Eraser) eraserReturn = null
             if (value !is Tool.Lasso && selection != null) clearSelection()
+            if (value !is Tool.Compass) compass = null
         }
 
     /** Tool before the last change (the pen's "switch to previous tool"). */
@@ -375,6 +383,37 @@ class EditorState(
 
     /** The page's strokes when a handle drag began: the drag is one undo step. */
     private var shapeEditSnapshot: List<Stroke>? = null
+
+    // Drafting instruments and the compass (EditorModel.swift's `instrument` and `compass`). The
+    // canvas draws them over the ink, so a change asks for a frame.
+
+    private val instrumentKindState = mutableStateOf<InstrumentKind?>(null)
+
+    /** The ruler, set square or protractor lying on the page (document points), or none. Fingers move
+     *  it on every frame, so it is kept out of Compose; the chrome reads [instrumentKind]. */
+    var instrument: Instrument? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            instrumentKindState.value = value?.kind
+            onInkChange?.invoke()
+        }
+
+    /** Which instrument lies on the page; observable (Araçlar marks it). */
+    val instrumentKind: InstrumentKind? get() = instrumentKindState.value
+
+    /** What the canvas shows in its middle: a page and a point of it (page-local), where an
+     *  instrument is laid (EditorModel.viewCenter). Set by the canvas. */
+    var viewCenter: Pair<Int, Vec2>? = null
+
+    /** The compass's center and radius, once its first drag has set them; none while another tool is
+     *  in hand. */
+    var compass: CompassState? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            onInkChange?.invoke()
+        }
 
     /** Changes since the last `markSaved`. */
     @Volatile
@@ -746,6 +785,45 @@ class EditorState(
         val brush = activeBrush
         val strokes = PenPaths.strokes(shapePaths(from, to), brush, color(brush), width(brush), referenceNow(), flowerLevel)
         replaceStrokes(page, removing = emptySet(), adding = strokes)
+    }
+
+    // MARK: Instruments and the compass
+
+    /** Lays the ruler (set square, protractor) where the view's middle is, or puts it away (null). An
+     *  instrument already on the page becomes the other kind where it lies, as it is turned. */
+    fun showInstrument(kind: InstrumentKind?) {
+        if (kind == null) {
+            instrument = null
+            return
+        }
+        instrument?.let {
+            instrument = it.copy(kind = kind)
+            return
+        }
+        val layout = layout()
+        var center = Pt(layout.pageWidth / 2.0, 320.0)
+        viewCenter?.let { (page, point) ->
+            if (page in 0 until layout.pageCount) {
+                val c = layout.toDoc(page, point.x, point.y)
+                center = Pt(c.x.toDouble(), c.y.toDouble())
+            }
+        }
+        instrument = Instrument(kind, center, 0.0)
+    }
+
+    /** Turns the instrument to a round angle (degrees, counterclockwise as on paper). */
+    fun setInstrumentAngle(degrees: Double) {
+        val i = instrument ?: return
+        instrument = i.copy(angle = Instrument.angleFor(degrees))
+    }
+
+    /** Draws a compass arc (page-local points) with the last pen picked, its color and width. */
+    fun addArc(page: Int, points: List<Pt>) {
+        if (points.size < 2) return
+        val brush = activeBrush
+        val r = width(brush) * 0.5f
+        val pts = points.map { InkPoint(it.x.toFloat(), it.y.toFloat(), r, 0.55f) }
+        addStroke(page, Stroke(brush, color(brush), width(brush), referenceNow(), newSeed(brush), pts))
     }
 
     // MARK: Undo
