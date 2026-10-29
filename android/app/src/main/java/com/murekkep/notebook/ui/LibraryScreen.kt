@@ -403,7 +403,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
                             onSettings = onSettings,
                             onHide = { sidebarShown = false },
                             ground = { SidebarGround(picture, full(), inDrawer = false) },
-                            courses = { CourseList(sections, counts, shownCourse?.id, pickCourse, courseActions) },
+                            courses = { CourseList(sections, counts, shownCourse?.id, pickCourse, courseActions, loaded = store.loaded) },
                             modifier = Modifier.width(SidebarWidth).fillMaxHeight(),
                         )
                         Box(Modifier.width(1.dp).fillMaxHeight().background(z.rule))
@@ -439,7 +439,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
                                     CourseList(sections, counts, shownCourse?.id, { picked ->
                                         pickCourse(picked)
                                         scope.launch { drawer.close() }
-                                    }, courseActions)
+                                    }, courseActions, loaded = store.loaded)
                                 },
                             )
                         }

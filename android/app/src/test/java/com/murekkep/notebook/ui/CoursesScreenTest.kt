@@ -1,6 +1,9 @@
 package com.murekkep.notebook.ui
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -176,6 +179,18 @@ class CoursesScreenTest {
         compose.onNode(menuItem("Remove from course")).performClick()
         compose.waitUntil(5_000) { !record("Derivatives").has("sectionID") }
         compose.onNode(sidebarRow("Biology") and hasText("2")).assertIsDisplayed()
+    }
+
+    @Test
+    fun theFirstCoursePromptWaitsForTheFirstRead() {
+        var loaded by mutableStateOf(false)
+        val actions = CourseActions(create = {}, edit = {}, delete = {}, import = {}, newNotebook = {}, drop = { _, _, _ -> })
+        compose.setContent { MurekkepTheme { CourseList(emptyList(), emptyMap(), null, {}, actions, loaded = loaded) } }
+        // Before the disk is read there may well be courses on it: no prompt for the first one.
+        compose.onNodeWithText("Courses").assertIsDisplayed()
+        assertTrue(compose.onAllNodes(hasText("Add your first course")).fetchSemanticsNodes().isEmpty())
+        loaded = true
+        compose.onNodeWithText("Add your first course").assertIsDisplayed()
     }
 
     @Test

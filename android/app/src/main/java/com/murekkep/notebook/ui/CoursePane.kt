@@ -100,7 +100,8 @@ internal class CourseActions(
 // MARK: The sidebar
 
 /** The sidebar's courses: the header with its +, "İlk dersini ekle" while there are none, and a row
- *  for each course, [selected] the one on screen. */
+ *  for each course, [selected] the one on screen. Until the disk has been read ([loaded]) there may
+ *  be courses on it, so the first frames show no prompt (the iPad reads them before it draws). */
 @Composable
 internal fun CourseList(
     sections: List<NoteSection>,
@@ -108,6 +109,7 @@ internal fun CourseList(
     selected: String?,
     onPick: (NoteSection) -> Unit,
     actions: CourseActions,
+    loaded: Boolean,
 ) {
     val z = Zen.colors
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -123,7 +125,7 @@ internal fun CourseList(
                 Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
             }
         }
-        if (sections.isEmpty()) {
+        if (loaded && sections.isEmpty()) {
             Box(
                 Modifier
                     .fillMaxWidth()
