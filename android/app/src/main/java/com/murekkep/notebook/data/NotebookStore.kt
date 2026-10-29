@@ -26,13 +26,16 @@ import org.json.JSONObject
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.Collections
 import java.util.UUID
+import java.util.WeakHashMap
 import kotlin.math.max
 
 // Notebooks on disk (Murekkep.swiftpm/LibraryStore.swift and the saving part of EditorModel.swift):
 // filesDir/notebooks/<uuid>/meta.json and ink.bin, a picture of the first page for the library's
-// cover (thumb.jpg, drawn at every save), and for an imported PDF its source.pdf (its cover is the
-// PDF's first page). There is no index file: the library is the folders,
+// cover (thumb.jpg, drawn at every save, and once for a notebook open without changes, as the iPad
+// draws it at every close), and for an imported PDF its source.pdf (its cover is the PDF's first
+// page). There is no index file: the library is the folders,
 // each with its own record, so one damaged record never empties the list. Saves wait for a pause in
 // writing (1.2 s, as on iPad), take their snapshot on the main thread and write it on the IO
 // dispatcher; the screen asks for a save at once when it leaves or the app goes to the background.
@@ -55,6 +58,10 @@ class NotebookStore private constructor(context: Context) {
 
     /** Each note's newest write on the IO dispatcher: `open` waits for it before it reads the ink. */
     private val writes = HashMap<String, Job>()
+
+    /** Editor states whose ink has had its cover drawn (at a save, or once without changes); held
+     *  weakly, so a closed note's ink is not kept. */
+    private val coveredStates: MutableSet<EditorState> = Collections.newSetFromMap(WeakHashMap())
 
     /** Every notebook, newest first. Observable from Compose. */
     var notebooks by mutableStateOf<List<NotebookMeta>>(emptyList())
@@ -112,8 +119,38 @@ class NotebookStore private constructor(context: Context) {
             val known = notebooks.mapTo(HashSet()) { it.id }
             notebooks = (notebooks + scanned.filter { it.id !in known }).sortedByDescending { it.modified }
             loaded = true
+            drawMissingCovers(scanned)
         }.also { firstLoad = it }
         load.await()
+    }
+
+    /** Notebooks saved before the covers came have ink but no thumb.jpg: their covers are drawn once,
+     *  off the main thread, after the first read of the folders (newest first, as the library lists
+     *  them). A notebook saved meanwhile keeps the cover its save drew. */
+    private fun drawMissingCovers(list: List<NotebookMeta>) {
+        val candidates = list.filter { it.kind == NoteKind.NOTEBOOK }
+        if (candidates.isEmpty()) return
+        scope.launch(Dispatchers.IO) {
+            for (meta in candidates) {
+                val id = meta.id
+                if (thumbFile(id).exists() || !inkFile(id).isFile) continue
+                val first = try {
+                    InkCodec.decode(inkFile(id).readBytes()).firstOrNull()
+                } catch (e: Exception) {
+                    null
+                }
+                if (first.isNullOrEmpty()) continue
+                val drawn = synchronized(writeLock) {
+                    if (id in writtenSequence || thumbFile(id).exists()) {
+                        false
+                    } else {
+                        writeCover(id, first, meta.paper)
+                        true
+                    }
+                }
+                if (drawn) coverChanged()
+            }
+        }
     }
 
     private fun scan(): List<NotebookMeta> {
@@ -308,11 +345,14 @@ class NotebookStore private constructor(context: Context) {
         }
     }
 
-    /** Writes the notebook now (the screen is leaving, or the app goes to the background). */
+    /** Writes the notebook now (the screen is leaving, or the app goes to the background); a notebook
+     *  without changes has its cover drawn instead, once while it is open. */
     fun saveNow(state: EditorState) {
         val id = state.notebookId ?: return
         saveJobs.remove(id)?.cancel()
-        scope.launch { save(state) }
+        scope.launch {
+            if (state.dirty) save(state) else drawCover(state)
+        }
     }
 
     /** Takes the ink on the main thread and writes it off it; nothing when there is no change. */
@@ -326,6 +366,7 @@ class NotebookStore private constructor(context: Context) {
         notebooks = notebooks.sortedByDescending { it.modified }
         val sequence = ++nextSequence
         val cover = if (state.isPdf) null else pages.firstOrNull() ?: emptyList()
+        if (cover != null) coveredStates.add(state)
         // Once the snapshot is taken the write is the store's own job: it goes through, and the
         // library hears of the cover, even when the save is cancelled meanwhile (the note closed).
         writes[id] = scope.launch(Dispatchers.IO) {
@@ -343,6 +384,28 @@ class NotebookStore private constructor(context: Context) {
                 }
             }
             if (coverWritten) coverChanged()
+        }
+    }
+
+    /** An unchanged notebook's cover from the ink it has open (the iPad draws it at every close): a
+     *  note from before the covers, or one whose cover was lost, has it again. Once per opening, and
+     *  never over a newer save's cover. */
+    private fun drawCover(state: EditorState) {
+        val id = state.notebookId ?: return
+        if (state.readOnly || state.isPdf || !coveredStates.add(state)) return
+        val first = state.pages.firstOrNull()?.strokes ?: emptyList()
+        val paper = state.paper
+        val sequence = ++nextSequence
+        scope.launch(Dispatchers.IO) {
+            val drawn = synchronized(writeLock) {
+                if ((writtenSequence[id] ?: 0L) > sequence) {
+                    false
+                } else {
+                    writeCover(id, first, paper)
+                    true
+                }
+            }
+            if (drawn) coverChanged()
         }
     }
 
