@@ -811,16 +811,22 @@ struct FloatingToolPalette: View {
             grip
             undoRedo
             divider()
-            Group {
-                if vertical {
-                    // Upright the column holds its pens snugly and scrolls only when the side runs short.
-                    ScrollView(.vertical, showsIndicators: false) { pens }
-                        .scrollBounceBehavior(.basedOnSize)
-                        .frame(maxHeight: min(columnLength, 440))
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) { pens }
-                        .frame(maxWidth: 560)
+            // When the pens do not all fit, the strip scrolls the pen in hand into view (as Android's).
+            ScrollViewReader { proxy in
+                Group {
+                    if vertical {
+                        // Upright the column holds its pens snugly and scrolls only when the side runs short.
+                        ScrollView(.vertical, showsIndicators: false) { pens }
+                            .scrollBounceBehavior(.basedOnSize)
+                            .frame(maxHeight: min(columnLength, 440))
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) { pens }
+                            .frame(maxWidth: 560)
+                    }
                 }
+                .onAppear { showToolInHand(proxy, animated: false) }
+                .onChange(of: editor.tool) { _, _ in showToolInHand(proxy, animated: true) }
+                .onChange(of: edge) { _, _ in showToolInHand(proxy, animated: false) }
             }
             .clipped()
             allPensButton
@@ -853,6 +859,27 @@ struct FloatingToolPalette: View {
         }
     }
 
+    /// A tool's place in the strip, for ScrollViewReader; "other" for tools that are not in it.
+    private static func stripID(_ tool: ToolKind) -> String {
+        switch tool {
+        case let .brush(brush): return "pen-\(brush.rawValue)"
+        case .textPen: return "textPen"
+        case .eraser: return "eraser"
+        default: return "other"
+        }
+    }
+
+    /// Scrolls the strip so the tool in hand is in view (a short side can hide it otherwise).
+    private func showToolInHand(_ proxy: ScrollViewProxy, animated: Bool) {
+        let id = Self.stripID(editor.tool)
+        guard id != "other" else { return }
+        if animated {
+            withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+        } else {
+            proxy.scrollTo(id, anchor: .center)
+        }
+    }
+
     /// The upright column's natural height: pens 30 pt, the text pen 36, 4 between, the heart
     /// divider 7, padding 8 (the sizes `pens` lays out).
     private var columnLength: CGFloat {
@@ -870,6 +897,7 @@ struct FloatingToolPalette: View {
         return layout {
             ForEach(shown.favorites) { brush in
                 penButton(brush)
+                    .id(Self.stripID(.brush(brush)))
             }
             if !shown.favorites.isEmpty && !shown.recent.isEmpty {
                 Rectangle()
@@ -880,9 +908,12 @@ struct FloatingToolPalette: View {
             }
             ForEach(shown.recent) { brush in
                 penButton(brush)
+                    .id(Self.stripID(.brush(brush)))
             }
             textPenButton
+                .id(Self.stripID(.textPen))
             eraserButton
+                .id(Self.stripID(.eraser))
         }
         .padding(vertical ? .vertical : .horizontal, 4)
         .frame(width: vertical ? 64 : nil, height: vertical ? nil : 64, alignment: vertical ? .trailing : .bottom)
