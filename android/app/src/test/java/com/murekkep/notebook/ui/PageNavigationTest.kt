@@ -10,7 +10,8 @@ import org.junit.Test
 // The page navigator's rules: the page a typed number goes to, against the answers of the iPad's
 // own PageNavigator.pageIndex (copied verbatim into a Swift file and run with the Windows Swift
 // toolchain, 2026-10-30: Swift's Int reads an optional sign and ASCII digits only, 64 bits wide,
-// after spaces and tabs are trimmed); the contents' rows as their headings are opened; and where the
+// after spaces and tabs are trimmed); the contents' rows as their headings are opened; the page
+// grid's columns, as many as fit at least 100 dp wide (the iPad's adaptive grid); and where the
 // navigator stands: above the badge, inside the window and clear of a bar at either side.
 class PageNavigationTest {
     @Test
@@ -81,6 +82,19 @@ class PageNavigationTest {
         // Under a closed heading nothing shows, even a heading left open there; a heading without
         // headings under it opens nothing.
         assertEquals(listOf("A", "B", "C"), rows(listOf(0, 1), listOf(1)).map { it.first })
+    }
+
+    @Test
+    fun thePagesStandInAsManyColumnsAsFitAndPicturesAreDrawnAsWideAsThem() {
+        // The iPad's 400 point popover: three columns of 112.
+        assertEquals(3 to 112, PageNavigation.gridColumns(364, 100, 14))
+        // A narrower card: two columns, wider than the iPad's 120 point pictures.
+        assertEquals(2 to 147, PageNavigation.gridColumns(308, 100, 14))
+        // Rounded up: a picture is never a pixel narrower than its tile.
+        assertEquals(2 to 137, PageNavigation.gridColumns(287, 100, 14))
+        // Too narrow for even one column of 100: one, as wide as there is room.
+        assertEquals(1 to 60, PageNavigation.gridColumns(60, 100, 14))
+        assertEquals(1 to 0, PageNavigation.gridColumns(0, 100, 14))
     }
 
     @Test

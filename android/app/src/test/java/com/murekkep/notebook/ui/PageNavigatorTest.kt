@@ -41,10 +41,10 @@ import org.robolectric.annotation.ConscryptMode
 
 // The page navigator the page badge opens (PageNavigator.swift): a number typed offers Go, which
 // goes there and closes it, Go and the ribbon whole even on a narrow window; a page's picture goes
-// to its page; the ribbon bookmarks the page in
-// view and Bookmarks lists it (a hint while there are none); only an imported PDF has Contents, its
-// headings open under their disclosure arrow and go to their pages, and a PDF without them says so;
-// they are read when Contents is first chosen, not as the navigator opens, and stay with the note.
+// to its page; the ribbon bookmarks the page in view and Bookmarks lists it (a hint while there are
+// none); only an imported PDF has Contents, its headings open under their disclosure arrow and go
+// to their pages, and a PDF without them says so; they are read when Contents is first chosen, not
+// as the navigator opens, and stay with the note.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w1280dp-h800dp")
 // Conscrypt's native library is looked up by a name lower-cased in the machine's language, which a

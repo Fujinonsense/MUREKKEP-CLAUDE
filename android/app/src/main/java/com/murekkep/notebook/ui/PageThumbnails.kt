@@ -24,24 +24,23 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 
 // Small pictures of a note's pages for the page navigator (PageThumbnails in
-// Murekkep.swiftpm/PageNavigator.swift): the paper or the PDF's own page with the ink on it, 120 dp
-// across, drawn one at a time on a worker thread as their tiles come into view, and kept while the
-// navigator is open. The iPad keeps every picture; here the ones drawn first go once the pictures
+// Murekkep.swiftpm/PageNavigator.swift): the paper or the PDF's own page with the ink on it, as wide
+// as their tiles and 120 dp at least, drawn one at a time on a worker thread as their tiles come into
+// view, and kept while the navigator is open (a tile grown wider draws its picture again). The iPad keeps every picture; here the ones drawn first go once the pictures
 // take more than a budget (a long PDF's pages), and a tile whose picture went draws it again. As the
 // iPad's, a PDF's picture opens only its own page: the first ones come at once however long the PDF.
 
 class PageThumbnails(
     private val pdfFile: File?,
     private val paper: PaperStyle,
-    /** A picture's width in pixels ([WIDTH] on this screen). */
-    private val pixelWidth: Int,
     budget: Long = BUDGET,
 ) : Closeable {
     companion object {
-        /** A picture's width (PageThumbnails.width on iPad, 120 points there). */
+        /** A picture's least width (PageThumbnails.width on iPad, 120 points there, where the tiles
+         *  are about 112 wide); wider tiles get pictures as wide as they are. */
         val WIDTH = 120.dp
 
-        /** The most the pictures take, in bytes: about 150 A4 pages at twice the dp. */
+        /** The most the pictures take, in bytes: about 150 A4 pages 120 dp across at twice the dp. */
         const val BUDGET = 48L shl 20
 
         /** A picture's size in pixels, [pixelWidth] across, for a page of [width] x [height] points
@@ -67,11 +66,12 @@ class PageThumbnails(
     /** Page [page]'s picture once it is drawn; observable. */
     fun image(page: Int): ImageBitmap? = images[page]
 
-    /** Draws page [page] ([strokes] on a page of [size] points) unless its picture is here. Called
-     *  on the main thread; the drawing waits its turn on the worker. */
-    suspend fun load(page: Int, strokes: List<Stroke>, size: PageSize) {
-        if (images.containsKey(page)) return
-        val bitmap = withContext(worker) { draw(page, strokes, size) } ?: return
+    /** Draws page [page] ([strokes] on a page of [size] points) [pixelWidth] pixels across, unless
+     *  its picture is here at least as wide. Called on the main thread; the drawing waits its turn on
+     *  the worker. */
+    suspend fun load(page: Int, strokes: List<Stroke>, size: PageSize, pixelWidth: Int) {
+        images[page]?.let { if (it.width >= pixelWidth) return }
+        val bitmap = withContext(worker) { draw(page, strokes, size, pixelWidth) } ?: return
         images[page] = bitmap.asImageBitmap()
         for (gone in kept.add(page, bitmap.allocationByteCount.toLong())) images.remove(gone)
     }
@@ -88,7 +88,7 @@ class PageThumbnails(
     }
 
     /** White, the PDF's page or the paper, then the ink, at the picture's scale (on the worker). */
-    private fun draw(page: Int, strokes: List<Stroke>, size: PageSize): Bitmap? = try {
+    private fun draw(page: Int, strokes: List<Stroke>, size: PageSize, pixelWidth: Int): Bitmap? = try {
         val pdfPage = pdf()?.takeIf { page < it.pageCount }?.openPage(page)
         try {
             // The PDF's page as PdfRenderer shows it (the size the note's pages took from it).

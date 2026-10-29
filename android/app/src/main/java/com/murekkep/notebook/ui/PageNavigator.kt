@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -142,6 +143,16 @@ internal object PageNavigation {
     /** A heading of the contents as a row of the list: how deep it lies, and its place in the tree. */
     class OutlineRow(val entry: OutlineEntry, val depth: Int, val path: List<Int>)
 
+    /**
+     * The page grid's columns across [width] pixels (the iPad's GridItem(.adaptive(minimum:))): as
+     * many at least [min] wide and [gap] apart as fit, one at least; and a column's width, rounded up.
+     */
+    fun gridColumns(width: Int, min: Int, gap: Int): Pair<Int, Int> {
+        val count = max(1, (width + gap) / (min + gap))
+        val room = max(0, width - gap * (count - 1))
+        return count to (room + count - 1) / count
+    }
+
     /** The rows the contents show (the iPad's List(children:)): the top headings, and under each
      *  heading whose path is in [open] its own, as deep as they are open. */
     fun outlineRows(entries: List<OutlineEntry>, open: Set<List<Int>>): List<OutlineRow> {
@@ -173,6 +184,11 @@ private val NavigatorHeight = 580.dp
 /** The transparent margin round the navigator, where its shadow is drawn (the popup window is cut at its edge). */
 private val NavigatorShadowPad = 44.dp
 
+/** The page grid: its margin, a column's least width and the gaps between columns (the iPad's). */
+private val GridPad = 18.dp
+private val TileMinWidth = 100.dp
+private val TileGap = 14.dp
+
 /** How far a heading of the contents stands in from the one it is under. */
 private val OutlineIndent = 20.dp
 
@@ -202,13 +218,10 @@ internal fun PageNavigator(state: EditorState, maxWidth: Dp, maxHeight: Dp, onDi
 private fun NavigatorCard(state: EditorState, close: () -> Unit, modifier: Modifier) {
     val z = Zen.colors
     val context = LocalContext.current
-    val density = LocalDensity.current
     val title = stringResource(R.string.pages_go_to)
     var number by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableStateOf(NavigatorTab.PAGES) }
-    val thumbnails = remember(state) {
-        PageThumbnails(state.pdfFile, state.paper, with(density) { PageThumbnails.WIDTH.roundToPx() })
-    }
+    val thumbnails = remember(state) { PageThumbnails(state.pdfFile, state.paper) }
     DisposableEffect(thumbnails) { onDispose { thumbnails.close() } }
     // A PDF's contents, read off the main thread the first time İçindekiler is chosen and kept with
     // the note for the navigator's next openings (the iPad reads them from the PDFKit document its
@@ -357,7 +370,8 @@ private fun RibbonButton(state: EditorState) {
 }
 
 /** [pages] as pictures in as many columns of at least 100 dp as fit, the page in view in the middle
- *  as the list opens (the iPad's scrollTo with the centre anchor). */
+ *  as the list opens (the iPad's scrollTo with the centre anchor). Each picture is drawn as wide as
+ *  its tile (120 dp at least, as the iPad's), so a wide tile never shows a stretched picture. */
 @Composable
 private fun PageGrid(state: EditorState, pages: List<Int>, thumbnails: PageThumbnails, go: (Int) -> Unit) {
     val current = state.currentPage
@@ -371,22 +385,31 @@ private fun PageGrid(state: EditorState, pages: List<Int>, thumbnails: PageThumb
         grid.scrollBy((item.offset.y + item.size.height / 2 - middle).toFloat())
     }
     val layout = state.layout()
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(100.dp),
-        modifier = Modifier.fillMaxSize(),
-        state = grid,
-        contentPadding = PaddingValues(18.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        items(pages, key = { it }) { page ->
-            val image = thumbnails.image(page)
-            // Drawn as the tile comes into view, and again should its picture have gone.
-            LaunchedEffect(page, image == null) {
-                if (image == null) thumbnails.load(page, state.strokes(page), PageSize(layout.width(page), layout.height(page)))
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val (columns, tileWidth) = with(density) {
+            PageNavigation.gridColumns(constraints.maxWidth - 2 * GridPad.roundToPx(), TileMinWidth.roundToPx(), TileGap.roundToPx())
+        }
+        val pictureWidth = max(tileWidth, with(density) { PageThumbnails.WIDTH.roundToPx() })
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxSize(),
+            state = grid,
+            contentPadding = PaddingValues(GridPad),
+            horizontalArrangement = Arrangement.spacedBy(TileGap),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(pages, key = { it }) { page ->
+                val image = thumbnails.image(page)
+                // Drawn as the tile comes into view, and again should its picture have gone or the
+                // tile have grown past it.
+                val wanted = image == null || image.width < pictureWidth
+                LaunchedEffect(page, wanted, pictureWidth) {
+                    if (wanted) thumbnails.load(page, state.strokes(page), PageSize(layout.width(page), layout.height(page)), pictureWidth)
+                }
+                val aspect = max(layout.width(page), 1f) / max(layout.height(page), 1f)
+                PageTile(page, image, aspect, page == current, state.isBookmarked(page)) { go(page) }
             }
-            val aspect = max(layout.width(page), 1f) / max(layout.height(page), 1f)
-            PageTile(page, image, aspect, page == current, state.isBookmarked(page)) { go(page) }
         }
     }
 }
