@@ -3,7 +3,8 @@ import UniformTypeIdentifiers
 
 // MARK: - Shared
 
-/// The big title at the top of a pane.
+/// The big title at the top of a pane, with the sidebar's toggle when the sidebar is away and the
+/// pane's buttons on the right.
 struct PaneHeader<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil
@@ -12,26 +13,21 @@ struct PaneHeader<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: 12) {
             if showToggle {
-                Button(action: actions.toggleSidebar) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 42, height: 42)
-                        .background(Color.primary.opacity(0.06), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Loc.t("Kenar çubuğunu göster"))
+                SidebarToggle(actions: actions)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(Theme.display(.largeTitle))
+                    .kerning(-0.8)
+                    .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let subtitle {
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .lineLimit(2)
                 }
             }
@@ -39,7 +35,56 @@ struct PaneHeader<Trailing: View>: View {
             ProCornerButton()
             trailing()
         }
-        .padding(.top, 18)
+        .padding(.top, 24)
+    }
+}
+
+/// Shows the sidebar again when it is hidden.
+struct SidebarToggle: View {
+    let actions: LibraryActions
+
+    var body: some View {
+        Button(action: actions.toggleSidebar) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(Theme.text2)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Loc.t("Kenar çubuğunu göster"))
+    }
+}
+
+/// The library's buttons: quiet (a hairline on paper) or filled (ink on paper), 40 points tall
+/// with a 44-point touch.
+struct LibraryButton: View {
+    let title: String
+    var filled = false
+    let action: () -> Void
+
+    init(_ title: String, filled: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.filled = filled
+        self.action = action
+    }
+
+    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(filled ? Theme.paper : Theme.text)
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .frame(height: 40)
+                .background(filled ? Theme.text : Theme.paper2, in: Self.shape)
+                .overlay(Self.shape.strokeBorder(filled ? Color.clear : Theme.hairline, lineWidth: 1))
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
     }
 }
 
@@ -50,26 +95,28 @@ struct SectionTitle: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(Theme.display(.title3))
+                .font(Theme.display(.title3, weight: .semibold))
+                .foregroundStyle(Theme.text)
             Spacer()
             if let action {
                 Button(action.title, action: action.run)
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
             }
         }
     }
 }
 
-/// Grid of notes with their context menu.
+/// Grid of notes with their context menu: four across on an iPad in landscape.
 struct NoteGrid: View {
     @EnvironmentObject private var store: LibraryStore
     let notes: [NoteMeta]
     let actions: LibraryActions
 
-    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 22)]
+    private let columns = [GridItem(.adaptive(minimum: 190, maximum: 260), spacing: 28)]
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 26) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
             ForEach(notes) { note in
                 Button {
                     actions.open(note.id)
@@ -153,315 +200,41 @@ struct NoteMenu: View {
 struct DropZone: View {
     let title: String
     let detail: String
-    let tint: Color
     let isTargeted: Bool
     let onPick: () -> Void
 
+    private static let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 16) {
             Image(systemName: isTargeted ? "arrow.down.doc.fill" : "doc.badge.plus")
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 64, height: 64)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            VStack(alignment: .leading, spacing: 4) {
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(isTargeted ? Theme.ink : Theme.text2)
+                .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(isTargeted ? Loc.t("Bırak, ekleyelim") : title)
-                    .font(.headline)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.text)
                 Text(detail)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 10)
-            Button(action: onPick) {
-                Label(Loc.t("Dosya seç"), systemImage: "folder")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(tint)
+            LibraryButton(Loc.t("Dosya seç"), action: onPick)
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(tint.opacity(isTargeted ? 0.14 : 0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(tint.opacity(isTargeted ? 0.9 : 0.35), style: StrokeStyle(lineWidth: 1.6, dash: [7, 5]))
-        )
+        .padding(16)
+        .background(Self.shape.fill(isTargeted ? Theme.ink.opacity(0.06) : Theme.paper2))
+        .overlay(Self.shape.strokeBorder(isTargeted ? Theme.ink : Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [6, 4])))
         .animation(.easeInOut(duration: 0.2), value: isTargeted)
     }
 }
 
-private struct StatTile: View {
-    let value: Int
-    let label: String
-    let symbol: String
-    let tint: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(tint)
-                    .frame(width: 42, height: 42)
-                    .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("\(value)")
-                        .font(Theme.display(.title2).monospacedDigit())
-                    Text(label)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .glassCard(radius: 18)
-        }
-        .buttonStyle(PressableStyle())
-        .foregroundStyle(.primary)
-    }
-}
-
-struct CourseCard: View {
-    let section: NoteSection
-    let notes: Int
-    let pdfs: Int
-    let overviews: Int
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(LinearGradient(colors: [section.color, section.color.opacity(0.72)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Image(systemName: section.symbol)
-                .font(.system(size: 84, weight: .bold))
-                .foregroundStyle(.white.opacity(0.16))
-                .rotationEffect(.degrees(-12))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .padding(.top, 8)
-                .padding(.trailing, 6)
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: section.symbol)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(section.color)
-                    .frame(width: 36, height: 36)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Spacer(minLength: 0)
-                Text(section.name)
-                    .font(Theme.display(.title3))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text(Loc.t("{0} PDF · {1} defter · {2} özet", "\(pdfs)", "\(notes - pdfs)", "\(overviews)"))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
-            }
-            .padding(16)
-        }
-        .frame(height: 150)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: section.color.opacity(0.35), radius: 12, y: 6)
-    }
-}
-
-// MARK: - Home
-
-struct HomePane: View {
-    @EnvironmentObject private var store: LibraryStore
-    @EnvironmentObject private var studio: StudioStore
-    @EnvironmentObject private var settings: AppSettings
-    let actions: LibraryActions
-    let showToggle: Bool
-    @State private var dropping = false
-
-    private static let quickTemplates: [PaperStyle] = [.lined, .grid, .dotted, .cornell, .weekly, .todo, .music]
-    private let courseColumns = [GridItem(.adaptive(minimum: 230, maximum: 340), spacing: 18)]
-
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12: return Loc.t("Günaydın")
-        case 12..<18: return Loc.t("İyi çalışmalar")
-        default: return Loc.t("İyi akşamlar")
-        }
-    }
-
-    private var recent: [NoteMeta] {
-        Array(store.notes.sorted { $0.modified > $1.modified }.prefix(10))
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
-                PaneHeader(title: greeting, subtitle: Loc.t("Bugün ne çalışıyoruz? Bir ders aç, PDF bırak ya da yeni bir deftere başla."),
-                           showToggle: showToggle, actions: actions) {
-                    NewMenu(actions: actions, section: nil)
-                }
-                stats
-                if !recent.isEmpty {
-                    VStack(alignment: .leading, spacing: 14) {
-                        SectionTitle(title: Loc.t("Kaldığın yerden devam et"), action: (title: Loc.t("Tümü"), run: { actions.go(.recent) }))
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(alignment: .top, spacing: 20) {
-                                ForEach(recent) { note in
-                                    Button {
-                                        actions.open(note.id)
-                                    } label: {
-                                        NoteCard(note: note)
-                                            .frame(width: 140)
-                                    }
-                                    .buttonStyle(PressableStyle())
-                                    .contextMenu { NoteMenu(note: note, store: store, actions: actions) }
-                                }
-                            }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 4)
-                        }
-                    }
-                }
-                courses
-                studioBlock
-                templates
-            }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 40)
-        }
-        .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
-        .overlay {
-            if dropping {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(Theme.ink, style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
-                    .background(Theme.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .overlay(Label(Loc.t("PDF'leri kütüphaneye bırak"), systemImage: "arrow.down.doc").font(.title3.weight(.bold)).foregroundStyle(Theme.ink))
-                    .padding(16)
-                    .allowsHitTesting(false)
-            }
-        }
-    }
-
-    private var stats: some View {
-        let notebooks = store.notes.filter { $0.kind == .notebook }.count
-        let pdfs = store.notes.count - notebooks
-        return HStack(spacing: 14) {
-            StatTile(value: notebooks, label: Loc.t("Defter"), symbol: "book.closed.fill", tint: Theme.ink) { actions.go(.notebooks) }
-            StatTile(value: pdfs, label: "PDF", symbol: "doc.richtext.fill", tint: Theme.aiStart) { actions.go(.pdfs) }
-            StatTile(value: store.sections.count, label: Loc.t("Ders"), symbol: "folder.fill", tint: Color(red: 0.92, green: 0.55, blue: 0.10)) {
-                if let first = store.sections.first { actions.go(.course(first.id)) } else { actions.newCourse() }
-            }
-            StatTile(value: studio.overviews.count, label: Loc.t("Özet"), symbol: "sparkles.tv.fill", tint: Theme.aiEnd) { actions.go(.studio) }
-        }
-    }
-
-    private var courses: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionTitle(title: Loc.t("Derslerin"))
-            LazyVGrid(columns: courseColumns, alignment: .leading, spacing: 18) {
-                ForEach(store.sections) { section in
-                    let notes = store.notes.filter { $0.sectionID == section.id }
-                    Button {
-                        actions.go(.course(section.id))
-                    } label: {
-                        CourseCard(section: section, notes: notes.count, pdfs: notes.filter { $0.kind == .pdf }.count,
-                                   overviews: studio.overviews(in: section.id).count)
-                    }
-                    .buttonStyle(PressableStyle())
-                    .onDrop(of: [.pdf, .image], isTargeted: nil) { providers in actions.drop(providers, section.id) }
-                    .contextMenu {
-                        Button {
-                            actions.editCourse(section)
-                        } label: {
-                            Label(Loc.t("Düzenle"), systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            actions.deleteCourse(section)
-                        } label: {
-                            Label(Loc.t("Dersi sil (içindekiler kalır)"), systemImage: "trash")
-                        }
-                    }
-                }
-                Button(action: actions.newCourse) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 28, weight: .semibold))
-                        Text(store.sections.isEmpty ? Loc.t("İlk dersini ekle") : Loc.t("Yeni ders"))
-                            .font(.headline)
-                        Text(Loc.t("PDF'ler, defterler ve özetler tek klasörde"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .foregroundStyle(Theme.ink)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 150)
-                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(Theme.ink.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])))
-                }
-                .buttonStyle(PressableStyle())
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var studioBlock: some View {
-        if studio.overviews.isEmpty && studio.jobs.isEmpty {
-            StudioPromo(actions: actions, sectionID: nil)
-        } else {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionTitle(title: Loc.t("Son özetler"), action: (title: Loc.t("Stüdyo"), run: { actions.go(.studio) }))
-                ForEach(studio.jobs) { job in
-                    JobRow(job: job)
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 18) {
-                        ForEach(studio.overviews.prefix(8)) { overview in
-                            Button {
-                                actions.play(overview)
-                            } label: {
-                                OverviewCard(overview: overview)
-                                    .frame(width: 270)
-                            }
-                            .buttonStyle(PressableStyle())
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 4)
-                }
-            }
-        }
-    }
-
-    private var templates: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionTitle(title: Loc.t("Yeni defter"), action: (title: Loc.t("{0} şablonun tümü", "\(PaperStyle.allCases.count)"), run: { actions.newNotebook(nil) }))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(Self.quickTemplates) { style in
-                        Button {
-                            actions.createNotebook(style, nil)
-                        } label: {
-                            VStack(spacing: 8) {
-                                PaperPreview(style: style)
-                                    .frame(width: 92, height: 130)
-                                Text(style.title)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                            }
-                            .frame(width: 96)
-                        }
-                        .buttonStyle(PressableStyle())
-                        .accessibilityLabel(Loc.t("Yeni defter: {0}", "\(style.title)"))
-                    }
-                }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 2)
-            }
-        }
-    }
-}
-
-/// The "+" menu: new notebook, PDF or course.
+/// The "Yeni" menu of the Studio pane: new notebook, PDF, course or overview.
 struct NewMenu: View {
     let actions: LibraryActions
     let section: UUID?
+
+    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
     var body: some View {
         Menu {
@@ -493,27 +266,69 @@ struct NewMenu: View {
             }
         } label: {
             Label(Loc.t("Yeni"), systemImage: "plus")
-                .font(.subheadline.weight(.bold))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.text)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Theme.ink, in: Capsule())
-                .foregroundStyle(.white)
+                .frame(height: 40)
+                .background(Theme.paper2, in: Self.shape)
+                .overlay(Self.shape.strokeBorder(Theme.hairline, lineWidth: 1))
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
         }
     }
 }
 
-// MARK: - Lists
+// MARK: - Notes
 
+/// The notes: all of them (with the Hepsi / Defterler / PDF'ler filter), the recent ones, the
+/// favourites, the notebooks or the PDFs, sorted by the last edit or by name, each shown as its
+/// first page.
 struct NotesPane: View {
     @EnvironmentObject private var store: LibraryStore
     let place: LibraryPlace
     let actions: LibraryActions
     let showToggle: Bool
+    @AppStorage("library.filter") private var filterRaw = NoteFilter.all.rawValue
+    @AppStorage("library.sort") private var sortRaw = NoteSort.modified.rawValue
     @State private var dropping = false
+
+    enum NoteFilter: String, CaseIterable, Identifiable {
+        case all
+        case notebooks
+        case pdfs
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .all: return Loc.t("Hepsi")
+            case .notebooks: return Loc.t("Defterler")
+            case .pdfs: return Loc.t("PDF'ler")
+            }
+        }
+    }
+
+    enum NoteSort: String, CaseIterable, Identifiable {
+        case modified
+        case title
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .modified: return Loc.t("Son düzenlenen")
+            case .title: return Loc.t("Ada göre")
+            }
+        }
+    }
+
+    private var filter: NoteFilter { NoteFilter(rawValue: filterRaw) ?? .all }
+    private var sort: NoteSort { NoteSort(rawValue: sortRaw) ?? .modified }
 
     private var title: String {
         switch place {
-        case .recent: return Loc.t("Son çalışılanlar")
+        case .home: return Loc.t("Tüm notlar")
+        case .recent: return Loc.t("Son açılanlar")
         case .favorites: return Loc.t("Favoriler")
         case .notebooks: return Loc.t("Defterler")
         case .pdfs: return Loc.t("PDF'ler")
@@ -522,24 +337,50 @@ struct NotesPane: View {
     }
 
     private var notes: [NoteMeta] {
+        let list: [NoteMeta]
         switch place {
         case .recent: return Array(store.notes.sorted { $0.modified > $1.modified }.prefix(40))
-        case .favorites: return store.notes.filter(\.starred)
-        case .notebooks: return store.notes.filter { $0.kind == .notebook }
-        case .pdfs: return store.notes.filter { $0.kind == .pdf }
-        default: return store.notes
+        case .favorites: list = store.notes.filter(\.starred)
+        case .notebooks: list = store.notes.filter { $0.kind == .notebook }
+        case .pdfs: list = store.notes.filter { $0.kind == .pdf }
+        default:
+            switch filter {
+            case .all: list = store.notes
+            case .notebooks: list = store.notes.filter { $0.kind == .notebook }
+            case .pdfs: list = store.notes.filter { $0.kind == .pdf }
+            }
+        }
+        switch sort {
+        case .modified: return list.sorted { $0.modified > $1.modified }
+        case .title: return list.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                PaneHeader(title: title, subtitle: Loc.t("{0} not", "\(notes.count)"), showToggle: showToggle, actions: actions) {
-                    NewMenu(actions: actions, section: nil)
+                PaneHeader(title: title, showToggle: showToggle, actions: actions) {
+                    LibraryButton(Loc.t("PDF içe aktar")) { actions.importPDF(nil) }
+                    LibraryButton(Loc.t("Yeni not"), filled: true) { actions.newNotebook(nil) }
+                }
+                HStack(spacing: 12) {
+                    if place == .home {
+                        Picker(Loc.t("Göster"), selection: $filterRaw) {
+                            ForEach(NoteFilter.allCases) { f in
+                                Text(f.title).tag(f.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 320)
+                    }
+                    Spacer(minLength: 0)
+                    if place != .recent {
+                        sortMenu
+                    }
                 }
                 if place == .pdfs {
                     DropZone(title: Loc.t("PDF'leri buraya sürükle"), detail: Loc.t("Dosyalar'dan ya da başka bir uygulamadan bırakabilirsin."),
-                             tint: Theme.aiStart, isTargeted: dropping) { actions.importPDF(nil) }
+                             isTargeted: dropping) { actions.importPDF(nil) }
                 }
                 if notes.isEmpty {
                     empty
@@ -549,10 +390,43 @@ struct NotesPane: View {
                     NoteGrid(notes: notes, actions: actions)
                 }
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 40)
             .padding(.bottom, 40)
         }
         .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
+        .overlay {
+            if dropping && place != .pdfs {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Theme.ink, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .background(Theme.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(Label(Loc.t("PDF'leri kütüphaneye bırak"), systemImage: "arrow.down.doc").font(.headline).foregroundStyle(Theme.ink))
+                    .padding(16)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// "Son düzenlenen ⌄": the order of the notes.
+    private var sortMenu: some View {
+        Menu {
+            Picker(Loc.t("Sıralama"), selection: $sortRaw) {
+                ForEach(NoteSort.allCases) { s in
+                    Text(s.title).tag(s.rawValue)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(sort.title)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+            }
+            .font(.subheadline)
+            .foregroundStyle(Theme.text2)
+            .padding(.horizontal, 10)
+            .frame(height: 36)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Loc.t("Sıralama"))
     }
 
     @ViewBuilder
@@ -563,9 +437,9 @@ struct NotesPane: View {
                                    description: Text(Loc.t("Bir notu basılı tutup \"Favorilere ekle\"yi seç.")))
         case .notebooks:
             ContentUnavailableView(Loc.t("Defter yok"), systemImage: "book.closed",
-                                   description: Text(Loc.t("Sol üstten \"Defter\"e dokunup bir şablon seç.")))
+                                   description: Text(Loc.t("Sağ üstteki \"Yeni not\" ile bir şablon seç.")))
         case .pdfs:
-            ContentUnavailableView(Loc.t("PDF yok"), systemImage: "doc.richtext",
+            ContentUnavailableView(Loc.t("PDF yok"), systemImage: "doc.text",
                                    description: Text(Loc.t("Ders notlarını, kitap bölümlerini ve makaleleri buraya ekle.")))
         default:
             ContentUnavailableView(Loc.t("Henüz not yok"), systemImage: "square.and.pencil",
@@ -609,12 +483,19 @@ struct SearchPane: View {
                             Button {
                                 actions.go(.course(section.id))
                             } label: {
-                                Label(section.name, systemImage: section.symbol)
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 9)
-                                    .background(section.color.opacity(0.14), in: Capsule())
-                                    .foregroundStyle(section.color)
+                                HStack(spacing: 8) {
+                                    Image(systemName: section.symbol)
+                                        .foregroundStyle(section.color)
+                                    Text(section.name)
+                                        .foregroundStyle(Theme.text)
+                                }
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 14)
+                                .frame(height: 40)
+                                .background(Theme.paper2, in: Capsule())
+                                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                                .padding(.vertical, 2)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -645,7 +526,7 @@ struct SearchPane: View {
                     }
                 }
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 40)
             .padding(.bottom, 40)
         }
         .task(id: query) {
@@ -674,24 +555,24 @@ struct SearchPane: View {
     private func hitRow(_ h: ContentHit) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "text.magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.ink)
-                .frame(width: 32, height: 32)
-                .background(Theme.ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.text2)
+                .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 3) {
                 Text("\(h.title) · \(Loc.t("s. {0}", "\(h.page + 1)"))")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                 (Text(h.hit.before) + Text(h.hit.match).bold().foregroundStyle(Theme.ink) + Text(h.hit.after))
                     .font(.subheadline)
+                    .foregroundStyle(Theme.text2)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 14)
+        .glassCard(radius: 12)
     }
 }
 
@@ -730,7 +611,7 @@ struct CoursePane: View {
         let notebooks = notes.filter { $0.kind == .notebook }
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                banner(pdfs: pdfs.count, notebooks: notebooks.count)
+                header(pdfs: pdfs.count, notebooks: notebooks.count)
                 Picker(Loc.t("Bölüm"), selection: $tabRaw) {
                     ForEach(CourseTab.allCases) { t in
                         Text(t.title).tag(t.rawValue)
@@ -742,11 +623,11 @@ struct CoursePane: View {
                 case .sources:
                     DropZone(title: Loc.t("Bu dersin PDF'lerini buraya sürükle"),
                              detail: Loc.t("Ders notları, slaytlar, kitap bölümleri. Asistan ve stüdyo hepsinden birlikte yararlanır."),
-                             tint: section.color, isTargeted: dropping) { actions.importPDF(section.id) }
+                             isTargeted: dropping) { actions.importPDF(section.id) }
                     if pdfs.isEmpty {
                         Text(Loc.t("Henüz kaynak yok. PDF ekleyince buradan video ve sesli özet çıkarabilirsin."))
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.muted)
                     } else {
                         NoteGrid(notes: pdfs, actions: actions)
                     }
@@ -754,22 +635,16 @@ struct CoursePane: View {
                     HStack {
                         Text(notebooks.isEmpty ? Loc.t("Bu derste henüz defter yok.") : Loc.t("{0} defter", "\(notebooks.count)"))
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.muted)
                         Spacer()
-                        Button {
-                            actions.newNotebook(section.id)
-                        } label: {
-                            Label(Loc.t("Yeni defter"), systemImage: "square.and.pencil")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(section.color)
+                        LibraryButton(Loc.t("Yeni defter")) { actions.newNotebook(section.id) }
                     }
                     NoteGrid(notes: notebooks, actions: actions)
                 case .studio:
                     StudioSection(sectionID: section.id, tint: section.color, actions: actions)
                 }
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 40)
             .padding(.bottom, 40)
         }
         .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in
@@ -778,94 +653,65 @@ struct CoursePane: View {
         }
     }
 
-    private func banner(pdfs: Int, notebooks: Int) -> some View {
+    /// The course's name with its symbol, what it holds, and its buttons; the rest is in "Diğer".
+    private func header(pdfs: Int, notebooks: Int) -> some View {
         let overviews = studio.overviews(in: section.id).count
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
-                if showToggle {
-                    Button(action: actions.toggleSidebar) {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.white.opacity(0.18), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-                Menu {
-                    Button {
-                        actions.editCourse(section)
-                    } label: {
-                        Label(Loc.t("Dersi düzenle"), systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        actions.deleteCourse(section)
-                    } label: {
-                        Label(Loc.t("Dersi sil (içindekiler kalır)"), systemImage: "trash")
-                    }
+        return HStack(alignment: .center, spacing: 12) {
+            if showToggle {
+                SidebarToggle(actions: actions)
+            }
+            Image(systemName: section.symbol)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(section.color)
+                .frame(width: 44, height: 44)
+                .background(Theme.paper2, in: Circle())
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(section.name)
+                    .font(Theme.display(.largeTitle))
+                    .kerning(-0.8)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(Loc.t("{0} kaynak · {1} defter · {2} özet", "\(pdfs)", "\(notebooks)", "\(overviews)"))
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 10)
+            ProCornerButton()
+            LibraryButton(Loc.t("PDF ya da fotoğraf ekle")) { actions.importPDF(section.id) }
+            LibraryButton(Loc.t("Yeni not"), filled: true) { actions.newNotebook(section.id) }
+            Menu {
+                Button {
+                    actions.makeOverview(section.id, .video, [])
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(.white.opacity(0.18), in: Circle())
+                    Label(Loc.t("Video özeti"), systemImage: OverviewKind.video.symbol)
                 }
-            }
-            HStack(alignment: .center, spacing: 18) {
-                Image(systemName: section.symbol)
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(section.color)
-                    .frame(width: 76, height: 76)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(section.name)
-                        .font(Theme.display(.largeTitle))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    Text(Loc.t("{0} kaynak · {1} defter · {2} özet", "\(pdfs)", "\(notebooks)", "\(overviews)"))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
+                Button {
+                    actions.makeOverview(section.id, .audio, [])
+                } label: {
+                    Label(Loc.t("Sesli özet"), systemImage: OverviewKind.audio.symbol)
                 }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    bannerButton(Loc.t("PDF ya da fotoğraf ekle"), "doc.badge.plus") { actions.importPDF(section.id) }
-                    bannerButton(Loc.t("Defter"), "square.and.pencil") { actions.newNotebook(section.id) }
-                    bannerButton(Loc.t("Video özeti"), OverviewKind.video.symbol) { actions.makeOverview(section.id, .video, []) }
-                    bannerButton(Loc.t("Sesli özet"), OverviewKind.audio.symbol) { actions.makeOverview(section.id, .audio, []) }
+                Divider()
+                Button {
+                    actions.editCourse(section)
+                } label: {
+                    Label(Loc.t("Dersi düzenle"), systemImage: "pencil")
                 }
+                Button(role: .destructive) {
+                    actions.deleteCourse(section)
+                } label: {
+                    Label(Loc.t("Dersi sil (içindekiler kalır)"), systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Theme.text2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel(Loc.t("Diğer"))
         }
-        .padding(22)
-        .background(
-            ZStack {
-                LinearGradient(colors: [section.color, section.color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: section.symbol)
-                    .font(.system(size: 220, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.10))
-                    .rotationEffect(.degrees(-14))
-                    .offset(x: 90, y: 20)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: section.color.opacity(0.35), radius: 18, y: 8)
-        .padding(.top, 14)
-    }
-
-    private func bannerButton(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(.white.opacity(0.2), in: Capsule())
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(PressableStyle())
+        .padding(.top, 24)
     }
 }

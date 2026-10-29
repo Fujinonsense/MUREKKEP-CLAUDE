@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 /// Where the library is: a list in the sidebar or a course.
 enum LibraryPlace: Hashable {
+    /// All notes.
     case home
     case recent
     case favorites
@@ -77,6 +78,9 @@ struct PhotoImportProgress: Equatable {
     var total: Int
 }
 
+/// The library: the sidebar (the lists, the courses, the Studio, voices and Settings) beside the
+/// notes, each shown as its own first page. In black and white it is plain paper; a Pro theme lays
+/// its picture behind it.
 struct LibraryView: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var settings: AppSettings
@@ -123,10 +127,10 @@ struct LibraryView: View {
             HStack(spacing: 0) {
                 if isRegular && sidebarShown {
                     sidebar
-                        .frame(width: 300)
+                        .frame(width: 288)
                         .transition(.move(edge: .leading))
                     Rectangle()
-                        .fill(Color.primary.opacity(0.06))
+                        .fill(Theme.hairline)
                         .frame(width: 1)
                         .ignoresSafeArea()
                 }
@@ -140,8 +144,7 @@ struct LibraryView: View {
                             .ignoresSafeArea()
                             .onTapGesture { withAnimation(.spring(response: 0.3)) { drawerShown = false } }
                         sidebar
-                            .frame(width: 300)
-                            .background(Color(uiColor: .systemBackground))
+                            .frame(width: 288)
                             .transition(.move(edge: .leading))
                     }
                 }
@@ -153,6 +156,8 @@ struct LibraryView: View {
                 }
             }
             .modifier(LibraryBackdrop())
+            // The editor's back button reads "‹ Notlar".
+            .navigationTitle(Loc.t("Notlar"))
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: UUID.self) { id in
                 if let note = store.note(id) {
@@ -350,9 +355,7 @@ struct LibraryView: View {
             SearchPane(query: q, actions: actions, showToggle: showToggle)
         } else {
             switch place {
-            case .home:
-                HomePane(actions: actions, showToggle: showToggle)
-            case .recent, .favorites, .notebooks, .pdfs:
+            case .home, .recent, .favorites, .notebooks, .pdfs:
                 NotesPane(place: place, actions: actions, showToggle: showToggle)
             case .studio:
                 StudioPane(actions: actions, showToggle: showToggle)
@@ -361,7 +364,7 @@ struct LibraryView: View {
                     CoursePane(section: section, actions: actions, showToggle: showToggle)
                         .id(section.id)
                 } else {
-                    HomePane(actions: actions, showToggle: showToggle)
+                    NotesPane(place: .home, actions: actions, showToggle: showToggle)
                 }
             }
         }
@@ -372,16 +375,16 @@ struct LibraryView: View {
         if let id = studio.justFinished, let overview = studio.overview(id) {
             HStack(spacing: 14) {
                 Image(systemName: overview.kind.symbol)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(Theme.ai, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Loc.t("{0} hazır", "\(overview.kind.title)"))
-                        .font(.subheadline.weight(.bold))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.text)
                     Text(overview.title)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 10)
@@ -390,18 +393,22 @@ struct LibraryView: View {
                     playing = overview
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.ink)
                 Button {
                     studio.justFinished = nil
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.muted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .accessibilityLabel(Loc.t("Kapat"))
             }
             .padding(14)
             .frame(maxWidth: 520)
-            .glassCard(radius: 22)
+            .glassCard(radius: 16, floating: true)
             .padding(.bottom, 24)
             .padding(.horizontal, 16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -420,13 +427,15 @@ struct LibraryView: View {
                 ProgressView()
                 VStack(alignment: .leading, spacing: 6) {
                     Text(Loc.t("Fotoğraflar PDF'e dönüştürülüyor ({0}/{1})", "\(p.done)", "\(p.total)"))
-                        .font(.subheadline.weight(.bold))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.text)
                     ProgressView(value: Double(p.done), total: Double(max(p.total, 1)))
+                        .tint(Theme.ink)
                 }
             }
             .padding(14)
             .frame(maxWidth: 520)
-            .glassCard(radius: 22)
+            .glassCard(radius: 16, floating: true)
             .padding(.bottom, 24)
             .padding(.horizontal, 16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -585,10 +594,14 @@ struct LibraryView: View {
 
 // MARK: - Sidebar
 
+/// The sidebar: the wordmark, search, the lists with their counts, the courses, and at the bottom
+/// the Studio, the voices and Settings. Paper in black and white; a Pro theme's picture shows
+/// through a material.
 struct LibrarySidebar: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var studio: StudioStore
+    @ObservedObject private var pro = ProStore.shared
     let place: LibraryPlace
     @Binding var query: String
     let actions: LibraryActions
@@ -596,109 +609,97 @@ struct LibrarySidebar: View {
     let onVoices: () -> Void
     @State private var dropTarget: UUID?
 
+    private static let rowShape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
+    /// Black and white draws its own flat paper; a Pro theme shows its picture through a material.
+    private var flat: Bool { !settings.shownBackground(locked: pro.locks).isPremium }
+
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 20) {
                     brand
                     searchField
-                    quickCreate
-                    WeekCard()
-                    group(Loc.t("KÜTÜPHANE")) {
-                        row(.home, Loc.t("Ana sayfa"), "house", "house.fill", count: nil)
-                        row(.recent, Loc.t("Son çalışılanlar"), "clock", "clock.fill", count: nil)
-                        row(.favorites, Loc.t("Favoriler"), "star", "star.fill", count: store.notes.filter(\.starred).count)
-                        row(.notebooks, Loc.t("Defterler"), "book.closed", "book.closed.fill", count: store.notes.filter { $0.kind == .notebook }.count)
-                        row(.pdfs, Loc.t("PDF'ler"), "doc.richtext", "doc.richtext.fill", count: store.notes.filter { $0.kind == .pdf }.count)
-                        row(.studio, Loc.t("Stüdyo"), "sparkles.tv", "sparkles.tv.fill", count: studio.overviews.count + studio.jobs.count)
+                    VStack(alignment: .leading, spacing: 2) {
+                        row(.home, Loc.t("Tüm notlar"), "square.grid.2x2", count: store.notes.count)
+                        row(.recent, Loc.t("Son açılanlar"), "clock", count: nil)
+                        row(.favorites, Loc.t("Favoriler"), "star", count: nil)
+                        row(.notebooks, Loc.t("Defterler"), "book.closed", count: store.notes.filter { $0.kind == .notebook }.count)
+                        row(.pdfs, Loc.t("PDF'ler"), "doc.text", count: store.notes.filter { $0.kind == .pdf }.count)
                     }
                     courses
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
             }
-            Divider()
-            HStack(spacing: 8) {
-                bottomButton(Loc.t("Sesler"), "person.wave.2", action: onVoices)
-                bottomButton(Loc.t("Ayarlar"), "gearshape", action: onSettings)
+            Rectangle()
+                .fill(Theme.hairline)
+                .frame(height: 1)
+            VStack(alignment: .leading, spacing: 2) {
+                tool(Loc.t("Stüdyo"), "play.rectangle", active: place == .studio) { actions.go(.studio) }
+                tool(Loc.t("Sesler"), "person.wave.2", active: false, action: onVoices)
+                tool(Loc.t("Ayarlar"), "gearshape", active: false, action: onSettings)
             }
-            .padding(12)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .background(.regularMaterial)
+        .background {
+            if flat {
+                Theme.paper2
+            } else {
+                Rectangle().fill(.regularMaterial)
+            }
+        }
     }
 
     private var brand: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Theme.ai)
-                .frame(width: 44, height: 44)
-                .overlay(Image(systemName: "pencil.and.scribble").font(.system(size: 20, weight: .bold)).foregroundStyle(.white))
-                .shadow(color: Theme.aiStart.opacity(0.35), radius: 8, y: 4)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(Loc.t("Mürekkep"))
-                    .font(Theme.display(.title3, weight: .bold))
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(engineReady ? Color.green : Color.orange)
-                        .frame(width: 6, height: 6)
-                    Text(engineLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
+        HStack(spacing: 8) {
+            Text(Loc.t("Mürekkep"))
+                .font(.title2.weight(.bold))
+                .kerning(-0.4)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
             Spacer(minLength: 0)
             Button(action: actions.toggleSidebar) {
                 Image(systemName: "sidebar.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Theme.text2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Loc.t("Kenar çubuğunu gizle"))
         }
-    }
-
-    private var engineLabel: String {
-        if settings.engine == .claude { return "Claude · \(settings.model.title.replacingOccurrences(of: "Claude ", with: ""))" }
-        if OnDeviceAI.isAvailable { return Loc.t("Cihazda yapay zekâ") }
-        if !settings.serverURL.isEmpty { return Loc.t("Yerel sunucu") }
-        return Loc.t("Çevrimdışı asistan")
-    }
-
-    private var engineReady: Bool {
-        settings.engine == .claude ? settings.hasAPIKey : true
+        .frame(height: 44)
+        .padding(.leading, 8)
     }
 
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(Loc.t("Notlarda ve özetlerde ara"), text: $query)
+                .foregroundStyle(Theme.muted)
+            TextField(Loc.t("Ara"), text: $query)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .foregroundStyle(Theme.text)
+                .accessibilityLabel(Loc.t("Notlarda ve özetlerde ara"))
             if !query.isEmpty {
                 Button {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Loc.t("Aramayı temizle"))
             }
         }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var quickCreate: some View {
-        HStack(spacing: 10) {
-            quickTile(Loc.t("Defter"), "square.and.pencil", AnyShapeStyle(Theme.ink.gradient)) { actions.newNotebook(currentCourse) }
-            quickTile(Loc.t("PDF / Foto"), "doc.badge.plus", AnyShapeStyle(Theme.ai)) { actions.importPDF(currentCourse) }
-            quickTile(Loc.t("Ders"), "folder.badge.plus", AnyShapeStyle(Color(red: 0.92, green: 0.55, blue: 0.10).gradient)) { actions.newCourse() }
-        }
+        .font(.body)
+        .padding(.horizontal, 11)
+        .frame(height: 38)
+        .background(Theme.paper, in: Self.rowShape)
+        .overlay(Self.rowShape.strokeBorder(Theme.hairline, lineWidth: 1))
     }
 
     private var currentCourse: UUID? {
@@ -706,98 +707,77 @@ struct LibrarySidebar: View {
         return nil
     }
 
-    private func quickTile(_ title: String, _ symbol: String, _ fill: AnyShapeStyle, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: symbol)
-                    .font(.system(size: 18, weight: .semibold))
-                Text(title)
-                    .font(.caption.weight(.bold))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 62)
-            .background(fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(PressableStyle())
-        .accessibilityLabel(Loc.t("Yeni {0}", "\(title)"))
-    }
-
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    /// One line of the sidebar: an icon, the name, and on the right a count.
+    private func line(_ title: String, _ symbol: String, count: Int?, on: Bool, tint: Color? = nil) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(tint ?? (on ? Theme.text : Theme.text2))
+                .frame(width: 22)
             Text(title)
-                .font(.caption2.weight(.heavy))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.bottom, 4)
-            content()
+                .font(.body.weight(on ? .semibold : .regular))
+                .foregroundStyle(on ? Theme.text : Theme.text2)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if let count, count > 0 {
+                Text("\(count)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Theme.muted)
+            }
         }
+        .padding(.horizontal, 10)
+        .frame(height: 40)
+        .background(on ? Theme.paper3 : Color.clear, in: Self.rowShape)
+        .contentShape(Rectangle())
     }
 
-    private func row(_ target: LibraryPlace, _ title: String, _ symbol: String, _ filled: String, count: Int?) -> some View {
+    private func row(_ target: LibraryPlace, _ title: String, _ symbol: String, count: Int?) -> some View {
         let on = place == target
         return Button {
             actions.go(target)
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: on ? filled : symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 22)
-                Text(title)
-                    .font(.subheadline.weight(on ? .semibold : .regular))
-                Spacer(minLength: 0)
-                if let count, count > 0 {
-                    Text("\(count)")
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .foregroundStyle(on ? Theme.ink : Color.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background(on ? Theme.ink.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(Rectangle())
+            line(title, symbol, count: count, on: on)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func tool(_ title: String, _ symbol: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            line(title, symbol, count: nil, on: active)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private var courses: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(Loc.t("DERSLER"))
-                    .font(.caption2.weight(.heavy))
-                    .foregroundStyle(.secondary)
+                Text(Loc.t("Kurslar"))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.muted)
                 Spacer()
                 Button(action: actions.newCourse) {
                     Image(systemName: "plus")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Theme.ink)
-                        .frame(width: 24, height: 24)
-                        .background(Theme.ink.opacity(0.1), in: Circle())
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.text2)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Loc.t("Yeni ders"))
             }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 4)
+            .padding(.leading, 10)
+            .frame(height: 36)
             if store.sections.isEmpty {
                 Button(action: actions.newCourse) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "folder.badge.plus")
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(Loc.t("İlk dersini ekle"))
-                                .font(.subheadline.weight(.semibold))
-                            Text(Loc.t("Anatomi, Calculus… her dersin PDF'leri, defterleri ve özetleri bir arada."))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.leading)
-                        }
-                    }
-                    .foregroundStyle(Theme.ink)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Theme.ink.opacity(0.35), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4])))
+                    Text(Loc.t("İlk dersini ekle"))
+                        .font(.body)
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 10)
+                        .frame(height: 40)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -814,30 +794,11 @@ struct LibrarySidebar: View {
         return Button {
             actions.go(.course(section.id))
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: section.symbol)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 26, height: 26)
-                    .background(section.color.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                Text(section.name)
-                    .font(.subheadline.weight(on ? .semibold : .regular))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .foregroundStyle(on ? section.color : Color.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(on || targeted ? section.color.opacity(targeted ? 0.25 : 0.13) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(Rectangle())
+            line(section.name, section.symbol, count: count, on: on || targeted, tint: section.color)
+                .overlay(Self.rowShape.strokeBorder(targeted ? Theme.ink : Color.clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
         .onDrop(of: [.pdf, .image], isTargeted: Binding(get: { dropTarget == section.id },
                                                 set: { dropTarget = $0 ? section.id : (dropTarget == section.id ? nil : dropTarget) })) { providers in
             actions.drop(providers, section.id)
@@ -847,6 +808,11 @@ struct LibrarySidebar: View {
                 actions.importPDF(section.id)
             } label: {
                 Label(Loc.t("PDF ya da fotoğraf ekle"), systemImage: "doc.badge.plus")
+            }
+            Button {
+                actions.newNotebook(section.id)
+            } label: {
+                Label(Loc.t("Yeni defter"), systemImage: "square.and.pencil")
             }
             Button {
                 actions.makeOverview(section.id, .video, [])
@@ -865,80 +831,6 @@ struct LibrarySidebar: View {
             }
         }
     }
-
-    private func bottomButton(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// This week's working days and the streak.
-private struct WeekCard: View {
-    @EnvironmentObject private var store: LibraryStore
-
-    private var days: [Date] {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        let weekday = (cal.component(.weekday, from: today) + 5) % 7 // Monday = 0
-        let monday = cal.date(byAdding: .day, value: -weekday, to: today) ?? today
-        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: monday) }
-    }
-
-    var body: some View {
-        let streak = ActivityLog.streak
-        let today = store.notes.filter { Calendar.current.isDateInToday($0.modified) }.count
-        let letters = [Loc.t("Pt"), Loc.t("Sa"), Loc.t("Ça"), Loc.t("Pe"), Loc.t("Cu"), Loc.t("Ct"), Loc.t("Pz")]
-        let week = days
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                if streak > 1 {
-                    Label(Loc.t("{0} gün", "\(streak)"), systemImage: "flame.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.orange)
-                }
-            }
-            HStack(spacing: 0) {
-                ForEach(week.indices, id: \.self) { i in
-                    let day = week[i]
-                    let worked = ActivityLog.worked(on: day)
-                    let isToday = Calendar.current.isDateInToday(day)
-                    VStack(spacing: 4) {
-                        Text(letters[i % 7])
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        Circle()
-                            .fill(worked ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(Color.primary.opacity(0.08)))
-                            .frame(width: 22, height: 22)
-                            .overlay {
-                                Circle().strokeBorder(Theme.ink, lineWidth: isToday ? 2 : 0)
-                            }
-                            .overlay {
-                                if worked {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 9, weight: .heavy))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            Text(today == 0 ? Loc.t("Bugün henüz bir şey yazmadın.") : Loc.t("Bugün {0} not üzerinde çalıştın.", "\(today)"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(14)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
 }
 
 // MARK: - Shared pieces
@@ -952,10 +844,13 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
+/// A note in the library: its first page as the cover, its name, and "3 sayfa, dün" under it.
 struct NoteCard: View {
     let note: NoteMeta
     @EnvironmentObject private var store: LibraryStore
     @State private var image: UIImage?
+
+    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
     var body: some View {
         let version = store.thumbnailVersions[note.id] ?? 0
@@ -963,70 +858,54 @@ struct NoteCard: View {
         let cover = image ?? store.cachedThumbnail(note.id, version: version)
         VStack(alignment: .leading, spacing: 10) {
             ZStack {
-                // A small stack of sheets behind the cover.
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white)
-                    .rotationEffect(.degrees(3))
-                    .offset(x: 4, y: 3)
-                    .shadow(color: Theme.shadow.opacity(0.10), radius: 4, y: 2)
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                // The page is paper, white at night too.
+                Self.shape
                     .fill(Color.white)
                 if let image = cover {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipShape(Self.shape)
                 } else {
-                    Image(systemName: note.kind == .pdf ? "doc.richtext" : "note.text")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.secondary)
+                    Image(systemName: note.kind == .pdf ? "doc.text" : "note.text")
+                        .font(.system(size: 30, weight: .light))
+                        .foregroundStyle(Theme.muted)
                 }
             }
-            .aspectRatio(0.76, contentMode: .fit)
-            .overlay(alignment: .topTrailing) {
-                Text(note.kind == .pdf ? "PDF" : Loc.t("Defter"))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(note.kind == .pdf ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(Theme.ink), in: Capsule())
-                    .padding(8)
-            }
-            .overlay(alignment: .topLeading) {
-                if note.starred {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.yellow)
-                        .padding(6)
-                        .background(.black.opacity(0.35), in: Circle())
-                        .padding(7)
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Theme.hairline, lineWidth: 1)
-            )
-            .shadow(color: Theme.shadow.opacity(0.16), radius: 10, y: 6)
+            .aspectRatio(0.75, contentMode: .fit)
+            .clipped()
+            .overlay(Self.shape.strokeBorder(Theme.hairline, lineWidth: 1))
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(note.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .foregroundStyle(.primary)
-                HStack(spacing: 4) {
-                    Text(Loc.t("{0} sayfa", "\(note.pageCount)"))
-                    Text("·")
-                    // A fixed label: the live ".relative" style redraws every card each second.
-                    Text(note.modified.formatted(.relative(presentation: .named)))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(note.title)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    if note.starred {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.muted)
+                            .accessibilityLabel(Loc.t("Favori"))
+                    }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
             }
         }
         .contentShape(Rectangle())
         .task(id: version) {
             image = await store.loadThumbnail(note.id, version: version)
         }
+    }
+
+    /// "3 sayfa, dün"; a PDF says so first: "PDF, 204 sayfa, 1 saat önce". A fixed text: the live
+    /// ".relative" style would redraw every card each second.
+    private var detail: String {
+        let pages = Loc.t("{0} sayfa", "\(note.pageCount)")
+        let when = note.modified.formatted(.relative(presentation: .named))
+        return (note.kind == .pdf ? "PDF, " : "") + pages + ", " + when
     }
 }
