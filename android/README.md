@@ -110,8 +110,16 @@ the pictures in `res/drawable-nodpi`); without Play Billing a Pro tile says Pro 
 stays black and white. Checked on the emulator in English and Turkish, light and dark, landscape and
 portrait, at font scale 1.3.
 
+Since then: an imported PDF is shared with its own pages, vectors and text, the ink laid over them
+by PDFBox (`export/PdfOverlay.kt`; its pages go as pictures only when PDFBox cannot do it), and
+Ayarlar › 3B mürekkep is the iPad's ink section (animations, the battery saver's 30 fps, the drying
+and cooling times, the flowers in the grass) on the same settings the pens' popovers and Diğer change
+(`data/InkSettings.kt`).
+
 **In the Android edition:**
-- library (new, rename, delete, search, sections, covers) and settings (the theme);
+- library (new, rename, delete, search, sections, covers) and settings (the theme, the 3D ink);
+- PDFs: import (files, photos as one PDF, drag and drop) and Paylaş as a PDF, an imported PDF with
+  its own pages;
 - notebook pages, pinch and fling;
 - all 23 pens with the iPad's shading, including 3D inks, shadows, grass blades and flowers;
 - highlighter, eraser (whole stroke and partial), undo/redo;
@@ -130,7 +138,6 @@ portrait, at font scale 1.3.
 - held drawings that become pictures (heart, face, organs) and their suggestions;
 - the lasso's "Convert to text" (it comes with the text pen);
 - the text pen (handwriting to text);
-- PDF import and export;
 - page templates beyond plain, lined, grid and dotted;
 - stickers;
 - the break corner (games, Ebru, living ink pond);
