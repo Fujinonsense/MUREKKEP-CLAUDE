@@ -969,6 +969,7 @@ private struct WeekCard: View {
                     let day = week[i]
                     let worked = ActivityLog.worked(on: day)
                     let isToday = Calendar.current.isDateInToday(day)
+                    let name = day.formatted(.dateTime.weekday(.wide).locale(Loc.locale))
                     VStack(spacing: 6) {
                         Text(letters[i % 7])
                             .font(.system(size: 10, weight: .semibold))
@@ -994,6 +995,11 @@ private struct WeekCard: View {
                             }
                     }
                     .frame(maxWidth: .infinity)
+                    // VoiceOver reads each day as one element, in words, not its letter and its
+                    // check: "Perşembe, bugün", and on a day worked "Çalıştın".
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(isToday ? Loc.t("{0}, bugün", name) : name)
+                    .accessibilityValue(worked ? Loc.t("Çalıştın") : "")
                 }
             }
             Text(today == 0 ? Loc.t("Bugün henüz bir şey yazmadın.") : Loc.t("Bugün {0} not üzerinde çalıştın.", "\(today)"))

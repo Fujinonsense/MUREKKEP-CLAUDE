@@ -95,7 +95,8 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
     muted), 6 altında 22'lik daireler: çalışılan gün accent dolu + beyaz tik, diğerleri paper-3;
     bugün dairenin 2 dışında 2'lik accent halka (30 çap; çalışılmış günün dolgusunda da görünsün
     diye); altında "Bugün henüz bir şey yazmadın." / "Bugün {0} not üzerinde çalıştın." (caption
-    muted).
+    muted). Ekran okuyucu her günü tek öğe olarak okur: gün adı (bugünse "{0}, bugün"), çalışılmış
+    günde değeri "Çalıştın".
   - Listeler ve Kurslar (bugünkü gibi); altta sabit blok: rule çizgisi, Stüdyo, Sesler, Ayarlar.
 - Tarihler (hafta kartının tarih satırı, notun altyazısındaki "11 saat önce") cihazın değil
   uygulamanın dilinde yazılır.
