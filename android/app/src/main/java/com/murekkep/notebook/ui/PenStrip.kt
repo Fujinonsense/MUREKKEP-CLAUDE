@@ -181,7 +181,7 @@ private fun PenChip(brush: Brush, color: InkColor, selected: Boolean, onClick: (
                 Icon(
                     Icons.Filled.Star,
                     contentDescription = stringResource(R.string.premium_pen),
-                    tint = PremiumGold,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(12.dp),
                 )
             }

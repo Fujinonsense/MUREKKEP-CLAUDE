@@ -122,7 +122,7 @@ class InkRenderer {
 
     /** Draws one frame; returns the frame rate the visible ink needs (0: draw only on change). */
     fun drawFrame(input: FrameInput): Int {
-        GLES30.glClearColor(0.93f, 0.93f, 0.95f, 1f)
+        GLES30.glClearColor(input.ground[0], input.ground[1], input.ground[2], 1f)
         GLES30.glClearDepthf(1f)
         GLES30.glDepthMask(true)
         GLES30.glColorMask(true, true, true, true)

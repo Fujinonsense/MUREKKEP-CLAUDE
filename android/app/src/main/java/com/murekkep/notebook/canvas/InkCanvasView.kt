@@ -191,6 +191,14 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         }
     }
 
+    /** The ground round the pages, rgb in 0..1: the theme's paper-3, set by the screen. */
+    @Volatile
+    var ground: FloatArray = floatArrayOf(0.93f, 0.93f, 0.95f)
+        set(value) {
+            field = value
+            requestFrame()
+        }
+
     /** An imported PDF's pages as textures (made once; the GL thread uses and frees them). */
     private val pdfTextures: PdfTextures? = state.pdfFile?.let { file -> PdfTextures(file) { requestRender() } }
 
@@ -209,6 +217,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             animate = true,
             pdf = pdfTextures,
             fitScale = fitZoom,
+            ground = ground,
         )
         requestRender()
         publishOverlay()

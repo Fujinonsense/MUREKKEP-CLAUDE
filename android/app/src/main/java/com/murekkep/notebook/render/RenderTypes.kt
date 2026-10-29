@@ -120,4 +120,6 @@ class FrameInput(
     val pdf: PdfTextures? = null,
     /** View pixels per point when the widest page fits the width: the PDF pages' base pictures. */
     val fitScale: Float = 1f,
+    /** The ground round the pages (the theme's paper-3), rgb in 0..1. */
+    val ground: FloatArray = floatArrayOf(0.93f, 0.93f, 0.95f),
 )
