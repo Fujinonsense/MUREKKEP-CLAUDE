@@ -1,5 +1,7 @@
 package com.murekkep.notebook.ui
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
@@ -14,7 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -36,7 +41,7 @@ private val MenuShadowPad = 44.dp
 /**
  * A menu under its anchor (the composable it is called in), starting at the anchor's start, or
  * ending at its end where there is no room; above the anchor where there is no room below.
- * Closed by a tap outside or Back.
+ * Closed by a tap outside it (its shadow's margin included) or Back.
  */
 @Composable
 fun ZenMenu(
@@ -52,7 +57,7 @@ fun ZenMenu(
     }
     // Not clipped to the screen, so the shadow's margin may run past its edge while the menu stays inside.
     Popup(popupPositionProvider = provider, onDismissRequest = onDismissRequest, properties = PopupProperties(focusable = true, clippingEnabled = false)) {
-        Box(Modifier.padding(MenuShadowPad)) {
+        Box(Modifier.dismissInMargin(MenuShadowPad, onDismissRequest).padding(MenuShadowPad)) {
             val type = MaterialTheme.typography
             // The items' labels in body text, not Material's semibold label style.
             MaterialTheme(typography = type.copy(labelLarge = type.bodyLarge)) {
@@ -66,6 +71,23 @@ fun ZenMenu(
                     content = content,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Closes a popup on a touch in the [margin] round its content: the popup's window holds that
+ * margin for the shadow, so the system does not count a touch there as outside, and nothing under
+ * the popup would take it either. Touches on the content go on to it.
+ */
+fun Modifier.dismissInMargin(margin: Dp, onDismiss: () -> Unit): Modifier = pointerInput(margin, onDismiss) {
+    awaitEachGesture {
+        val down = awaitFirstDown(pass = PointerEventPass.Initial)
+        val m = margin.toPx()
+        val p = down.position
+        if (p.x < m || p.y < m || p.x >= size.width - m || p.y >= size.height - m) {
+            down.consume()
+            onDismiss()
         }
     }
 }
