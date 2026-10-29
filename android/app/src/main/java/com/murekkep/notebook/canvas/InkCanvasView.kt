@@ -41,9 +41,15 @@ import kotlin.random.Random
 // - pen events come unbatched (requestUnbufferedDispatch) and the line under the tip runs a little
 //   ahead of the pen with Jetpack's motion prediction;
 // - the screen runs at its highest refresh rate (120 Hz where the tablet has it).
+/** A pen hovering over the canvas: where (view pixels) and the radius of what it would draw or erase. */
+data class HoverRing(val x: Float, val y: Float, val radius: Float, val erasing: Boolean)
+
 class InkCanvasView(context: Context, private val state: EditorState) : GLSurfaceView(context) {
     private val renderer = InkRenderer()
     @Volatile private var frameInput: FrameInput? = null
+
+    /** Told where a hovering pen is (null when it leaves or touches): the screen draws the ring. */
+    var onHover: ((HoverRing?) -> Unit)? = null
 
     // Where the document is: its origin in view pixels and view pixels per document point.
     private var originX = 0f
@@ -189,6 +195,28 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private fun docX(x: Float) = (x - originX) / zoom
     private fun docY(y: Float) = (y - originY) / zoom
 
+    // MARK: hover
+
+    /** A pen above the screen (S Pen, USI) shows the size of its line, or of the eraser while its
+     *  side button is held or its eraser end is down, as the Pencil's hover preview on iPad. */
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        val tool = event.getToolType(0)
+        if (tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_ERASER) return super.onHoverEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
+                stylusSeen = true
+                val erasing = state.tool is Tool.Eraser || tool == MotionEvent.TOOL_TYPE_ERASER ||
+                    event.isButtonPressed(MotionEvent.BUTTON_STYLUS_PRIMARY) ||
+                    event.isButtonPressed(MotionEvent.BUTTON_STYLUS_SECONDARY)
+                val brush = (state.tool as? Tool.Brush)?.brush ?: state.activeBrush
+                val radius = if (erasing) state.eraserSize / 2f else state.width(brush) / 2f
+                onHover?.invoke(HoverRing(event.x, event.y, max(radius * zoom, 3f), erasing))
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> onHover?.invoke(null)
+        }
+        return true
+    }
+
     // MARK: touches
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -200,6 +228,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 if (pen) {
                     stylusSeen = true
+                    onHover?.invoke(null)
                     if (penPointer == -1) {
                         requestUnbufferedDispatch(event)
                         penDown(event, index, stylus = true)

@@ -2,6 +2,7 @@ package com.murekkep.notebook.ui
 
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,9 +27,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.murekkep.notebook.R
+import com.murekkep.notebook.canvas.HoverRing
 import com.murekkep.notebook.canvas.InkCanvasView
 
 // One open notebook: a calm top bar (back, title, undo, redo), the ink canvas, and the pen dock
@@ -48,7 +56,8 @@ import com.murekkep.notebook.canvas.InkCanvasView
 fun EditorScreen(state: EditorState, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = remember(context) { context.findLifecycleOwner() }
-    val canvas = remember(state) { InkCanvasView(context, state) }
+    var hover by remember { mutableStateOf<HoverRing?>(null) }
+    val canvas = remember(state) { InkCanvasView(context, state).also { it.onHover = { ring -> hover = ring } } }
 
     DisposableEffect(lifecycleOwner, canvas) {
         val observer = LifecycleEventObserver { _, event ->
@@ -73,6 +82,17 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
         EditorTopBar(state, onBack)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(factory = { canvas }, modifier = Modifier.fillMaxSize())
+            // A hovering pen (S Pen, USI) shows the size of what it would draw, or erase in red.
+            hover?.let { ring ->
+                Canvas(Modifier.fillMaxSize()) {
+                    drawCircle(
+                        color = if (ring.erasing) Color(0x99D93025) else Color(0x661E2A5A),
+                        radius = ring.radius,
+                        center = Offset(ring.x, ring.y),
+                        style = Stroke(width = 1.5.dp.toPx()),
+                    )
+                }
+            }
             if (state.readOnly) {
                 ReadOnlyNotice(Modifier.align(Alignment.TopCenter).padding(12.dp))
             }

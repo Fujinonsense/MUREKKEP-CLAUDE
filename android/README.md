@@ -28,6 +28,7 @@ jarsigner -keystore %USERPROFILE%\.murekkep-android\upload.jks app-release.aab u
 | Pressure, tilt (`AXIS_TILT`), direction (`AXIS_ORIENTATION`) | shape the line, pencil and watercolor shading | Apple Pencil force, altitude, azimuth |
 | Side button (S Pen, USI) held | temporary eraser while held | Pencil Pro squeeze |
 | Eraser end (`TOOL_TYPE_ERASER`) | erases | — |
+| Pen hovering (`ACTION_HOVER_*`) | a ring with the line's width, red with the eraser's size while erasing | Pencil hover preview |
 | Palm on the screen | ignored once a pen has been used; fingers move and zoom | Pencil-only drawing |
 | A touch the system cancels (`FLAG_CANCELED`) | takes its stroke back | — |
 | Unbuffered pen events + motion prediction | every pen sample, the line a step ahead of the tip | coalesced and predicted touches |

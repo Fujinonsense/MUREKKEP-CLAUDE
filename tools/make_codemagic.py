@@ -192,9 +192,25 @@ grep -E "tests completed|BUILD SUCCESSFUL" ../android-build.log | tail -3
 
 ANDROID_DEBUG = ANDROID_BUILD.replace("testDebugUnitTest assembleDebug bundleRelease", "assembleDebug")
 
+# The M2 image has the Android SDK but no emulator: an Android 15 tablet is installed on the build
+# machine the first time (about a gigabyte from Google, on Codemagic's side).
 ANDROID_EMULATOR = """\
 SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-export PATH="$SDK/emulator:$SDK/platform-tools:$PATH"
+echo "SDK=$SDK"
+CMD="$SDK/cmdline-tools/latest/bin"
+[ -d "$CMD" ] || CMD=$(ls -d "$SDK"/cmdline-tools/*/bin 2>/dev/null | head -1)
+export PATH="$SDK/emulator:$SDK/platform-tools:$CMD:$PATH"
+IMG="system-images;android-35;google_apis;arm64-v8a"
+if ! emulator -list-avds 2>/dev/null | grep -q .; then
+  yes | sdkmanager --licenses > /dev/null 2>&1 || true
+  if ! sdkmanager --install "emulator" "platform-tools" "$IMG" > android-sdkmanager.log 2>&1; then
+    tail -20 android-sdkmanager.log
+    echo "::error::could not install the emulator"
+    exit 1
+  fi
+  echo no | avdmanager create avd -n murekkep -k "$IMG" -d pixel_tablet > android-avd.log 2>&1 \\
+    || echo no | avdmanager create avd -n murekkep -k "$IMG" >> android-avd.log 2>&1
+fi
 emulator -list-avds | tee android-avds.txt
 AVD=$(head -1 android-avds.txt)
 if [ -z "$AVD" ]; then
