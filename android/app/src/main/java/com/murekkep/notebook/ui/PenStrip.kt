@@ -45,7 +45,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DensityMedium
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -109,7 +108,6 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.murekkep.notebook.R
 import com.murekkep.notebook.ink.Brush
-import com.murekkep.notebook.ink.BrushGroup
 import com.murekkep.notebook.ink.EraserMode
 import com.murekkep.notebook.ink.InkColor
 import com.murekkep.notebook.ink.ShapeKind
@@ -128,7 +126,7 @@ import kotlin.math.roundToInt
 // the iPad's realistic bodies (ToolArt.kt). A second tap on the picked pen, or a tap on the colour,
 // opens the pen's settings in a popover on the page's side of the bar; a long press on a pen adds it
 // to the favourites or takes it away. The eraser's and the shapes' settings open from their buttons;
-// the grid button opens every pen.
+// the grid button opens every pen (PenPanel.kt).
 
 fun InkColor.toColor(): Color = Color(r, g, b, a)
 
@@ -137,8 +135,6 @@ private val isTurkish: Boolean
 
 /** The pen's name in the user's language: Turkish, else English. */
 fun Brush.localizedTitle(): String = if (isTurkish) titleTr else titleEn
-
-fun BrushGroup.localizedTitle(): String = if (isTurkish) titleTr else titleEn
 
 /** A shape's name in the user's language: Turkish, else English. */
 fun ShapeName.localizedTitle(): String = if (isTurkish) titleTr else titleEn
@@ -249,7 +245,7 @@ fun PenBar(
             BarButton(stringResource(R.string.all_pens), selected = sheet == Sheet.ALL_PENS, onClick = { sheet = Sheet.ALL_PENS }) {
                 AllPensGlyph(LocalContentColor.current)
                 if (sheet == Sheet.ALL_PENS) {
-                    BarPopover(edge, popoverRoom, onDismiss = close, width = 482.dp) { AllPens(state, onPicked = close) }
+                    BarPopover(edge, popoverRoom, onDismiss = close, width = 548.dp, padding = 0.dp, spacing = 0.dp) { PenPanel(state, onPicked = close) }
                 }
             }
             BarDivider(vertical)
@@ -1002,84 +998,5 @@ private fun Stepper(icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = if (enabled) z.ink2 else z.rule, modifier = Modifier.size(18.dp))
-    }
-}
-
-// MARK: Every pen
-
-/** Every pen by group, six to a row: a tap picks one, a long press stars it. */
-@Composable
-private fun AllPens(state: EditorState, onPicked: () -> Unit) {
-    val z = Zen.colors
-    val tool = state.tool
-    Text(stringResource(R.string.all_pens), style = MaterialTheme.typography.titleMedium, color = z.ink)
-    Column(
-        Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        for (group in BrushGroup.entries) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(group.localizedTitle(), style = MaterialTheme.typography.labelMedium, color = z.muted)
-                for (row in group.brushes.chunked(6)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (brush in row) {
-                            PenTile(
-                                brush = brush,
-                                ink = state.color(brush).toColor(),
-                                selected = tool is Tool.Brush && tool.brush == brush,
-                                starred = state.isFavorite(brush),
-                                onTap = {
-                                    state.tool = Tool.Brush(brush)
-                                    onPicked()
-                                },
-                                onLongPress = { state.toggleFavorite(brush) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** A pen's silhouette over its name, 70 dp wide; the picked one in a ring of the accent. */
-@Composable
-private fun PenTile(brush: Brush, ink: Color, selected: Boolean, starred: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
-    val z = Zen.colors
-    val name = brush.localizedTitle()
-    Column(
-        Modifier
-            .width(70.dp)
-            .clip(RoundedCornerShape(Zen.control))
-            .background(if (selected) z.paper3 else Color.Transparent)
-            .border(1.dp, if (selected) z.accent else Color.Transparent, RoundedCornerShape(Zen.control))
-            .combinedClickable(onClick = onTap, onLongClick = onLongPress)
-            .semantics {
-                contentDescription = name
-                this.selected = selected
-            }
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(24.dp, 40.dp).clipToBounds()) {
-            if (z.proTheme) {
-                Box(Modifier.offset(x = (-3).dp)) { ToolArtwork(brush, ink) }
-            } else {
-                PenSilhouetteArt(brush, ink, selected)
-            }
-            if (starred) {
-                Icon(Icons.Filled.Star, contentDescription = null, tint = z.muted, modifier = Modifier.align(Alignment.TopEnd).size(8.dp))
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            name,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (selected) z.ink else z.ink2,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.height(32.dp).padding(horizontal = 2.dp),
-        )
     }
 }
