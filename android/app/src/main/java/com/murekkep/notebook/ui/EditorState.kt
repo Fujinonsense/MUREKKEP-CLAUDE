@@ -204,11 +204,17 @@ class EditorState(
     /** A pen resting at the end of a stroke straightens it into a clean shape. */
     var straightLine: Boolean by kept(prefs?.straightLine ?: true) { prefs?.straightLine = it }
 
-    /** Seconds wet ink takes to dry. */
-    var dryDuration: Float by kept(prefs?.dryDuration ?: 4f) { prefs?.dryDuration = it }
+    /** Seconds wet ink takes to dry; ink drying on the page follows a change at once. */
+    var dryDuration: Float by kept(prefs?.dryDuration ?: 4f) {
+        prefs?.dryDuration = it
+        onInkChange?.invoke()
+    }
 
-    /** Seconds lava takes to cool. */
-    var coolDuration: Float by kept(prefs?.coolDuration ?: 6f) { prefs?.coolDuration = it }
+    /** Seconds lava takes to cool; lava cooling on the page follows a change at once. */
+    var coolDuration: Float by kept(prefs?.coolDuration ?: 6f) {
+        prefs?.coolDuration = it
+        onInkChange?.invoke()
+    }
 
     /** The grass's flowers: 0 none, 1 some, 2 lots; new grass strokes carry it in their seed. */
     var flowerLevel: Int by kept(prefs?.flowerLevel ?: 1) { prefs?.flowerLevel = it }

@@ -12,8 +12,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // The ink's settings in EditorState as AppSettings has them on iPad: the custom colours picked
-// lately, and the grass's flower level, which every new grass stroke carries in its seed (drawn,
-// given to a selection or drawn as a shape).
+// lately, the drying and cooling times, and the grass's flower level, which every new grass stroke
+// carries in its seed (drawn, given to a selection or drawn as a shape).
 class EditorStateInkSettingsTest {
     @Test
     fun recentColoursNewestFirstEightKept() {
@@ -24,6 +24,23 @@ class EditorStateInkSettingsTest {
         state.rememberColor(colors[5])
         assertEquals(colors[5], state.recentColors.first())
         assertEquals(8, state.recentColors.toSet().size)
+    }
+
+    @Test
+    fun theTimesTheInkTakesToDryAndCoolAskForAFrame() {
+        // The canvas hands them to the renderer with every frame: ink drying or cooling on the page
+        // follows a change at once, as the iPad's canvas reads them live.
+        val state = EditorState()
+        var frames = 0
+        state.onInkChange = { frames++ }
+        state.dryDuration = 8f
+        assertEquals(1, frames)
+        state.coolDuration = 12f
+        assertEquals(2, frames)
+        state.dryDuration = 8f
+        assertEquals(2, frames)
+        assertEquals(8f, state.dryDuration)
+        assertEquals(12f, state.coolDuration)
     }
 
     @Test
