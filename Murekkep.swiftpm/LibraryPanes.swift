@@ -56,6 +56,35 @@ struct SidebarToggle: View {
     }
 }
 
+/// A pane's page (the notes, a course, the search): its header (title, buttons, filter and sort) on
+/// the theme's picture, then what it holds on the notes' wash (NotesWash), which runs the pane's
+/// full width from just above the first row to the bottom of the pane and scrolls with the notes.
+struct PaneScroll<Header: View, Content: View>: View {
+    @ViewBuilder var header: () -> Header
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        GeometryReader { pane in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        header()
+                    }
+                    .padding(.horizontal, 40)
+                    VStack(alignment: .leading, spacing: 24) {
+                        content()
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 24)
+                    .padding(.bottom, 40)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(NotesWash(reach: pane.size.height))
+                }
+            }
+        }
+    }
+}
+
 /// The library's buttons: quiet (a hairline on paper) or filled (ink on paper), 40 points tall
 /// with a 44-point touch.
 struct LibraryButton: View {
@@ -357,41 +386,38 @@ struct NotesPane: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                PaneHeader(title: title, showToggle: showToggle, actions: actions) {
-                    LibraryButton(Loc.t("PDF içe aktar")) { actions.importPDF(nil) }
-                    LibraryButton(Loc.t("Yeni not"), filled: true) { actions.newNotebook(nil) }
-                }
-                HStack(spacing: 12) {
-                    if place == .home {
-                        Picker(Loc.t("Göster"), selection: $filterRaw) {
-                            ForEach(NoteFilter.allCases) { f in
-                                Text(f.title).tag(f.rawValue)
-                            }
+        PaneScroll {
+            PaneHeader(title: title, showToggle: showToggle, actions: actions) {
+                LibraryButton(Loc.t("PDF içe aktar")) { actions.importPDF(nil) }
+                LibraryButton(Loc.t("Yeni not"), filled: true) { actions.newNotebook(nil) }
+            }
+            HStack(spacing: 12) {
+                if place == .home {
+                    Picker(Loc.t("Göster"), selection: $filterRaw) {
+                        ForEach(NoteFilter.allCases) { f in
+                            Text(f.title).tag(f.rawValue)
                         }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 320)
                     }
-                    Spacer(minLength: 0)
-                    if place != .recent {
-                        sortMenu
-                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 320)
                 }
-                if place == .pdfs {
-                    DropZone(title: Loc.t("PDF'leri buraya sürükle"), detail: Loc.t("Dosyalar'dan ya da başka bir uygulamadan bırakabilirsin."),
-                             isTargeted: dropping) { actions.importPDF(nil) }
-                }
-                if notes.isEmpty {
-                    empty
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 30)
-                } else {
-                    NoteGrid(notes: notes, actions: actions)
+                Spacer(minLength: 0)
+                if place != .recent {
+                    sortMenu
                 }
             }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 40)
+        } content: {
+            if place == .pdfs {
+                DropZone(title: Loc.t("PDF'leri buraya sürükle"), detail: Loc.t("Dosyalar'dan ya da başka bir uygulamadan bırakabilirsin."),
+                         isTargeted: dropping) { actions.importPDF(nil) }
+            }
+            if notes.isEmpty {
+                empty
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 30)
+            } else {
+                NoteGrid(notes: notes, actions: actions)
+            }
         }
         .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in actions.drop(providers, nil) }
         .overlay {
@@ -465,69 +491,66 @@ struct SearchPane: View {
         }
         let overviews = studio.overviews.filter { $0.title.localizedCaseInsensitiveContains(query) }
         let courses = store.sections.filter { $0.name.localizedCaseInsensitiveContains(query) }
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Every row below counts, the places found inside the notes too.
-                PaneHeader(title: "“\(query)”", subtitle: Loc.t("{0} sonuç", "\(notes.count + overviews.count + courses.count + hits.count)"),
-                           showToggle: showToggle, actions: actions) {
-                    EmptyView()
-                }
-                if notes.isEmpty && overviews.isEmpty && courses.isEmpty && hits.isEmpty && !searching {
-                    ContentUnavailableView.search(text: query)
-                        .frame(maxWidth: .infinity)
-                }
-                if !courses.isEmpty {
-                    SectionTitle(title: Loc.t("Dersler"))
-                    HStack(spacing: 12) {
-                        ForEach(courses) { section in
-                            Button {
-                                actions.go(.course(section.id))
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: section.symbol)
-                                        .foregroundStyle(section.color)
-                                    Text(section.name)
-                                        .foregroundStyle(Theme.text)
-                                }
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .frame(height: 40)
-                                .background(Theme.paper2, in: Capsule())
-                                .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-                                .padding(.vertical, 2)
-                                .contentShape(Rectangle())
+        PaneScroll {
+            // Every row below counts, the places found inside the notes too.
+            PaneHeader(title: "“\(query)”", subtitle: Loc.t("{0} sonuç", "\(notes.count + overviews.count + courses.count + hits.count)"),
+                       showToggle: showToggle, actions: actions) {
+                EmptyView()
+            }
+        } content: {
+            if notes.isEmpty && overviews.isEmpty && courses.isEmpty && hits.isEmpty && !searching {
+                ContentUnavailableView.search(text: query)
+                    .frame(maxWidth: .infinity)
+            }
+            if !courses.isEmpty {
+                SectionTitle(title: Loc.t("Dersler"))
+                HStack(spacing: 12) {
+                    ForEach(courses) { section in
+                        Button {
+                            actions.go(.course(section.id))
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: section.symbol)
+                                    .foregroundStyle(section.color)
+                                Text(section.name)
+                                    .foregroundStyle(Theme.text)
                             }
-                            .buttonStyle(.plain)
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 14)
+                            .frame(height: 40)
+                            .background(Theme.paper2, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                            .padding(.vertical, 2)
+                            .contentShape(Rectangle())
                         }
-                    }
-                }
-                if !notes.isEmpty {
-                    SectionTitle(title: Loc.t("Notlar"))
-                    NoteGrid(notes: notes, actions: actions)
-                }
-                if !overviews.isEmpty {
-                    SectionTitle(title: Loc.t("Özetler"))
-                    OverviewGrid(overviews: overviews, actions: actions)
-                }
-                if searching || !hits.isEmpty {
-                    HStack(spacing: 10) {
-                        SectionTitle(title: Loc.t("Notların içinde"))
-                        if searching { ProgressView() }
-                    }
-                    VStack(spacing: 8) {
-                        ForEach(hits) { h in
-                            Button {
-                                actions.openAt(h.note, h.page)
-                            } label: {
-                                hitRow(h)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 40)
+            if !notes.isEmpty {
+                SectionTitle(title: Loc.t("Notlar"))
+                NoteGrid(notes: notes, actions: actions)
+            }
+            if !overviews.isEmpty {
+                SectionTitle(title: Loc.t("Özetler"))
+                OverviewGrid(overviews: overviews, actions: actions)
+            }
+            if searching || !hits.isEmpty {
+                HStack(spacing: 10) {
+                    SectionTitle(title: Loc.t("Notların içinde"))
+                    if searching { ProgressView() }
+                }
+                VStack(spacing: 8) {
+                    ForEach(hits) { h in
+                        Button {
+                            actions.openAt(h.note, h.page)
+                        } label: {
+                            hitRow(h)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
         .task(id: query) {
             hits = []
@@ -609,43 +632,40 @@ struct CoursePane: View {
         let notes = store.notes.filter { $0.sectionID == section.id }
         let pdfs = notes.filter { $0.kind == .pdf }
         let notebooks = notes.filter { $0.kind == .notebook }
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                header(pdfs: pdfs.count, notebooks: notebooks.count)
-                Picker(Loc.t("Bölüm"), selection: $tabRaw) {
-                    ForEach(CourseTab.allCases) { t in
-                        Text(t.title).tag(t.rawValue)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 460)
-                switch tab {
-                case .sources:
-                    DropZone(title: Loc.t("Bu dersin PDF'lerini buraya sürükle"),
-                             detail: Loc.t("Ders notları, slaytlar, kitap bölümleri. Asistan ve stüdyo hepsinden birlikte yararlanır."),
-                             isTargeted: dropping) { actions.importPDF(section.id) }
-                    if pdfs.isEmpty {
-                        Text(Loc.t("Henüz kaynak yok. PDF ekleyince buradan video ve sesli özet çıkarabilirsin."))
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.muted)
-                    } else {
-                        NoteGrid(notes: pdfs, actions: actions)
-                    }
-                case .notebooks:
-                    HStack {
-                        Text(notebooks.isEmpty ? Loc.t("Bu derste henüz defter yok.") : Loc.t("{0} defter", "\(notebooks.count)"))
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.muted)
-                        Spacer()
-                        LibraryButton(Loc.t("Yeni defter")) { actions.newNotebook(section.id) }
-                    }
-                    NoteGrid(notes: notebooks, actions: actions)
-                case .studio:
-                    StudioSection(sectionID: section.id, tint: section.color, actions: actions)
+        PaneScroll {
+            header(pdfs: pdfs.count, notebooks: notebooks.count)
+            Picker(Loc.t("Bölüm"), selection: $tabRaw) {
+                ForEach(CourseTab.allCases) { t in
+                    Text(t.title).tag(t.rawValue)
                 }
             }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 40)
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 460)
+        } content: {
+            switch tab {
+            case .sources:
+                DropZone(title: Loc.t("Bu dersin PDF'lerini buraya sürükle"),
+                         detail: Loc.t("Ders notları, slaytlar, kitap bölümleri. Asistan ve stüdyo hepsinden birlikte yararlanır."),
+                         isTargeted: dropping) { actions.importPDF(section.id) }
+                if pdfs.isEmpty {
+                    Text(Loc.t("Henüz kaynak yok. PDF ekleyince buradan video ve sesli özet çıkarabilirsin."))
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.muted)
+                } else {
+                    NoteGrid(notes: pdfs, actions: actions)
+                }
+            case .notebooks:
+                HStack {
+                    Text(notebooks.isEmpty ? Loc.t("Bu derste henüz defter yok.") : Loc.t("{0} defter", "\(notebooks.count)"))
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.muted)
+                    Spacer()
+                    LibraryButton(Loc.t("Yeni defter")) { actions.newNotebook(section.id) }
+                }
+                NoteGrid(notes: notebooks, actions: actions)
+            case .studio:
+                StudioSection(sectionID: section.id, tint: section.color, actions: actions)
+            }
         }
         .onDrop(of: [.pdf, .image], isTargeted: $dropping) { providers in
             tabRaw = CourseTab.sources.rawValue

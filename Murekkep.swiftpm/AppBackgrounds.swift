@@ -133,6 +133,17 @@ enum AppBackground: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// The notes' own wash (NotesWash): warm paper at 0.88 on a light picture, night at 0.65 on a
+    /// dark one, under the covers, their captions and the empty state. Measured over every pixel of
+    /// each picture, so whatever the crop: the grey captions ("3 sayfa, dün") keep at least 5.5:1 on
+    /// the light pictures and 4.5:1 on at least 96 % of each dark one, down to 3.5:1 on the
+    /// brightest gold and light (night at 0.72 would keep 4.5:1 everywhere). None without a
+    /// picture: black and white and the ruled paper are paper already.
+    var notesWash: Double {
+        guard imageName != nil else { return 0 }
+        return isDark ? 0.65 : 0.88
+    }
+
     /// The theme's own accent, from its palette: gold on the dark pictures of the zen set, the
     /// picture's ink on the light ones, the brand ink elsewhere. The chrome still draws its chosen
     /// states with Theme.ink; this stands ready for the day the palettes are wired in.
@@ -227,6 +238,35 @@ struct LibraryBackdrop: ViewModifier {
             .background {
                 AppBackgroundView(kind: kind)
                     .ignoresSafeArea()
+            }
+    }
+}
+
+/// The wash the notes lie on over a Pro theme's picture (`notesWash`). The picture stays clear
+/// behind the sidebar and the pane's header; the wash lies behind the view it modifies (PaneScroll
+/// gives that the pane's full width) and fades in over its top 40 points. `reach` is the pane's
+/// height: the wash runs that far past the notes, so it reaches the bottom of the pane when there
+/// are only a few (the scroll view clips the rest).
+struct NotesWash: ViewModifier {
+    @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var pro = ProStore.shared
+    let reach: CGFloat
+
+    func body(content: Content) -> some View {
+        let kind = settings.shownBackground(locked: pro.locks)
+        let tone: Color = (kind.isDark ? Color.black : Theme.paperWarm).opacity(kind.notesWash)
+        content
+            .background(alignment: .top) {
+                if kind.notesWash > 0 {
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [tone.opacity(0), tone], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 40)
+                        tone
+                    }
+                    .padding(.bottom, -reach)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
             }
     }
 }
