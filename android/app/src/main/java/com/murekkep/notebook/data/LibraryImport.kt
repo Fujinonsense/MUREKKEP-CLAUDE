@@ -35,8 +35,9 @@ import kotlin.math.max
 // in as they are, and photos picked or dropped together become one PDF, a page per photo, while a
 // banner counts them. The work runs in the process's own scope, not the library screen's, so
 // opening a note or Ayarlar meanwhile never cuts an import off halfway (which left its copy on disk
-// with no record). The library showing at the end opens the one note an import from its buttons
-// brought in, and lists the files that could not be read.
+// with no record). An import goes into a course, or into none: the library showing at the end opens
+// the one note an import from its buttons brought into none (one brought into a course stays in the
+// course, as on iPad), and lists the files that could not be read.
 
 class LibraryImport private constructor(context: Context) {
     private val app: Context = context.applicationContext
@@ -71,17 +72,20 @@ class LibraryImport private constructor(context: Context) {
             shared ?: synchronized(this) { shared ?: LibraryImport(context).also { shared = it } }
     }
 
-    /** Files from the system's picker: each PDF as it is, the photos among them as one PDF named after the first. */
-    fun importFiles(uris: List<Uri>) = start(uris, open = true) { importAll(uris) }
+    /** Files from the system's picker into [section] (a course's id) or into none: each PDF as it
+     *  is, the photos among them as one PDF named after the first. */
+    fun importFiles(uris: List<Uri>, section: String? = null) = start(uris, open = section == null) { importAll(uris, section) }
 
-    /** Photos from the gallery, as one PDF named "Fotoğraf" and the moment. */
-    fun importPhotos(uris: List<Uri>) = start(uris, open = true) {
-        val meta = convertPhotos(uris, defaultPhotoTitle())
+    /** Photos from the gallery into [section] or into none, as one PDF named "Fotoğraf" and the moment. */
+    fun importPhotos(uris: List<Uri>, section: String? = null) = start(uris, open = section == null) {
+        val meta = convertPhotos(uris, defaultPhotoTitle(), section)
         if (meta != null) Imported(listOf(meta), emptyList()) else Imported(emptyList(), names(uris))
     }
 
-    /** Files dragged in from another app; [release] gives back the right to read them once they are copied. */
-    fun importDropped(uris: List<Uri>, release: () -> Unit) = start(uris, open = false, release = release) { importAll(uris) }
+    /** Files dragged in from another app into [section] or into none; [release] gives back the right
+     *  to read them once they are copied. */
+    fun importDropped(uris: List<Uri>, section: String?, release: () -> Unit) =
+        start(uris, open = false, release = release) { importAll(uris, section) }
 
     fun clearFailed() {
         failed = emptyList()
@@ -110,25 +114,26 @@ class LibraryImport private constructor(context: Context) {
         }
     }
 
-    private suspend fun importAll(uris: List<Uri>): Imported {
+    private suspend fun importAll(uris: List<Uri>, section: String?): Imported {
         val photos = withContext(Dispatchers.IO) { uris.filter { isPhoto(it) } }
         val added = ArrayList<NotebookMeta>()
         val failedNames = ArrayList<String>()
         for (uri in uris) {
             if (uri in photos) continue
-            val meta = store.importPdf(uri)
+            val meta = store.importPdf(uri, section)
             if (meta != null) added.add(meta) else failedNames.addAll(names(listOf(uri)))
         }
         if (photos.isNotEmpty()) {
             val first = names(photos.take(1)).first().substringBeforeLast('.').trim()
-            val meta = convertPhotos(photos, first.ifEmpty { defaultPhotoTitle() })
+            val meta = convertPhotos(photos, first.ifEmpty { defaultPhotoTitle() }, section)
             if (meta != null) added.add(meta) else failedNames.addAll(names(photos))
         }
         return Imported(added, failedNames)
     }
 
-    /** Photos as one PDF in the library, titled [title]; null when none of them could be read. */
-    private suspend fun convertPhotos(photos: List<Uri>, title: String): NotebookMeta? {
+    /** Photos as one PDF in the library (in [section], or in no course), titled [title]; null when
+     *  none of them could be read. */
+    private suspend fun convertPhotos(photos: List<Uri>, title: String, section: String?): NotebookMeta? {
         photoProgress = PhotoProgress(0, photos.size)
         val dir = File(app.cacheDir, "photo-import/" + UUID.randomUUID())
         try {
@@ -142,7 +147,7 @@ class LibraryImport private constructor(context: Context) {
                     }
                 }
             }
-            return if (pages > 0) store.importPdf(Uri.fromFile(file)) else null
+            return if (pages > 0) store.importPdf(Uri.fromFile(file), section) else null
         } catch (e: Exception) {
             return null
         } finally {
