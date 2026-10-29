@@ -236,8 +236,11 @@ fun EditorScreen(
                 if (state.tool is Tool.Lasso && state.selection != null) {
                     SelectionBar(state, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomInset + 52.dp + bottomClearance))
                 }
+                // Down the right side the bar keeps the iPad's 60 dp from the top and the bottom while
+                // it fits; on a short window those give way (down to 12) before its tray has to scroll.
+                val column = columnMargin(maxHeight, bottomInset, penColumnLength(state))
                 paletteTarget?.let { target ->
-                    PaletteDockHint(target, Modifier.align(target.alignment).padding(paletteInsets(target, bottomInset, leftInset, rightInset)))
+                    PaletteDockHint(target, Modifier.align(target.alignment).padding(paletteInsets(target, bottomInset, leftInset, rightInset, column)))
                 }
                 // Against the canvas as it is now: a drag outlives a turn of the tablet.
                 val nearest = { finger: Offset ->
@@ -272,10 +275,12 @@ fun EditorScreen(
                     },
                     modifier = Modifier
                         .align(edge.alignment)
-                        .padding(paletteInsets(edge, bottomInset, leftInset, rightInset))
+                        .padding(paletteInsets(edge, bottomInset, leftInset, rightInset, column))
                         .offset { IntOffset(paletteDrag.x.roundToInt(), paletteDrag.y.roundToInt()) },
                 )
-                PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset, bottom = bottomInset + 8.dp + bottomClearance))
+                // Beside a bar down the right side that came closer to the bottom, the badge stands left of it.
+                val badgeShift = if (edge == PaletteEdge.TRAILING && column < PaletteColumnMargin) PenBarHeight + PaletteSideMargin else 0.dp
+                PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset + badgeShift, bottom = bottomInset + 8.dp + bottomClearance))
                 SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter))
             }
         }
@@ -309,11 +314,20 @@ private val PaletteTopMargin = 10.dp
 private val PaletteSideMargin = 12.dp
 private val PaletteColumnMargin = 60.dp
 
-private fun paletteInsets(edge: PaletteEdge, bottomInset: Dp, leftInset: Dp, rightInset: Dp): PaddingValues = when (edge) {
+/** [column]: the room above and below a bar down the right side ([columnMargin]). */
+private fun paletteInsets(edge: PaletteEdge, bottomInset: Dp, leftInset: Dp, rightInset: Dp, column: Dp): PaddingValues = when (edge) {
     PaletteEdge.TOP -> PaddingValues(start = PaletteSideMargin + leftInset, top = PaletteTopMargin, end = PaletteSideMargin + rightInset)
     PaletteEdge.BOTTOM -> PaddingValues(start = PaletteSideMargin + leftInset, end = PaletteSideMargin + rightInset, bottom = bottomInset + PenBarMargin)
-    PaletteEdge.TRAILING -> PaddingValues(top = PaletteColumnMargin, end = PaletteSideMargin + rightInset, bottom = PaletteColumnMargin + bottomInset)
+    PaletteEdge.TRAILING -> PaddingValues(top = column, end = PaletteSideMargin + rightInset, bottom = column + bottomInset)
 }
+
+/**
+ * The room above and below a bar down the right side of a canvas [canvasHeight] tall: the iPad's
+ * 60 dp while the whole bar ([barLength], every pen in view) fits, less on a short window, down to
+ * the 12 dp of its side, before its tray has to scroll.
+ */
+internal fun columnMargin(canvasHeight: Dp, bottomInset: Dp, barLength: Dp): Dp =
+    ((canvasHeight - bottomInset - barLength) / 2).coerceIn(PaletteSideMargin, PaletteColumnMargin)
 
 private val PaletteEdge.alignment: Alignment
     get() = when (this) {

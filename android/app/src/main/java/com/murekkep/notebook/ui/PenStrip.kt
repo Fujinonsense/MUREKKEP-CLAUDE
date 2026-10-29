@@ -10,6 +10,7 @@ import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +43,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -70,7 +73,9 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -80,9 +85,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush as Gradient
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -95,6 +107,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -333,6 +346,27 @@ private fun fixedLength(addPage: Boolean): Dp {
     return BarPadding * 2 + GripLength + Zen.target * buttons + DividerLength * 3 + FoldLength + BarGap * (items - 1)
 }
 
+// The tray's sizes: a pen's slot across, the gap between slots, the padding at its ends, the
+// hairline between the favourites and the pens used last with its margins, the longest it grows
+// down the right side and along an edge, and how far its ends fade while it scrolls.
+private val SlotWidth = 30.dp
+private val TrayGap = 4.dp
+private val TrayPadding = 4.dp
+private val TrayHairline = 7.dp
+private val TrayMaxColumn = 440.dp
+private val TrayMaxRow = 560.dp
+private val TrayFade = 16.dp
+
+/** The upright bar's whole length with every pen of its tray in view (the iPad's columnLength and
+ *  the rest of the bar), for the room the screen gives it down the right side. */
+internal fun penColumnLength(state: EditorState): Dp {
+    val (favorites, recent) = state.barPens
+    val slots = favorites.size + recent.size + 1
+    val hairline = if (favorites.isNotEmpty() && recent.isNotEmpty()) TrayHairline + TrayGap else 0.dp
+    val tray = (SlotWidth * slots + TrayGap * (slots - 1) + hairline + TrayPadding * 2).coerceAtMost(TrayMaxColumn)
+    return fixedLength(addPage = !state.isPdf) + BarGap + tray
+}
+
 /** A row along the top or the bottom, a column down the right side; [content] gets the modifier that
  *  lets a child take what the others leave. */
 @Composable
@@ -359,7 +393,8 @@ private fun UndoRedo(state: EditorState, vertical: Boolean) {
 /**
  * The pens of the bar, then the eraser, in a tray that scrolls when they run long (560 dp along the top
  * or the bottom, 440 down the side): the favourites, a hairline, the pens used last. A picked pen
- * stands out toward the page.
+ * stands out toward the page. The tool in hand is always in view: the tray scrolls to it when it is
+ * picked and when the tray's room changes; while pens lie past an end, that end fades.
  */
 @Composable
 private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setSheet: (Sheet?) -> Unit, popoverRoom: Dp, modifier: Modifier) {
@@ -368,6 +403,7 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
     val (favorites, recent) = state.barPens
     val tick = rememberSelectionTick()
     val close = { setSheet(null) }
+    var room by remember { mutableIntStateOf(0) }
 
     @Composable
     fun pen(brush: Brush) {
@@ -377,6 +413,7 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
             ink = state.color(brush).toColor(),
             selected = selected,
             vertical = vertical,
+            room = room,
             onTap = {
                 if (selected) {
                     setSheet(Sheet.PEN_FROM_SLOT)
@@ -405,6 +442,7 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
             ink = Color.Transparent,
             selected = tool is Tool.Eraser,
             vertical = vertical,
+            room = room,
             onTap = {
                 if (tool is Tool.Eraser) {
                     setSheet(Sheet.ERASER)
@@ -423,17 +461,54 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
     val scroll = rememberScrollState()
     if (vertical) {
         Column(
-            modifier.heightIn(max = 440.dp).verticalScroll(scroll).width(PenBarHeight).padding(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier
+                .heightIn(max = TrayMaxColumn)
+                .onSizeChanged { room = it.height }
+                .fadedEnds(scroll, vertical = true)
+                .verticalScroll(scroll)
+                .width(PenBarHeight)
+                .padding(vertical = TrayPadding),
+            verticalArrangement = Arrangement.spacedBy(TrayGap),
             horizontalAlignment = Alignment.End,
         ) { pens() }
     } else {
         Row(
-            modifier.widthIn(max = 560.dp).horizontalScroll(scroll).height(PenBarHeight).padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier
+                .widthIn(max = TrayMaxRow)
+                .onSizeChanged { room = it.width }
+                .fadedEnds(scroll, vertical = false)
+                .horizontalScroll(scroll)
+                .height(PenBarHeight)
+                .padding(horizontal = TrayPadding),
+            horizontalArrangement = Arrangement.spacedBy(TrayGap),
             verticalAlignment = Alignment.Bottom,
         ) { pens() }
     }
+}
+
+/** While pens lie past an end of the tray, that end fades out over [TrayFade], so a cut pen reads
+ *  as more to scroll to. On the tray's frame, outside its scroll. */
+private fun Modifier.fadedEnds(scroll: ScrollState, vertical: Boolean): Modifier =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        val fade = TrayFade.toPx()
+        val length = if (vertical) size.height else size.width
+        if (scroll.value > 0) fadeEnd(from = 0f, to = fade, vertical)
+        if (scroll.value < scroll.maxValue) fadeEnd(from = length, to = length - fade, vertical)
+    }
+
+/** Fades what is drawn from clear at [from] to whole at [to], along the tray. */
+private fun DrawScope.fadeEnd(from: Float, to: Float, vertical: Boolean) {
+    val start = if (vertical) Offset(0f, from) else Offset(from, 0f)
+    val end = if (vertical) Offset(0f, to) else Offset(to, 0f)
+    val near = minOf(from, to)
+    val span = kotlin.math.abs(to - from)
+    drawRect(
+        Gradient.linearGradient(listOf(Color.Transparent, Color.Black), start, end),
+        topLeft = if (vertical) Offset(0f, near) else Offset(near, 0f),
+        size = if (vertical) Size(size.width, span) else Size(span, size.height),
+        blendMode = BlendMode.DstIn,
+    )
 }
 
 /** The hairline between the favourites and the pens used last. */
@@ -700,7 +775,9 @@ private fun Modifier.lyingInSlot(): Modifier = layout { measurable, _ ->
 /**
  * One pen in the tray (null: the eraser): 30 dp across, the bar's thickness long, the pen cut at the
  * tray's edge. A long press on a pen ([favorite] not null) opens its menu: add it to the favourites or
- * take it away. [popover] is the pen's settings when they are open, anchored to this slot.
+ * take it away. [popover] is the pen's settings when they are open, anchored to this slot. The one in
+ * hand ([selected]) scrolls the tray to itself, clear of the faded ends, whenever it is picked or
+ * the tray's [room] changes.
  */
 @Composable
 private fun PenSlot(
@@ -708,6 +785,7 @@ private fun PenSlot(
     ink: Color,
     selected: Boolean,
     vertical: Boolean,
+    room: Int,
     onTap: () -> Unit,
     favorite: Boolean?,
     onToggleFavorite: () -> Unit = {},
@@ -719,9 +797,22 @@ private fun PenSlot(
     val openSettings = stringResource(R.string.open_settings_action)
     var menu by remember { mutableStateOf(false) }
     val favoriteLabel = favorite?.let { stringResource(if (it) R.string.remove_favorite else R.string.add_favorite) }
+    val inView = remember { BringIntoViewRequester() }
+    if (selected) {
+        val density = LocalDensity.current
+        LaunchedEffect(room, vertical) {
+            with(density) {
+                val fade = TrayFade.toPx()
+                val across = PenBarHeight.toPx()
+                val along = SlotWidth.toPx()
+                inView.bringIntoView(if (vertical) Rect(0f, -fade, across, along + fade) else Rect(-fade, 0f, along + fade, across))
+            }
+        }
+    }
     Box(
         Modifier
-            .then(if (vertical) Modifier.size(PenBarHeight, 30.dp) else Modifier.size(30.dp, PenBarHeight))
+            .bringIntoViewRequester(inView)
+            .then(if (vertical) Modifier.size(PenBarHeight, SlotWidth) else Modifier.size(SlotWidth, PenBarHeight))
             .clipToBounds()
             .combinedClickable(
                 onClick = onTap,
