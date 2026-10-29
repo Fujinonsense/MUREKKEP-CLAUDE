@@ -17,7 +17,8 @@ struct MurekkepApp: App {
                 .environmentObject(settings)
                 .environmentObject(studio)
                 .environmentObject(study)
-                .tint(Color(red: 0.10, green: 0.33, blue: 0.80))
+                // The one accent: the brand ink, lighter at night.
+                .tint(Theme.ink)
                 // Another language rebuilds every screen in it (dates and numbers follow too).
                 .environment(\.locale, Locale(identifier: settings.language == .english ? "en_US" : "tr_TR"))
                 .id(settings.language)

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The Mürekkep Pro page: what Pro adds beside the free plan, the three plans and the purchase.
 /// It opens when a free allowance runs out or a Pro-only thing is touched, and from Settings. The
-/// artwork at the top is one of the Pro library backgrounds.
+/// picture at the top is one of the ultra premium themes, and the themes stand in a row below.
 struct PaywallView: View {
     let reason: ProPlan.Feature?
     let close: () -> Void
@@ -24,6 +24,7 @@ struct PaywallView: View {
                         reasonLine(reason)
                     }
                     perks
+                    themes
                     if store.isPro {
                         active
                     } else if store.pricesFailed {
@@ -49,12 +50,15 @@ struct PaywallView: View {
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 34, height: 34)
-                    .background(.regularMaterial, in: Circle())
+                    .foregroundStyle(Theme.text)
+                    .frame(width: 36, height: 36)
+                    .background(Theme.paper, in: Circle())
+                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(16)
+            .padding(12)
             .accessibilityLabel(Loc.t("Kapat"))
         }
         .task { await store.refresh() }
@@ -70,16 +74,19 @@ struct PaywallView: View {
 
     // MARK: Parts
 
+    /// The first ultra premium theme's picture, fading into the paper the title stands on.
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
-            AppBackgroundView(kind: .holo)
+            AppBackgroundView(kind: AppBackground.available.first { $0.isPremium } ?? .ebru)
             LinearGradient(colors: [.clear, Theme.paper], startPoint: .center, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: "Mürekkep Pro")
-                    .font(Theme.display(.largeTitle, weight: .bold))
-                Text(Loc.t("Sınırsız yapay zekâ, 3D mürekkepler ve yaratıcı arka planlar."))
+                    .font(Theme.display(.largeTitle))
+                    .kerning(-0.8)
+                    .foregroundStyle(Theme.text)
+                Text(Loc.t("Sınırsız yapay zekâ, 3B mürekkepler ve ultra premium temalar."))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 18)
@@ -88,13 +95,38 @@ struct PaywallView: View {
         .clipped()
     }
 
+    private static let cardShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
     private func reasonLine(_ reason: ProPlan.Feature) -> some View {
         Label(Self.reasonText(reason), systemImage: "info.circle")
             .font(.subheadline.weight(.medium))
-            .foregroundStyle(Theme.ink)
+            .foregroundStyle(Theme.text)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(Theme.paper2, in: Self.cardShape)
+            .overlay(Self.cardShape.strokeBorder(Theme.hairline, lineWidth: 1))
+    }
+
+    /// The ultra premium themes this build has, as small pictures with their names.
+    private var themes: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(AppBackground.available.filter(\.isPremium)) { kind in
+                    VStack(alignment: .leading, spacing: 6) {
+                        AppBackgroundView(kind: kind, preview: true)
+                            .frame(width: 104, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
+                        Text(kind.title)
+                            .font(.caption)
+                            .foregroundStyle(Theme.muted)
+                            .lineLimit(1)
+                    }
+                    .frame(width: 104)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
     }
 
     static func reasonText(_ reason: ProPlan.Feature) -> String {
@@ -110,7 +142,7 @@ struct PaywallView: View {
         case .premiumTemplate:
             return Loc.t("Bu şablon Mürekkep Pro'da.")
         case .premiumBackground:
-            return Loc.t("Bu arka plan Mürekkep Pro'da.")
+            return Loc.t("Bu tema Mürekkep Pro'da.")
         case .trialInk:
             return Loc.t("Doğa kalemlerinin deneme mürekkebi bitti. Pro ile sınırsız çizersin.")
         }
@@ -128,13 +160,13 @@ struct PaywallView: View {
                  Loc.t("Ücretsiz planda deneme mürekkebi kadar"))
             perk("paintbrush.pointed", Loc.t("10 adet 3D mürekkep"),
                  Loc.t("Lav, altın, krom, galaksi, yıldırım, inci ve fazlası"))
-            perk("photo.artframe", Loc.t("10 sanat arka planı: sıvı cam, ipek, erimiş altın ve fazlası"),
-                 Loc.t("Ücretsiz planda düz renkler"))
+            perk("photo.artframe", Loc.t("Ultra premium temalar: ebru, lapis, varak, sıvı cam ve fazlası"),
+                 Loc.t("Ücretsiz planda siyah beyaz"))
             perk("doc.richtext", Loc.t("Planlayıcı, CV ve özel şablonlar"),
                  Loc.t("Haftalık, aylık, toplantı, nota kâğıdı ve fazlası"))
             Text(Loc.t("Defterler, PDF'ler, kalemler, metin kalemi ve öğrenci şablonları her zaman ücretsiz."))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.muted)
                 .padding(.top, 2)
         }
     }
@@ -142,15 +174,16 @@ struct PaywallView: View {
     private func perk(_ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.ink)
+                .font(.body.weight(.medium))
+                .foregroundStyle(Theme.text2)
                 .frame(width: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.text)
                 Text(detail)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
             }
         }
         .accessibilityElement(children: .combine)
@@ -207,7 +240,7 @@ struct PaywallView: View {
                         Text(Self.title(kind))
                             .font(.headline)
                         if kind == .yearly && store.trialEligible {
-                            Chip(text: Loc.t("{0} gün ücretsiz", "\(store.trialDays)"), symbol: "gift", tint: Theme.aiEnd)
+                            Chip(text: Loc.t("{0} gün ücretsiz", "\(store.trialDays)"), symbol: "gift", tint: Theme.ink)
                         }
                     }
                     Text(detail(kind))
@@ -228,8 +261,8 @@ struct PaywallView: View {
                 }
             }
             .padding(16)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
-            .overlay(shape.strokeBorder(chosen ? Theme.ink : Theme.hairline, lineWidth: chosen ? 2 : 0.6))
+            .background(Theme.paper2, in: shape)
+            .overlay(shape.strokeBorder(chosen ? Theme.ink : Theme.hairline, lineWidth: chosen ? 2 : 1))
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -353,7 +386,8 @@ struct PaywallView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(Theme.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Theme.paper2, in: Self.cardShape)
+        .overlay(Self.cardShape.strokeBorder(Theme.hairline, lineWidth: 1))
     }
 
     private var active: some View {
@@ -361,17 +395,19 @@ struct PaywallView: View {
             Label(Loc.t("Mürekkep Pro açık"), systemImage: "checkmark.seal.fill")
                 .font(.headline)
                 .foregroundStyle(Theme.ink)
-            Text(Loc.t("Bütün sınırlar kalktı; 3D mürekkepler, özel şablonlar ve arka planlar senin."))
+            Text(Loc.t("Bütün sınırlar kalktı; 3B mürekkepler, özel şablonlar ve ultra premium temalar senin."))
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.muted)
             Button(Loc.t("Aboneliği yönet")) {
                 Task { await store.manageSubscription() }
             }
             .font(.subheadline.weight(.semibold))
+            .tint(Theme.ink)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Theme.paper2, in: Self.cardShape)
+        .overlay(Self.cardShape.strokeBorder(Theme.hairline, lineWidth: 1))
     }
 
     private var footer: some View {
@@ -389,17 +425,15 @@ struct PaywallView: View {
     }
 }
 
-/// The small mark on Pro-only pens, templates and backgrounds: "Pro" in the app's ink gradient.
+/// The small mark on Pro-only pens, templates and themes: "Pro" in flat ink.
 struct ProBadge: View {
     var body: some View {
         Text(verbatim: "Pro")
-            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .font(.caption2.weight(.bold))
             .foregroundStyle(Color.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2.5)
-            .background(Theme.ai, in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
-            .shadow(color: Theme.aiStart.opacity(0.35), radius: 3, y: 1)
+            .background(Theme.ink, in: Capsule())
             .accessibilityLabel(Text(verbatim: "Mürekkep Pro"))
     }
 }
@@ -407,6 +441,8 @@ struct ProBadge: View {
 /// The quiet way to Mürekkep Pro at the top right of the library (App Store edition, until Pro is on).
 struct ProCornerButton: View {
     @ObservedObject private var pro = ProStore.shared
+
+    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
     var body: some View {
         if pro.locks {
@@ -418,11 +454,13 @@ struct ProCornerButton: View {
                     Text(verbatim: "Pro")
                 }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.ai)
+                .foregroundStyle(Theme.text)
                 .padding(.horizontal, 14)
-                .frame(height: 42)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.aiStart.opacity(0.35), lineWidth: 1))
+                .frame(height: 40)
+                .background(Theme.paper2, in: Self.shape)
+                .overlay(Self.shape.strokeBorder(Theme.hairline, lineWidth: 1))
+                .padding(.vertical, 2)
+                .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle())
             .accessibilityLabel(Loc.t("Mürekkep Pro'ya geç"))
