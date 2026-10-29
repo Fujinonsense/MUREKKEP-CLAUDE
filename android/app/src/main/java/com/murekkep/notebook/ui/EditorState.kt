@@ -24,12 +24,14 @@ import com.murekkep.notebook.ink.Vec2
 import com.murekkep.notebook.ink.referenceNow
 import com.murekkep.notebook.ink.restroke
 import com.murekkep.notebook.render.PageLayout
+import com.murekkep.notebook.render.PageSize
+import java.io.File
 import kotlin.math.hypot
 import kotlin.random.Random
 
 // Ink, tools and undo for one open notebook: the part of Murekkep.swiftpm/EditorModel.swift the
 // Android edition has (pens, the eraser, the lasso, held shapes and the shape tool, undo, the blank
-// page at the end; no stickers, text pen or PDFs yet). The canvas reads `pages` on its render thread, so the list is
+// page at the end of a notebook, imported PDFs; no stickers or text pen yet). The canvas reads `pages` on its render thread, so the list is
 // replaced whole on every change and never mutated: a frame always sees one consistent snapshot.
 // Everything else runs on the main thread (touch events and the chrome).
 
@@ -62,6 +64,11 @@ class EditorState(
     /** The ink file could not be read (damaged, or written by a newer Mürekkep): nothing is changed
      *  or written, so the file stays for a build that can read it. */
     val readOnly: Boolean = false,
+    /** An imported PDF's page sizes: its pages are the PDF's and none are added. Null for a notebook,
+     *  whose pages are A4. */
+    val pageSizes: List<PageSize>? = null,
+    /** The PDF the pages are drawn on (its `source.pdf`), for the canvas and the export. */
+    val pdfFile: File? = null,
 ) {
     companion object {
         /** A4 in points. */
@@ -71,8 +78,16 @@ class EditorState(
         private const val UNDO_LIMIT = 300
     }
 
-    /** Every page is A4 in points: 595.28 x 841.89. */
-    val pageSize: Pair<Float, Float> = Pair(A4_WIDTH, A4_HEIGHT)
+    /** Pages written on an imported PDF. */
+    val isPdf: Boolean get() = pageSizes != null
+
+    private var cachedLayout: PageLayout? = null
+
+    /** Where the pages stand in the document (main thread). */
+    fun layout(): PageLayout {
+        cachedLayout?.let { if (it.pageCount == pages.size) return it }
+        return (pageSizes?.let { PageLayout(it) } ?: PageLayout(pages.size)).also { cachedLayout = it }
+    }
 
     /** Snapshot of every page's ink. Pages never go, and a blank page always ends the notebook. */
     @Volatile
@@ -221,7 +236,7 @@ class EditorState(
         if (list.isEmpty()) list = listOf(PageInk(emptyList(), 1))
         // An opened notebook ends in a blank page too (keepBlankPageAtEnd), in memory only: opening
         // writes nothing; the page is saved with the next change.
-        if (!readOnly && list.last().strokes.isNotEmpty()) list = list + PageInk(emptyList(), 1)
+        if (!readOnly && pageSizes == null && list.last().strokes.isNotEmpty()) list = list + PageInk(emptyList(), 1)
         pages = list
         pageCount = list.size
     }
@@ -446,19 +461,19 @@ class EditorState(
 
     /** The page a selection belongs to once dropped with its middle over another page. */
     private fun dropPage(sel: InkSelection): Int? {
-        val layout = PageLayout(pages.size)
-        val cx = (sel.bounds.minX + sel.bounds.maxX) / 2f
-        val cy = layout.top(sel.page) + (sel.bounds.minY + sel.bounds.maxY) / 2f
-        val target = layout.pageAt(cx, cy) ?: return null
+        val layout = layout()
+        val c = layout.toDoc(sel.page, (sel.bounds.minX + sel.bounds.maxX) / 2f, (sel.bounds.minY + sel.bounds.maxY) / 2f)
+        val target = layout.pageAt(c.x, c.y) ?: return null
         return if (target != sel.page && target in pages.indices) target else null
     }
 
     /** Carries the selected strokes from their page to `target`, where they stay at the same place on
      *  the document. One undo step puts both pages back. */
     private fun carrySelection(sel: InkSelection, before: List<Stroke>, target: Int) {
-        val layout = PageLayout(pages.size)
+        val layout = layout()
+        val dx = layout.left(sel.page) - layout.left(target)
         val dy = layout.top(sel.page) - layout.top(target)
-        val carried = Lasso.shifted(pages[sel.page].strokes.filter { it.id in sel.ids }, 0f, dy)
+        val carried = Lasso.shifted(pages[sel.page].strokes.filter { it.id in sel.ids }, dx, dy)
         val after = pages[sel.page].strokes.filter { it.id !in sel.ids }
         val targetBefore = pages[target].strokes
         val targetAfter = targetBefore + carried
@@ -629,7 +644,7 @@ class EditorState(
 
     /** Adds a blank page at the end (the chrome's "new page"). */
     fun addPage() {
-        if (readOnly) return
+        if (readOnly || isPdf) return
         appendBlankPage()
     }
 
@@ -637,7 +652,7 @@ class EditorState(
      *  joins after it, so the next page is there before the pen gets to it (no pulling at the end).
      *  Pages only come this way, they never go: an undo leaves the blank page in place. */
     private fun keepBlankPageAtEnd() {
-        if (readOnly) return
+        if (readOnly || isPdf) return
         if (pages.lastOrNull()?.strokes?.isNotEmpty() != true) return
         appendBlankPage()
     }

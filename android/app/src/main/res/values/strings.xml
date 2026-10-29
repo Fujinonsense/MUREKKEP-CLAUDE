@@ -32,6 +32,12 @@
     <string name="dashed_line">Dashed line</string>
     <string name="polygon_sides">Number of sides: %1$d</string>
     <string name="shapes_help">Drag with the pen. Lines snap at 15° steps, squares and circles click into equal sides; the size shows next to the pen. The shape is drawn with the ink you picked last.</string>
+    <string name="import_pdf">Import PDF</string>
+    <string name="importing_pdf">Importing…</string>
+    <string name="pdf_unreadable_title">This PDF could not be opened</string>
+    <string name="pdf_unreadable_message">It may be damaged or locked with a password. Try another copy of it.</string>
+    <string name="share_pdf">Share as PDF</string>
+    <string name="export_failed">The PDF could not be made.</string>
     <string name="eraser">Eraser</string>
     <string name="eraser_whole_stroke">Whole stroke</string>
     <string name="eraser_partial">Partial</string>

@@ -140,15 +140,30 @@ class InkRenderer {
         )
         val docTop = -input.originY / input.zoom
         val docBottom = (height - input.originY) / input.zoom
+        val docLeft = -input.originX / input.zoom
+        val docRight = (width - input.originX) / input.zoom
         val visible = input.layout.pagesBetween(docTop - 8f, docBottom + 8f)
         var animationFps = 0
+        val pdf = input.pdf
+        pdf?.upload()
+        val onScreen = ArrayList<PdfTextures.Region>()
 
         for (index in visible) {
-            val x0 = 0f
+            val x0 = input.layout.left(index)
             val y0 = input.layout.top(index)
-            val w = input.layout.pageWidth
-            val h = input.layout.pageHeight
-            drawPageBackground(frame, x0, y0, w, h, input.paperStyle)
+            val w = input.layout.width(index)
+            val h = input.layout.height(index)
+            if (pdf != null) {
+                drawPdfPage(frame, pdf, index, x0, y0, w, h, input.fitScale)
+                // The part of the page on screen, for a sharper picture when zoomed in.
+                val l = max(docLeft, x0)
+                val t = max(docTop, y0)
+                val r = min(docRight, x0 + w)
+                val b = min(docBottom, y0 + h)
+                if (r > l && b > t) onScreen.add(PdfTextures.Region(index, l - x0, t - y0, r - l, b - t))
+            } else {
+                drawPageBackground(frame, x0, y0, w, h, input.paperStyle)
+            }
             if (!scissor(frame, x0, y0, w, h)) continue
             val page = if (index < input.pages.size) input.pages[index] else PageInk()
             val gpu = cached(index, page)
@@ -167,6 +182,10 @@ class InkRenderer {
             if (activeHere?.brush == Brush.LAVA) animationFps = 60
         }
         trimCache(visible)
+        if (pdf != null) {
+            pdf.want(onScreen, frame.scale)
+            pdf.keep(visible)
+        }
         return animationFps
     }
 
@@ -240,6 +259,30 @@ class InkRenderer {
             GLES30.glUniform1f(p.loc("u_shadowRadius"), 0f)
             GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
         }
+    }
+
+    /** A PDF page under the ink: its shadow, white until its picture is ready, the picture at about
+     *  fit-width size, and over it the sharper picture of the part on screen when zoomed in. */
+    private fun drawPdfPage(frame: Frame, pdf: PdfTextures, index: Int, x: Float, y: Float, w: Float, h: Float, fitScale: Float) {
+        drawPageBackground(frame, x, y, w, h, 0)
+        val base = pdf.base(index, PageSize(w, h), fitScale) ?: return
+        drawPicture(frame, base, x, y)
+        val detail = pdf.detail(index) ?: return
+        if (detail.scale > base.scale * 1.05f) drawPicture(frame, detail, x, y)
+    }
+
+    private fun drawPicture(frame: Frame, t: PdfTextures.Texture, x: Float, y: Float) {
+        val p = use("texture", frame) ?: return
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, t.id)
+        GLES30.glUniform1i(p.loc("u_texture"), 0)
+        GLES30.glUniform4f(p.loc("u_rect"), x + t.left, y + t.top, t.width, t.height)
+        GLES30.glUniform4f(p.loc("u_uvRect"), 0f, 0f, 1f, 1f)
+        GLES30.glUniform2f(p.loc("u_pageOrigin"), x, y)
+        GLES30.glUniform2f(p.loc("u_pageSize"), t.width, t.height)
+        GLES30.glUniform1ui(p.loc("u_style"), 0)
+        GLES30.glUniform1f(p.loc("u_shadowRadius"), 0f)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
     }
 
     /** Limits drawing to the page (its pixels); false when it is off screen. */

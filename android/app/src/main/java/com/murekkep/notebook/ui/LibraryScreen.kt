@@ -65,15 +65,47 @@ import com.murekkep.notebook.data.NotebookStore
 import com.murekkep.notebook.data.PaperStyle
 import java.text.DateFormat
 import java.util.Date
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.murekkep.notebook.data.NoteKind
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 
 // The library (Murekkep.swiftpm/LibraryView): a grid of notebook cards, newest first, with a button
-// for a new notebook; each card's menu renames or deletes it (deleting asks first).
+// for a new notebook and one that imports a PDF to write on; each card's menu renames or deletes it
+// (deleting asks first). A PDF's card shows its first page.
 
 @Composable
 fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit) {
     LaunchedEffect(store) { store.load() }
     var renaming by remember { mutableStateOf<NotebookMeta?>(null) }
     var deleting by remember { mutableStateOf<NotebookMeta?>(null) }
+    var importFailed by remember { mutableStateOf(false) }
+    var importing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importing = true
+        scope.launch {
+            val meta = store.importPdf(uri)
+            importing = false
+            if (meta == null) importFailed = true else onOpen(meta)
+        }
+    }
     val titlePrefix = stringResource(R.string.notebook_default_title)
     val direction = LocalLayoutDirection.current
 
@@ -82,6 +114,13 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.library_title), style = MaterialTheme.typography.titleLarge) },
+                actions = {
+                    TextButton(onClick = { pickPdf.launch(arrayOf("application/pdf")) }, enabled = !importing) {
+                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(if (importing) R.string.importing_pdf else R.string.import_pdf))
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -114,6 +153,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit) {
                 items(notebooks, key = { it.id }) { meta ->
                     NotebookCard(
                         meta = meta,
+                        thumbnail = if (meta.kind == NoteKind.PDF) store.thumbFile(meta.id) else null,
                         onOpen = { onOpen(meta) },
                         onRename = { renaming = meta },
                         onDelete = { deleting = meta },
@@ -121,6 +161,15 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit) {
                 }
             }
         }
+    }
+
+    if (importFailed) {
+        AlertDialog(
+            onDismissRequest = { importFailed = false },
+            confirmButton = { TextButton(onClick = { importFailed = false }) { Text(stringResource(R.string.ok)) } },
+            title = { Text(stringResource(R.string.pdf_unreadable_title)) },
+            text = { Text(stringResource(R.string.pdf_unreadable_message)) },
+        )
     }
 
     renaming?.let { meta ->
@@ -167,7 +216,7 @@ private fun EmptyLibrary(modifier: Modifier) {
 }
 
 @Composable
-private fun NotebookCard(meta: NotebookMeta, onOpen: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun NotebookCard(meta: NotebookMeta, thumbnail: File?, onOpen: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     Column {
         Card(
@@ -178,7 +227,11 @@ private fun NotebookCard(meta: NotebookMeta, onOpen: () -> Unit, onRename: () ->
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         ) {
             Box(Modifier.fillMaxSize()) {
-                PaperPreview(meta.paper, Modifier.fillMaxSize())
+                if (thumbnail != null) {
+                    PagePicture(thumbnail, Modifier.fillMaxSize())
+                } else {
+                    PaperPreview(meta.paper, Modifier.fillMaxSize())
+                }
                 Box(Modifier.align(Alignment.TopEnd)) {
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(
@@ -329,4 +382,24 @@ private fun DeleteDialog(meta: NotebookMeta, onDismiss: () -> Unit, onDelete: ()
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
+}
+
+/** A PDF's first page (`thumb.jpg`, made when it was imported), read off the main thread; white
+ *  until it is there. */
+@Composable
+private fun PagePicture(file: File, modifier: Modifier) {
+    val picture by produceState<ImageBitmap?>(null, file) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                BitmapFactory.decodeFile(file.path)?.asImageBitmap()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+    Box(modifier.background(Color.White)) {
+        picture?.let {
+            Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        }
+    }
 }

@@ -32,7 +32,7 @@ import com.murekkep.notebook.ink.referenceNow
 import com.murekkep.notebook.render.ActiveStroke
 import com.murekkep.notebook.render.FrameInput
 import com.murekkep.notebook.render.InkRenderer
-import com.murekkep.notebook.render.PageLayout
+import com.murekkep.notebook.render.PdfTextures
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.Tool
 import com.murekkep.notebook.ui.localizedTitle
@@ -184,8 +184,15 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     /** The screen is going away: frees the GL resources. */
     fun release() {
         state.onInkChange = null
-        queueEvent { renderer.release() }
+        val pdf = pdfTextures
+        queueEvent {
+            renderer.release()
+            pdf?.release()
+        }
     }
+
+    /** An imported PDF's pages as textures (made once; the GL thread uses and frees them). */
+    private val pdfTextures: PdfTextures? = state.pdfFile?.let { file -> PdfTextures(file) { requestRender() } }
 
     // MARK: frames
 
@@ -193,13 +200,15 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val pages = state.pages
         frameInput = FrameInput(
             pages = pages,
-            layout = PageLayout(pages.size),
+            layout = pageLayout(),
             originX = originX,
             originY = originY,
             zoom = zoom,
             active = active,
             paperStyle = 1,
             animate = true,
+            pdf = pdfTextures,
+            fitScale = fitZoom,
         )
         requestRender()
         publishOverlay()
@@ -220,23 +229,26 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             null
         }
         val label = liveLabel
+        val l = pageLayout()
         val handles = state.shapeEdit?.let { edit ->
-            val top = pageLayout().top(edit.page)
+            val left = l.left(edit.page)
+            val top = l.top(edit.page)
             val hs = edit.shape.handles
             FloatArray(hs.size * 2).also { a ->
                 for ((i, h) in hs.withIndex()) {
-                    a[2 * i] = viewX(h.x.toFloat())
+                    a[2 * i] = viewX(left + h.x.toFloat())
                     a[2 * i + 1] = viewY(top + h.y.toFloat())
                 }
             }
         }
         val preview = shapeStart?.let { (page, from) ->
             val end = shapeEnd ?: return@let null
-            val top = pageLayout().top(page)
+            val left = l.left(page)
+            val top = l.top(page)
             state.shapePaths(from, end).map { path ->
                 FloatArray(path.size * 2).also { a ->
                     for ((i, q) in path.withIndex()) {
-                        a[2 * i] = viewX(q.x)
+                        a[2 * i] = viewX(left + q.x)
                         a[2 * i + 1] = viewY(top + q.y)
                     }
                 }
@@ -250,8 +262,9 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             return
         }
         val box = sel?.let { s ->
-            val top = pageLayout().top(s.page)
-            ViewRect(viewX(s.bounds.minX), viewY(top + s.bounds.minY), viewX(s.bounds.maxX), viewY(top + s.bounds.maxY))
+            val left = l.left(s.page)
+            val top = l.top(s.page)
+            ViewRect(viewX(left + s.bounds.minX), viewY(top + s.bounds.minY), viewX(left + s.bounds.maxX), viewY(top + s.bounds.maxY))
         }
         overlayShown = true
         onOverlay?.invoke(CanvasOverlay(loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }, handles, preview))
@@ -297,7 +310,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        val layout = PageLayout(1)
+        val layout = pageLayout()
         val margin = 24f * resources.displayMetrics.density
         val oldFit = fitZoom
         fitZoom = max(0.1f, (w - 2 * margin) / layout.pageWidth)
@@ -320,7 +333,13 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     // MARK: document geometry
 
-    private fun pageLayout() = PageLayout(state.pages.size)
+    private fun pageLayout() = state.layout()
+
+    /** A document point in page `page`'s own points (where its ink lives). */
+    private fun toPage(page: Int, doc: Vec2): Vec2 = pageLayout().toPage(page, doc.x, doc.y)
+
+    /** A point of page `page` in document points. */
+    private fun toDoc(page: Int, x: Float, y: Float): Vec2 = pageLayout().toDoc(page, x, y)
 
     private fun clamp() {
         val l = pageLayout()
@@ -437,10 +456,12 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             else event.getAxisValue(MotionEvent.AXIS_ORIENTATION, i)
         val millis = if (h >= 0) event.getHistoricalEventTime(h) else event.eventTime
         val page = active?.page ?: eraserPage ?: 0
-        val top = pageLayout().top(page)
+        val l = pageLayout()
+        val left = l.left(page)
+        val top = l.top(page)
         val stylus = event.getToolType(i) == MotionEvent.TOOL_TYPE_STYLUS || event.getToolType(i) == MotionEvent.TOOL_TYPE_ERASER
         return InputSample(
-            x = docX(x),
+            x = docX(x) - left,
             y = docY(y) - top,
             // The iPad's raw force scale: a full press is the Pencil's full width, a finger reads as average.
             force = InputSample.force(pressure, stylus),
@@ -467,7 +488,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             if (index != null) {
                 val h = edit.shape.handles[index]
                 shapeHandleDrag = index
-                shapeHandleOffset = Pt(h.x - x, h.y - (y - l.top(edit.page)))
+                val at = l.toPage(edit.page, x, y)
+                shapeHandleOffset = Pt(h.x - at.x, h.y - at.y)
                 lastShapeSnapped = false
                 state.beginShapeHandleDrag()
                 penPointer = event.getPointerId(i)
@@ -478,7 +500,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         }
         if (state.tool is Tool.Shape && !borrowsEraser) {
             val page = l.pageAt(x, y) ?: return
-            val start = Pt(x.toDouble(), (y - l.top(page)).toDouble())
+            val at = l.toPage(page, x, y)
+            val start = Pt(at.x.toDouble(), at.y.toDouble())
             shapeStart = Pair(page, start)
             shapeEnd = start
             penPointer = event.getPointerId(i)
@@ -499,7 +522,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         if (state.tool is Tool.Eraser || temporaryEraser) {
             state.temporaryEraser = temporaryEraser
             eraserPage = page
-            val p = Vec2(x, y - l.top(page))
+            val p = l.toPage(page, x, y)
             lastEraser = p
             state.beginErase(page)
             state.erase(page, p, p)
@@ -564,7 +587,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val tip = b.tip
         if (name != null && adjustment != null && tip != null) {
             val scale = NumberFormat.getPercentInstance().format(adjustment.scale)
-            liveLabel = Pair(Vec2(tip.x, tip.y + pageLayout().top(a.page)), "${name.localizedTitle()} · $scale · ${adjustment.degrees}°")
+            liveLabel = Pair(toDoc(a.page, tip.x, tip.y), "${name.localizedTitle()} · $scale · ${adjustment.degrees}°")
         }
         trackHold(event.getX(i), event.getY(i))
         requestFrame()
@@ -665,7 +688,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private fun lassoBegan(doc: Vec2): Boolean {
         val l = pageLayout()
         state.displayedSelection?.let { sel ->
-            val drag = Lasso.grab(Vec2(doc.x, doc.y - l.top(sel.page)), sel.bounds, unit())
+            val drag = Lasso.grab(l.toPage(sel.page, doc.x, doc.y), sel.bounds, unit())
             if (drag != null) {
                 selectionDrag = drag
                 // A turn starts settled at 0°: no click until it leaves and comes back.
@@ -688,7 +711,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val drag = selectionDrag
         if (drag != null) {
             val sel = state.displayedSelection ?: return
-            val p = Vec2(doc.x, doc.y - pageLayout().top(sel.page))
+            val p = toPage(sel.page, doc)
             when (drag) {
                 is SelectionDrag.Move -> state.transformSelection(p - drag.start, 1f, Vec2.ZERO)
                 is SelectionDrag.Scale -> {
@@ -740,8 +763,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val page = lassoPage
         penPointer = -1
         if (page == null) return
-        val top = pageLayout().top(page)
-        val polygon = lassoPoints.map { Vec2(it.x, it.y - top) }
+        val polygon = lassoPoints.map { toPage(page, it) }
         lassoPage = null
         lassoPoints.clear()
         var length = 0f
@@ -788,7 +810,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         if (last != null) {
             val title = name.localizedTitle()
             val text = if (b.shapeAdjustment == null) title else context.getString(R.string.shape_hold_hint, title)
-            liveLabel = Pair(Vec2(last.x.toFloat(), last.y.toFloat() + pageLayout().top(a.page)), text)
+            liveLabel = Pair(toDoc(a.page, last.x.toFloat(), last.y.toFloat()), text)
         }
         requestFrame()
     }
@@ -797,7 +819,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
      *  `inside`, a touch within a closed shape (or along an open one) that misses the corner handles
      *  takes the move handle, so the shape moves from anywhere on it. */
     private fun shapeHandle(doc: Vec2, edit: ShapeEditState, reach: Float, inside: Boolean = true): Int? {
-        val p = Pt(doc.x.toDouble(), (doc.y - pageLayout().top(edit.page)).toDouble())
+        val at = toPage(edit.page, doc)
+        val p = Pt(at.x.toDouble(), at.y.toDouble())
         val handles = edit.shape.handles
         var best: Int? = null
         var bestDistance = (reach * unit()).toDouble()
@@ -828,7 +851,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     private fun dragShapeHandle(index: Int, doc: Vec2) {
         val edit = state.shapeEdit ?: return
-        val p = Pt(doc.x + shapeHandleOffset.x, doc.y - pageLayout().top(edit.page) + shapeHandleOffset.y)
+        val at = toPage(edit.page, doc)
+        val p = Pt(at.x + shapeHandleOffset.x, at.y + shapeHandleOffset.y)
         val feedback = state.moveShapeHandle(index, p, snap = 9.0 * unit()) ?: return
         if (feedback.snapped && !lastShapeSnapped) tick()
         lastShapeSnapped = feedback.snapped
@@ -843,11 +867,11 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
      *  lines and on squares for boxes, with its size next to the pen. */
     private fun updateShapePreview(doc: Vec2) {
         val (page, from) = shapeStart ?: return
-        val top = pageLayout().top(page)
-        val end = ShapeBuilder.snappedEnd(state.shapeKind, Pt(doc.x.toDouble(), (doc.y - top).toDouble()), from)
+        val at = toPage(page, doc)
+        val end = ShapeBuilder.snappedEnd(state.shapeKind, Pt(at.x.toDouble(), at.y.toDouble()), from)
         shapeEnd = end
         val separator = DecimalFormatSymbols.getInstance().decimalSeparator
-        liveLabel = Pair(Vec2(end.x.toFloat(), end.y.toFloat() + top), ShapeBuilder.measurement(state.shapeKind, from, end).format(separator))
+        liveLabel = Pair(toDoc(page, end.x.toFloat(), end.y.toFloat()), ShapeBuilder.measurement(state.shapeKind, from, end).format(separator))
         requestFrame()
     }
 

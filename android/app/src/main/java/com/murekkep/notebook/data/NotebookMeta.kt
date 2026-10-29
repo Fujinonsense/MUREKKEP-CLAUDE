@@ -4,8 +4,18 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
-// A notebook's record on disk (Murekkep.swiftpm/LibraryStore.swift: NoteMeta, and PaperStyle from
-// Templates.swift). The Android edition keeps notebooks only (no PDFs yet), one folder a notebook.
+// A notebook's record on disk (Murekkep.swiftpm/LibraryStore.swift: NoteMeta, NoteKind, and
+// PaperStyle from Templates.swift): one folder a note, a notebook or an imported PDF.
+
+/** A notebook of blank pages, or a PDF written on. Raw values are the iPad's. */
+enum class NoteKind(val raw: String) {
+    NOTEBOOK("notebook"),
+    PDF("pdf");
+
+    companion object {
+        fun fromRaw(raw: String?): NoteKind = entries.firstOrNull { it.raw == raw } ?: NOTEBOOK
+    }
+}
 
 /** Page template of a notebook. Raw values are the iPad's (they are stored in meta.json); existing
  *  ones never change. */
@@ -46,6 +56,8 @@ data class NotebookMeta(
     val modified: Long,
     val pageCount: Int,
     val paper: PaperStyle,
+    /** An imported PDF keeps it as `source.pdf` in its folder, its pages are the PDF's. */
+    val kind: NoteKind = NoteKind.NOTEBOOK,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -54,6 +66,7 @@ data class NotebookMeta(
         .put("modified", Instant.ofEpochMilli(modified).toString())
         .put("pageCount", pageCount)
         .put("paper", paper.raw)
+        .put("kind", kind.raw)
 
     companion object {
         /** The record in a folder named `id`; missing or odd fields take sensible defaults. */
@@ -67,6 +80,7 @@ data class NotebookMeta(
                 modified = parseTime(json.opt("modified")) ?: created,
                 pageCount = json.optInt("pageCount", 1).coerceAtLeast(1),
                 paper = PaperStyle.fromRaw(json.optString("paper", "")),
+                kind = NoteKind.fromRaw(json.optString("kind", "")),
             )
         }
 

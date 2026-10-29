@@ -1,10 +1,14 @@
 package com.murekkep.notebook.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.murekkep.notebook.ink.Stroke
+import com.murekkep.notebook.render.PageSize
 import com.murekkep.notebook.ui.EditorState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -21,9 +25,11 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
+import kotlin.math.max
 
 // Notebooks on disk (Murekkep.swiftpm/LibraryStore.swift and the saving part of EditorModel.swift):
-// filesDir/notebooks/<uuid>/meta.json and ink.bin. There is no index file: the library is the folders,
+// filesDir/notebooks/<uuid>/meta.json and ink.bin, and for an imported PDF its source.pdf and a
+// picture of its first page for the library (thumb.jpg). There is no index file: the library is the folders,
 // each with its own record, so one damaged record never empties the list. Saves wait for a pause in
 // writing (1.2 s, as on iPad), take their snapshot on the main thread and write it on the IO
 // dispatcher; the screen asks for a save at once when it leaves or the app goes to the background.
@@ -58,6 +64,9 @@ class NotebookStore private constructor(context: Context) {
     companion object {
         private const val SAVE_DELAY_MS = 1200L
 
+        /** The library's picture of a PDF's first page, in pixels across. */
+        private const val THUMB_WIDTH = 360f
+
         @Volatile
         private var shared: NotebookStore? = null
 
@@ -73,6 +82,10 @@ class NotebookStore private constructor(context: Context) {
     fun metaFile(id: String): File = File(folder(id), "meta.json")
 
     fun inkFile(id: String): File = File(folder(id), "ink.bin")
+
+    fun pdfFile(id: String): File = File(folder(id), "source.pdf")
+
+    fun thumbFile(id: String): File = File(folder(id), "thumb.jpg")
 
     fun notebook(id: String): NotebookMeta? = notebooks.firstOrNull { it.id == id }
 
@@ -131,6 +144,67 @@ class NotebookStore private constructor(context: Context) {
         return meta
     }
 
+    /** Copies the PDF behind `uri` into a new note at the top of the library, with a picture of its
+     *  first page. Null when Android cannot read it (damaged, or locked with a password); then
+     *  nothing is left behind. */
+    suspend fun importPdf(uri: Uri): NotebookMeta? {
+        val id = UUID.randomUUID().toString()
+        val dir = folder(id)
+        val pageCount = withContext(Dispatchers.IO) {
+            try {
+                dir.mkdirs()
+                val copied = app.contentResolver.openInputStream(uri)?.use { input ->
+                    pdfFile(id).outputStream().use { input.copyTo(it) }
+                }
+                if (copied == null) {
+                    null
+                } else {
+                    PdfSource(pdfFile(id)).use { pdf ->
+                        if (pdf.pageCount == 0) {
+                            null
+                        } else {
+                            val picture = pdf.renderPage(0, THUMB_WIDTH / pdf.sizes[0].width)
+                            thumbFile(id).outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+                            picture.recycle()
+                            pdf.pageCount
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (pageCount == null) {
+            withContext(Dispatchers.IO) { dir.deleteRecursively() }
+            return null
+        }
+        val now = System.currentTimeMillis()
+        val meta = NotebookMeta(
+            id = id,
+            title = displayName(uri).ifEmpty { "PDF" },
+            created = now,
+            modified = now,
+            pageCount = pageCount,
+            paper = PaperStyle.PLAIN,
+            kind = NoteKind.PDF,
+        )
+        notebooks = listOf(meta) + notebooks
+        scope.launch(Dispatchers.IO) { writeMeta(meta) }
+        return meta
+    }
+
+    /** The document's name without ".pdf" (what the iPad calls an imported PDF). */
+    private fun displayName(uri: Uri): String {
+        val name = try {
+            app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        } catch (e: Exception) {
+            null
+        } ?: uri.lastPathSegment ?: ""
+        return name.substringAfterLast('/').removeSuffix(".pdf").removeSuffix(".PDF").trim()
+    }
+
     fun rename(id: String, title: String) {
         val t = title.trim()
         if (t.isEmpty()) return
@@ -161,32 +235,45 @@ class NotebookStore private constructor(context: Context) {
 
     // MARK: Opening and saving
 
-    private class Loaded(val pages: List<List<Stroke>>, val readOnly: Boolean)
+    private class Loaded(val pages: List<List<Stroke>>, val readOnly: Boolean, val pdfSizes: List<PageSize>? = null)
 
     /** Loads the notebook's ink off the main thread into an editor state hooked to this store. */
     suspend fun open(meta: NotebookMeta): EditorState {
         val file = inkFile(meta.id)
+        val isPdf = meta.kind == NoteKind.PDF
         val result = withContext(Dispatchers.IO) {
+            // An imported PDF's pages are its own; a PDF Android cannot read now opens read-only.
+            val sizes = if (!isPdf) null else try {
+                PdfSource(pdfFile(meta.id)).use { it.sizes }.takeIf { it.isNotEmpty() }
+            } catch (e: Exception) {
+                null
+            }
+            val pdfUnreadable = isPdf && sizes == null
             if (!file.isFile) {
-                Loaded(emptyList(), readOnly = false)
+                Loaded(emptyList(), readOnly = pdfUnreadable, pdfSizes = sizes)
             } else {
                 try {
-                    Loaded(InkCodec.decode(file.readBytes()), readOnly = false)
+                    Loaded(InkCodec.decode(file.readBytes()), readOnly = pdfUnreadable, pdfSizes = sizes)
                 } catch (e: Exception) {
                     // The file stays as it is: the notebook opens read-only, so no save replaces ink
                     // a newer build (or a repair) could still read.
-                    Loaded(emptyList(), readOnly = true)
+                    Loaded(emptyList(), readOnly = true, pdfSizes = sizes)
                 }
             }
         }
-        // The record may count more pages than the file holds (blank pages at the end).
+        // The record may count more pages than the file holds (blank pages at the end); a PDF has
+        // exactly its own pages.
         val pages = ArrayList(result.pages)
-        while (pages.size < meta.pageCount) pages.add(emptyList())
+        val sizes = result.pdfSizes ?: if (isPdf) List(max(meta.pageCount, pages.size)) { PageSize.A4 } else null
+        while (pages.size < (sizes?.size ?: meta.pageCount)) pages.add(emptyList())
+        if (sizes != null) while (pages.size > sizes.size) pages.removeAt(pages.size - 1)
         val state = EditorState(
             notebookId = meta.id,
             initialPages = pages,
             prefs = penPreferences,
             readOnly = result.readOnly,
+            pageSizes = sizes,
+            pdfFile = if (result.pdfSizes != null) pdfFile(meta.id) else null,
         )
         state.title = meta.title
         state.onDirty = { scheduleSave(state) }

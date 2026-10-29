@@ -32,6 +32,12 @@
     <string name="dashed_line">Kesikli çizgi</string>
     <string name="polygon_sides">Kenar sayısı: %1$d</string>
     <string name="shapes_help">Kalemle sürükle. Doğrular 15°\'lerde, kare ve daireler eşit kenarda tık diye oturur; ölçü kalemin yanında görünür. Şekil son seçtiğin mürekkeple çizilir.</string>
+    <string name="import_pdf">PDF içe aktar</string>
+    <string name="importing_pdf">Aktarılıyor…</string>
+    <string name="pdf_unreadable_title">Bu PDF açılamadı</string>
+    <string name="pdf_unreadable_message">Bozuk ya da parolalı olabilir. Başka bir kopyasını dene.</string>
+    <string name="share_pdf">PDF olarak paylaş</string>
+    <string name="export_failed">PDF hazırlanamadı.</string>
     <string name="eraser">Silgi</string>
     <string name="eraser_whole_stroke">Tüm çizgi</string>
     <string name="eraser_partial">Kısmi</string>
