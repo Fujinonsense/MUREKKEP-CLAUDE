@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -16,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.murekkep.notebook.data.OutlineEntry
 import com.murekkep.notebook.render.PageSize
@@ -37,7 +40,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 
 // The page navigator the page badge opens (PageNavigator.swift): a number typed offers Go, which
-// goes there and closes it; a page's picture goes to its page; the ribbon bookmarks the page in
+// goes there and closes it, Go and the ribbon whole even on a narrow window; a page's picture goes
+// to its page; the ribbon bookmarks the page in
 // view and Bookmarks lists it (a hint while there are none); only an imported PDF has Contents, its
 // headings open under their disclosure arrow and go to their pages, and a PDF without them says so;
 // they are read when Contents is first chosen, not as the navigator opens, and stay with the note.
@@ -59,11 +63,11 @@ class PageNavigatorTest {
     private fun notebook(pages: Int, current: Int = 0) =
         EditorState(initialPages = List(pages) { emptyList() }).also { it.currentPage = current }
 
-    private fun show(state: EditorState) {
+    private fun show(state: EditorState, width: Dp = 400.dp) {
         state.onScrollRequest = { jumps += it }
         compose.setContent {
             MurekkepTheme {
-                Box(Modifier.fillMaxSize()) { PageNavigator(state, 400.dp, 580.dp) { closed++ } }
+                Box(Modifier.fillMaxSize()) { PageNavigator(state, width, 580.dp) { closed++ } }
             }
         }
     }
@@ -77,6 +81,15 @@ class PageNavigatorTest {
         compose.onNodeWithText("Go").performClick()
         assertEquals(listOf(4), jumps)
         assertEquals(1, closed)
+    }
+
+    @Test
+    fun onANarrowWindowGoAndTheRibbonKeepTheirFullSizeWhileANumberIsTyped() {
+        show(notebook(5), width = 200.dp)
+        compose.onNode(hasSetTextAction()).performTextInput("3")
+        // Go and the ribbon are the spec's 44 dp tap targets; the field gives way instead.
+        compose.onNodeWithText("Go").assertHeightIsEqualTo(Zen.target)
+        compose.onNodeWithContentDescription("Bookmark this page").assertWidthIsEqualTo(Zen.target).assertHeightIsEqualTo(Zen.target)
     }
 
     @Test

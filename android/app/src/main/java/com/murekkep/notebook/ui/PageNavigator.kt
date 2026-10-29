@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -275,7 +274,9 @@ private fun NavigatorHeader(state: EditorState, number: String, onNumber: (Strin
     // The iPad's spring (response 0.25, damping 0.85) as Git comes and goes.
     val pop = spring<Float>(dampingRatio = 0.85f, stiffness = springStiffness(0.25f))
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Git and the ribbon keep their size; the field and its hint take the rest (on a narrow
+        // window the hint wraps and the field gives way, "/ 12" staying whole).
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 BasicTextField(
                     value = number,
@@ -285,7 +286,7 @@ private fun NavigatorHeader(state: EditorState, number: String, onNumber: (Strin
                     cursorBrush = SolidColor(z.accent),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { goTyped() }),
-                    modifier = Modifier.width(104.dp).alignByBaseline().semantics { contentDescription = fieldLabel },
+                    modifier = Modifier.weight(1f, fill = false).width(104.dp).alignByBaseline().semantics { contentDescription = fieldLabel },
                     decorationBox = { field ->
                         Box {
                             // The page in view until a number is typed (the iPad's placeholder).
@@ -303,7 +304,6 @@ private fun NavigatorHeader(state: EditorState, number: String, onNumber: (Strin
             }
             Text(stringResource(R.string.pages_type_number), style = Caption, color = z.muted)
         }
-        Spacer(Modifier.weight(1f))
         AnimatedVisibility(typed != null, enter = scaleIn(pop) + fadeIn(pop), exit = scaleOut(pop) + fadeOut(pop)) {
             GoButton(goTyped)
         }
@@ -311,13 +311,13 @@ private fun NavigatorHeader(state: EditorState, number: String, onNumber: (Strin
     }
 }
 
-/** "Git": filled with the accent (the iPad's borderedProminent in its ink blue). */
+/** "Git": filled with the accent (the iPad's borderedProminent in its ink blue), a 44 dp target. */
 @Composable
 private fun GoButton(onClick: () -> Unit) {
     val shape = RoundedCornerShape(Zen.control)
     Box(
         Modifier
-            .height(40.dp)
+            .height(Zen.target)
             .clip(shape)
             .background(Zen.colors.accent)
             .clickable(role = Role.Button, onClick = onClick)
