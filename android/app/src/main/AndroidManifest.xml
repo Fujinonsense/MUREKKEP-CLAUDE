@@ -13,10 +13,14 @@
         android:supportsRtl="true"
         android:resizeableActivity="true"
         android:theme="@style/Theme.Murekkep">
+        <!-- Compose redraws for these changes itself, so the activity is not made again: the open
+             note keeps its undo history, its place and any popover, and is not read again from disk
+             (a turn, a split screen, a keyboard cover, the dark mode, the font size or bold text,
+             the language). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode|fontScale|fontWeightAdjustment|locale|layoutDirection"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

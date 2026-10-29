@@ -53,6 +53,9 @@ class NotebookStore private constructor(context: Context) {
     private val writtenSequence = HashMap<String, Long>()
     private var nextSequence = 0L
 
+    /** Each note's newest write on the IO dispatcher: `open` waits for it before it reads the ink. */
+    private val writes = HashMap<String, Job>()
+
     /** Every notebook, newest first. Observable from Compose. */
     var notebooks by mutableStateOf<List<NotebookMeta>>(emptyList())
         private set
@@ -250,6 +253,8 @@ class NotebookStore private constructor(context: Context) {
         update(meta.id) { it.copy(opened = System.currentTimeMillis()) }?.let { opened ->
             scope.launch(Dispatchers.IO) { writeMeta(opened) }
         }
+        // The screen that had the note open may have just left: its last save lands first.
+        writes[meta.id]?.join()
         val file = inkFile(meta.id)
         val isPdf = meta.kind == NoteKind.PDF
         val result = withContext(Dispatchers.IO) {
@@ -323,7 +328,7 @@ class NotebookStore private constructor(context: Context) {
         val cover = if (state.isPdf) null else pages.firstOrNull() ?: emptyList()
         // Once the snapshot is taken the write is the store's own job: it goes through, and the
         // library hears of the cover, even when the save is cancelled meanwhile (the note closed).
-        scope.launch(Dispatchers.IO) {
+        writes[id] = scope.launch(Dispatchers.IO) {
             val bytes = InkCodec.encode(pages)
             val coverWritten = synchronized(writeLock) {
                 val last = writtenSequence[id] ?: 0L
