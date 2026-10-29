@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -711,7 +712,10 @@ private fun AllPens(state: EditorState, onPicked: () -> Unit) {
 @Composable
 private fun PenTile(brush: Brush, ink: Color, selected: Boolean, starred: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
     val z = Zen.colors
-    val name = brush.localizedTitle()
+    // The configuration is a key so that a language change, which does not make the activity again
+    // (the manifest's configChanges), names the pens of an open sheet anew: localizedTitle() reads
+    // the locale, which Compose does not watch, and nothing else here reads a string resource.
+    val name = remember(brush, LocalConfiguration.current) { brush.localizedTitle() }
     Column(
         Modifier
             .width(70.dp)
