@@ -106,6 +106,7 @@ private fun PenOptions(state: EditorState, brush: Brush) {
                     ),
                     selected = state.flowerLevel,
                     onSelect = { state.flowerLevel = it },
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 InspectorNote(stringResource(R.string.pen_note_grass))
             }

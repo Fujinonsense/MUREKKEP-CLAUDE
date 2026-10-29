@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -871,22 +872,27 @@ fun ZenSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
     )
 }
 
-/** A row of choices in a paper-3 track; the picked one stands on paper with a hairline. */
+/**
+ * A row of equal choices in a paper-3 track, as wide as [modifier] makes it (the iPad's segmented
+ * pickers fill their row), else as its widest choice allows; the picked one stands on paper with a
+ * hairline.
+ */
 @Composable
 fun ZenSegments(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val z = Zen.colors
-    Row(modifier.background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp)) {
+    Row(modifier.width(IntrinsicSize.Max).background(z.paper3, RoundedCornerShape(Zen.control)).padding(2.dp)) {
         options.forEachIndexed { i, label ->
             val on = i == selected
             Box(
                 Modifier
+                    .weight(1f)
                     .height(32.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) z.paper else Color.Transparent)
                     .then(if (on) Modifier.border(1.dp, z.rule, RoundedCornerShape(8.dp)) else Modifier)
                     .clickable { onSelect(i) }
                     .semantics { this.selected = on }
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -894,6 +900,8 @@ fun ZenSegments(options: List<String>, selected: Int, onSelect: (Int) -> Unit, m
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (on) z.ink else z.ink2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -911,6 +919,7 @@ private fun EraserSettings(state: EditorState) {
         options = listOf(stringResource(R.string.eraser_whole_stroke), stringResource(R.string.eraser_partial)),
         selected = if (state.eraserMode == EraserMode.STROKE) 0 else 1,
         onSelect = { state.eraserMode = if (it == 0) EraserMode.STROKE else EraserMode.PARTIAL },
+        modifier = Modifier.fillMaxWidth(),
     )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         LabelRow(stringResource(R.string.eraser_size), state.eraserSize.roundToInt().toString())

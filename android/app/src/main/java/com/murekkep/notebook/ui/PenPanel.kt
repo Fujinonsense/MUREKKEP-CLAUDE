@@ -94,6 +94,7 @@ internal fun PenPanel(state: EditorState, onPicked: () -> Unit) {
             state.penPanelShelf = PenShelf.entries[i].raw
         },
         modifier = Modifier
+            .fillMaxWidth()
             .padding(start = 20.dp, end = 20.dp, bottom = 14.dp)
             .semantics { contentDescription = shelfLabel },
     )
