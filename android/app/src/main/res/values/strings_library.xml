@@ -1,6 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The library as on the iPad (LibraryView, LibraryPanes, TemplateGallery; English from Translations.swift) -->
+    <string name="save">Save</string>
+    <string name="error">Error</string>
+    <string name="show_sidebar">Show sidebar</string>
+    <string name="clear_search">Clear the search</string>
+    <string name="sort_label">Sort</string>
+    <string name="filter_label">Show</string>
+    <plurals name="search_results">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
+    <string name="search_empty">No results for “%1$s”</string>
+    <string name="search_empty_hint">Check the spelling or try a new search.</string>
+    <string name="empty_home_text">Open a new notebook or import a PDF.</string>
+    <string name="empty_notebooks_title">No notebooks</string>
+    <string name="empty_notebooks_text">Pick a template with “New note” at the top right.</string>
+    <string name="empty_pdfs_title">No PDFs</string>
+    <string name="empty_pdfs_text">Add lecture notes, book chapters and articles here.</string>
+    <string name="drop_title">Drag PDFs here</string>
+    <string name="drop_detail">You can drop them from Files or from another app.</string>
+    <string name="drop_choose">Choose files</string>
+    <string name="drop_release">Drop it here to add it</string>
+    <string name="drop_library">Drop PDFs into the library</string>
+    <string name="import_title">Add a PDF or photos</string>
+    <string name="import_message">Photos become one PDF, one page per photo.</string>
+    <string name="import_from_files">From Files (PDF or photos)</string>
+    <string name="import_from_photos">From Photos</string>
+    <string name="import_photo_progress">Converting photos to a PDF (%1$d/%2$d)</string>
+    <string name="import_failed">Couldn\'t open these files: %1$s</string>
+    <string name="photo_title">Photo</string>
+    <string name="new_notebook_title">New notebook</string>
+    <string name="template_basic">Basic</string>
+    <string name="template_plain">Plain</string>
+    <string name="template_lined">Lined</string>
+    <string name="template_grid">Grid</string>
+    <string name="template_dotted">Dotted</string>
     <string name="export_failed_title">Couldn\'t export</string>
 
     <!-- Ayarlar › Görünüm -->

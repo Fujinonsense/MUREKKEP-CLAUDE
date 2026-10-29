@@ -7,16 +7,15 @@
     <string name="new_notebook">Yeni not</string>
     <string name="notebook_default_title">Not</string>
     <string name="library_empty_title">Henüz not yok</string>
-    <string name="library_empty_hint">“Yeni not”a dokun ve yazmaya başla.</string>
     <string name="more_actions">Daha fazla</string>
     <string name="rename">Yeniden adlandır</string>
     <string name="delete">Sil</string>
-    <string name="rename_title">Defteri yeniden adlandır</string>
-    <string name="notebook_title_label">Başlık</string>
+    <string name="rename_title">Yeniden adlandır</string>
+    <string name="notebook_title_label">Ad</string>
     <string name="ok">Tamam</string>
     <string name="cancel">Vazgeç</string>
-    <string name="delete_title">Bu defter silinsin mi?</string>
-    <string name="delete_message">“%1$s” ve tüm sayfaları silinecek. Bu geri alınamaz.</string>
+    <string name="delete_title">Bu not silinsin mi?</string>
+    <string name="delete_message">Not ve üzerindeki tüm yazılar kalıcı olarak silinir.</string>
     <string name="opening">Açılıyor…</string>
 
     <!-- Düzenleyici -->
@@ -34,8 +33,6 @@
     <string name="shapes_help">Kalemle sürükle. Doğrular 15°\'lerde, kare ve daireler eşit kenarda tık diye oturur; ölçü kalemin yanında görünür. Şekil son seçtiğin mürekkeple çizilir.</string>
     <string name="import_pdf">PDF içe aktar</string>
     <string name="importing_pdf">Aktarılıyor…</string>
-    <string name="pdf_unreadable_title">Bu PDF açılamadı</string>
-    <string name="pdf_unreadable_message">Bozuk ya da parolalı olabilir. Başka bir kopyasını dene.</string>
     <string name="share_pdf">PDF olarak paylaş</string>
     <string name="export_failed">PDF hazırlanamadı.</string>
     <string name="eraser">Silgi</string>
@@ -101,10 +98,7 @@
     <string name="all">Hepsi</string>
     <string name="sort_modified">Son düzenlenen</string>
     <string name="sort_title">Ada göre</string>
-    <string name="sort_created">Oluşturulma</string>
     <string name="pdf_label">PDF</string>
-    <string name="library_section_empty">Burada henüz not yok.</string>
-    <string name="menu">Menü</string>
     <string name="hide_sidebar">Kenar çubuğunu gizle</string>
     <plurals name="pages">
         <item quantity="other">%d sayfa</item>

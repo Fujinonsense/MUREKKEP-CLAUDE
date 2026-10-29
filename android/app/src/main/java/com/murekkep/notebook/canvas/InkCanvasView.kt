@@ -36,6 +36,7 @@ import com.murekkep.notebook.render.PdfTextures
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.Tool
 import com.murekkep.notebook.ui.localizedTitle
+import com.murekkep.notebook.ui.shaderIndex
 import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import javax.microedition.khronos.egl.EGLConfig
@@ -213,7 +214,7 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             originY = originY,
             zoom = zoom,
             active = active,
-            paperStyle = 1,
+            paperStyle = state.paper.shaderIndex,
             animate = true,
             pdf = pdfTextures,
             fitScale = fitZoom,
