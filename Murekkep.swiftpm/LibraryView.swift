@@ -945,9 +945,13 @@ private struct WeekCard: View {
         let week = days
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                // In the app's language (Loc.locale), not the iPad's: formatted() does not read
+                // SwiftUI's locale. One line beside the streak ("Wednesday, September 30").
+                Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Loc.locale)))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer()
                 if streak > 1 {
                     HStack(spacing: 4) {
@@ -1074,10 +1078,11 @@ struct NoteCard: View {
     }
 
     /// "3 sayfa, dün"; a PDF says so first: "PDF, 204 sayfa, 1 saat önce". A fixed text: the live
-    /// ".relative" style would redraw every card each second.
+    /// ".relative" style would redraw every card each second. The time follows the app's language
+    /// (Loc.locale), as the page count does, not the iPad's.
     private var detail: String {
         let pages = Loc.t("{0} sayfa", "\(note.pageCount)")
-        let when = note.modified.formatted(.relative(presentation: .named))
+        let when = note.modified.formatted(.relative(presentation: .named).locale(Loc.locale))
         return (note.kind == .pdf ? "PDF, " : "") + pages + ", " + when
     }
 }

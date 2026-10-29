@@ -90,12 +90,15 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
     Foto (doc.badge.plus), Ders (folder.badge.plus, yeni ders); açık dersin içine. Simge (18,
     medium, ink-2) üstte, ad altta (caption semibold, ink); 58 yüksek, paper + 1 rule, köşe 12.
   - Hafta kartı: paper + 1 rule, köşe 14, iç boşluk 14, satırlar 10 aralıklı. Tarih satırı (gün adı,
-    gün, ay; subheadline semibold ink); seri 1 günü geçince turuncu alev + "{0} gün" (caption
-    semibold ink); yedi sütun Pt Sa Ça Pe Cu Ct Pz (10 semibold muted), 6 altında 22'lik daireler:
-    çalışılan gün accent dolu + beyaz tik, diğerleri paper-3; bugün dairenin 2 dışında 2'lik accent
-    halka (30 çap; çalışılmış günün dolgusunda da görünsün diye); altında
-    "Bugün henüz bir şey yazmadın." / "Bugün {0} not üzerinde çalıştın." (caption muted).
+    gün, ay; subheadline semibold ink; tek satır, gerekirse %85'e küçülür); seri 1 günü geçince
+    turuncu alev + "{0} gün" (caption semibold ink); yedi sütun Pt Sa Ça Pe Cu Ct Pz (10 semibold
+    muted), 6 altında 22'lik daireler: çalışılan gün accent dolu + beyaz tik, diğerleri paper-3;
+    bugün dairenin 2 dışında 2'lik accent halka (30 çap; çalışılmış günün dolgusunda da görünsün
+    diye); altında "Bugün henüz bir şey yazmadın." / "Bugün {0} not üzerinde çalıştın." (caption
+    muted).
   - Listeler ve Kurslar (bugünkü gibi); altta sabit blok: rule çizgisi, Stüdyo, Sesler, Ayarlar.
+- Tarihler (hafta kartının tarih satırı, notun altyazısındaki "11 saat önce") cihazın değil
+  uygulamanın dilinde yazılır.
 - Notların tarafında karartma yok: notların örtüsü kalktı, Ebru'nun görsel örtüsü 0,20'den 0,10'a
   indi (büyük başlık 3:1'i rahat geçer). Pro tema görselinde görselin üstüne doğrudan gelecek her
   şey kendi levhasında durur, görsel aralarında canlı kalır. Levha: paper %92, 1 rule, gölge
