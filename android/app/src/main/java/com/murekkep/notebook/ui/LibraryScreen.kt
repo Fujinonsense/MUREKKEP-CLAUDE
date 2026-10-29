@@ -132,9 +132,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -1264,21 +1266,22 @@ private object CoverCache {
 
 // MARK: Dialogs
 
-/** The iPad's rename alert: "Yeniden adlandır", the name, "Vazgeç" and "Kaydet". The editor's too. */
+/** The iPad's rename alert: "Yeniden adlandır", the name with the cursor after it, "Vazgeç" and "Kaydet". */
 @Composable
 internal fun RenameDialog(initial: String, onDismiss: () -> Unit, onRename: (String) -> Unit) {
-    var text by remember(initial) { mutableStateOf(initial) }
+    // The cursor starts after the name, as the alert's field puts it: typing goes on from its end.
+    var value by remember(initial) { mutableStateOf(TextFieldValue(initial, TextRange(initial.length))) }
     val focus = remember { FocusRequester() }
     val submit: () -> Unit = {
-        if (text.isNotBlank()) onRename(text.trim())
+        if (value.text.isNotBlank()) onRename(value.text.trim())
     }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.rename_title)) },
         text = {
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
+                value = value,
+                onValueChange = { value = it },
                 singleLine = true,
                 label = { Text(stringResource(R.string.notebook_title_label)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -1289,7 +1292,7 @@ internal fun RenameDialog(initial: String, onDismiss: () -> Unit, onRename: (Str
             LaunchedEffect(Unit) { focus.requestFocus() }
         },
         confirmButton = {
-            TextButton(onClick = submit, enabled = text.isNotBlank()) { Text(stringResource(R.string.save)) }
+            TextButton(onClick = submit, enabled = value.text.isNotBlank()) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
