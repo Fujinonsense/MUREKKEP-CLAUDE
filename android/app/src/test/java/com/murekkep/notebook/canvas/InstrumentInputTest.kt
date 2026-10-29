@@ -28,8 +28,9 @@ import kotlin.math.sin
 
 // The canvas's touches with a drafting instrument and the compass, as the iPad's CanvasView routes
 // them: a finger on an instrument carries it and draws nothing, two turn it (settling at 15°, the
-// angle shown over it); a pen starting by an edge draws along it; the compass's first drag sets
-// its center and radius, the next draws an arc of that radius; a tap draws nothing.
+// angle shown over it); a pen starting by an edge draws along it, one away from it hands the screen
+// nothing new to draw; the compass's first drag sets its center and radius, the next draws an arc of
+// that radius; a tap draws nothing.
 @RunWith(RobolectricTestRunner::class)
 // Android 10: Jetpack's motion predictor runs its own Kalman filter there and finds the display
 // through the window manager, which Robolectric's contexts have.
@@ -199,6 +200,29 @@ class InstrumentInputTest {
         pen(Pt(100.0, 700.0), Pt(150.0, 760.0), Pt(200.0, 700.0))
         val ys = state.strokes(0).single().points.map { it.y }
         assertTrue(ys.maxOrNull()!! - ys.minOrNull()!! > 30)
+    }
+
+    @Test
+    fun aPenWritingAwayFromTheRulerRedrawsNothingWhileAScrollMovesIt() {
+        val ruler = ruler()
+        val shown = overlay!!.instrument!!
+        var published = 0
+        canvas.onOverlay = {
+            overlay = it
+            published++
+        }
+        // The ruler stands still while the pen writes away from it: the screen is told nothing, as the
+        // iPad repaints its overlay only when what it shows changes.
+        pen(Pt(100.0, 700.0), Pt(150.0, 760.0), Pt(200.0, 700.0), Pt(250.0, 760.0))
+        assertEquals(1, state.strokes(0).size)
+        assertEquals(0, published)
+        // A finger scrolls the pages (a pen has been seen): the ruler goes up the screen with them.
+        finger(MotionEvent.ACTION_DOWN, 0 to Pt(600.0, 900.0))
+        finger(MotionEvent.ACTION_MOVE, 0 to Pt(600.0, 860.0))
+        assertTrue(published > 0)
+        assertEquals(ruler, state.instrument)
+        assertTrue(overlay!!.instrument!!.y < shown.y - 30)
+        finger(MotionEvent.ACTION_UP, 0 to Pt(600.0, 860.0))
     }
 
     @Test

@@ -84,7 +84,8 @@ data class OverlayLabel(val x: Float, val y: Float, val text: String)
  *  loop while it is drawn (x, y pairs), the box of the selected strokes (its dashed frame and
  *  handles go round it), a measurement next to the pen, the handles of a recognized shape (x, y
  *  pairs; the last one moves the whole shape), the shape tool's shape while it is dragged, the
- *  drafting instrument on the page and the compass. */
+ *  drafting instrument on the page and the compass. Two that show the same are equal (the iPad's
+ *  overlay signature): the canvas hands the screen only a change. */
 class CanvasOverlay(
     val lasso: FloatArray?,
     val selection: ViewRect?,
@@ -93,7 +94,20 @@ class CanvasOverlay(
     val preview: List<FloatArray>? = null,
     val instrument: InstrumentOverlay? = null,
     val compass: CompassOverlay? = null,
-)
+) {
+    override fun equals(other: Any?): Boolean =
+        other is CanvasOverlay && lasso.contentEquals(other.lasso) && selection == other.selection &&
+            label == other.label && shapeHandles.contentEquals(other.shapeHandles) && samePaths(preview, other.preview) &&
+            instrument == other.instrument && compass == other.compass
+
+    override fun hashCode(): Int = listOf(
+        lasso.contentHashCode(), selection, label, shapeHandles.contentHashCode(),
+        preview?.map { it.contentHashCode() }, instrument, compass,
+    ).hashCode()
+
+    private fun samePaths(a: List<FloatArray>?, b: List<FloatArray>?): Boolean =
+        a === b || (a != null && b != null && a.size == b.size && a.indices.all { a[it].contentEquals(b[it]) })
+}
 
 class InkCanvasView(context: Context, private val state: EditorState) : GLSurfaceView(context) {
     companion object {
@@ -110,9 +124,11 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     /** Told where a hovering pen is (null when it leaves or touches): the screen draws the ring. */
     var onHover: ((HoverRing?) -> Unit)? = null
 
-    /** Told what to draw over the ink (null when nothing): the screen draws it. */
+    /** Told what to draw over the ink (null when nothing) whenever it changes: the screen draws it. */
     var onOverlay: ((CanvasOverlay?) -> Unit)? = null
-    private var overlayShown = false
+
+    /** What the screen was told to draw last (null: nothing). */
+    private var shownOverlay: CanvasOverlay? = null
 
     // Where the document is: its origin in view pixels and view pixels per document point.
     private var originX = 0f
@@ -333,8 +349,8 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         }
         val compass = compassOverlay(l)
         if (sel == null && loop == null && label == null && handles == null && preview == null && instrument == null && compass == null) {
-            if (overlayShown) {
-                overlayShown = false
+            if (shownOverlay != null) {
+                shownOverlay = null
                 onOverlay?.invoke(null)
             }
             return
@@ -344,13 +360,15 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             val top = l.top(s.page)
             ViewRect(viewX(left + s.bounds.minX), viewY(top + s.bounds.minY), viewX(left + s.bounds.maxX), viewY(top + s.bounds.maxY))
         }
-        overlayShown = true
-        onOverlay?.invoke(
-            CanvasOverlay(
-                loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }, handles, preview,
-                instrument = instrument, compass = compass,
-            ),
+        val next = CanvasOverlay(
+            loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }, handles, preview,
+            instrument = instrument, compass = compass,
         )
+        // Only a change goes to the screen, as the iPad repaints its overlay only when its signature
+        // changes: a pen writing beside an instrument or a set compass does not redraw it on every move.
+        if (next == shownOverlay) return
+        shownOverlay = next
+        onOverlay?.invoke(next)
     }
 
     /** The compass while its tool is in hand (view pixels): the center and radius being dragged, or
