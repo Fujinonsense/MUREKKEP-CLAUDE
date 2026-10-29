@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +33,8 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -163,7 +166,10 @@ fun EditorScreen(
         }
     }
 
-    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    // The system bars and a cutout, not the keyboard (safeDrawing takes it in): the editor's only
+    // field is the page navigator's number, and should this window be told of its keyboard too, the
+    // badge the navigator hangs from, the bar and the page must not rise behind the navigator.
+    val safe = WindowInsets.systemBars.union(WindowInsets.displayCutout).asPaddingValues()
     val layoutDirection = LocalLayoutDirection.current
     val bottomInset = safe.calculateBottomPadding()
     val leftInset = safe.calculateLeftPadding(layoutDirection)
