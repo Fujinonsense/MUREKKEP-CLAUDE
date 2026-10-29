@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The library as on the iPad (LibraryView, LibraryPanes, TemplateGallery; English from Translations.swift) -->
+    <string name="export_failed_title">Couldn\'t export</string>
 
     <!-- Ayarlar › Görünüm -->
     <string name="theme_paper_wave">Paper waves</string>

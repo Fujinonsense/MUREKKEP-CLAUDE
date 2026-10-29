@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Kütüphane, iPad'deki gibi (LibraryView, LibraryPanes, TemplateGallery) -->
+    <string name="export_failed_title">Dışa aktarılamadı</string>
 
     <!-- Ayarlar › Görünüm -->
     <string name="theme_paper_wave">Kâğıt dalga</string>

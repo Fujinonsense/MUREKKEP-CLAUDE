@@ -1,8 +1,10 @@
 package com.murekkep.notebook
 
 import android.content.pm.ApplicationInfo
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,12 +13,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +42,8 @@ import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.LibraryScreen
 import com.murekkep.notebook.ui.MurekkepTheme
 import com.murekkep.notebook.ui.SettingsScreen
+import com.murekkep.notebook.ui.Zen
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -52,6 +58,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             var theme by remember { mutableStateOf(appearance.theme) }
             MurekkepTheme(theme = theme) {
+                // The activity outlives a light/dark switch (it handles uiMode), so the bars' icons
+                // and the navigation bar's scrim follow the look in force whenever it changes,
+                // a picture theme's own look included.
+                val dark = Zen.colors.dark
+                DisposableEffect(dark) {
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+                        navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
+                    )
+                    onDispose {}
+                }
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     MurekkepApp(
                         store, demo, theme,
@@ -63,6 +80,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private companion object {
+        /** androidx's own scrims behind three-button navigation, light and dark. */
+        val LIGHT_SCRIM = Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
+        val DARK_SCRIM = Color.argb(0x80, 0x1B, 0x1B, 0x1B)
     }
 }
 
@@ -118,9 +141,8 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
     } else {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        val snackbar = remember { SnackbarHostState() }
-        val exportFailed = stringResource(R.string.export_failed)
         var sharing by remember { mutableStateOf(false) }
+        var exportFailed by remember { mutableStateOf(false) }
         EditorScreen(
             state = state,
             onBack = close,
@@ -131,8 +153,10 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                         try {
                             val file = PdfShare.write(context, state)
                             PdfShare.share(context, file, state.title)
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
-                            snackbar.showSnackbar(exportFailed)
+                            exportFailed = true
                         } finally {
                             sharing = false
                         }
@@ -143,8 +167,16 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
                 store.rename(id, title)
                 state.title = title
             },
-            snackbar = snackbar,
         )
+        // A failed export is an alert, as on the iPad, and the share button is free again at once.
+        if (exportFailed) {
+            AlertDialog(
+                onDismissRequest = { exportFailed = false },
+                title = { Text(stringResource(R.string.export_failed_title)) },
+                text = { Text(stringResource(R.string.export_failed)) },
+                confirmButton = { TextButton(onClick = { exportFailed = false }) { Text(stringResource(R.string.ok)) } },
+            )
+        }
     }
 }
 
