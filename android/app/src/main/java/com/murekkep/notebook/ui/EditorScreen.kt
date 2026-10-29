@@ -112,9 +112,9 @@ import kotlinx.coroutines.launch
 // One open notebook, the spec's editor: a quiet top bar on paper-2 ("‹ Notlar", the title in the
 // middle, Paylaş and Diğer), the page edge to edge under it, the lasso's bar and the floating pen
 // bar over it along an edge (PenStrip.kt), the page badge "1 / 1" at the bottom right. Diğer holds
-// the switches of the iPad's that Android has and Ayarlar, which opens over the note. The canvas is
-// a GLSurfaceView: it pauses and resumes with the screen's lifecycle and is released when the screen
-// leaves; the notebook is saved at both moments.
+// a notebook's Şablonu değiştir, the switches of the iPad's that Android has and Ayarlar, which
+// opens over the note. The canvas is a GLSurfaceView: it pauses and resumes with the screen's
+// lifecycle and is released when the screen leaves; the notebook is saved at both moments.
 
 @Composable
 fun EditorScreen(

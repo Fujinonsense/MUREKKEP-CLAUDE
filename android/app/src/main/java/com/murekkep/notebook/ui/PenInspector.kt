@@ -74,7 +74,7 @@ internal fun PenSettings(state: EditorState, brush: Brush) {
         brush, color, width, GrassGenerator.strokeSeed(brush, state.flowerLevel, 0.37f), 120.dp,
         Modifier.clip(shape).border(1.dp, z.rule, shape),
     )
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabelRow(stringResource(R.string.color))
         ColorGrid(state, brush)
     }
