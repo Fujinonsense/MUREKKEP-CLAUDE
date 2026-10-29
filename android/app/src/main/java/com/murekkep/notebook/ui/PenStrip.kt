@@ -66,6 +66,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -488,6 +489,11 @@ private fun Grip(
     val vertical = edge.isVertical
     var menu by remember { mutableStateOf(false) }
     val anchor = remember { GripAnchor() }
+    // The gesture runs on across recompositions, so it calls the latest callbacks: a turned tablet
+    // or a resized window hands new ones, which know the canvas's new size.
+    val move by rememberUpdatedState(onMove)
+    val drop by rememberUpdatedState(onDrop)
+    val cancel by rememberUpdatedState(onCancel)
     val label = stringResource(R.string.bar_move)
     val hint = stringResource(R.string.bar_move_hint)
     val moves = PaletteEdge.entries.filter { it != edge }.map { place ->
@@ -525,14 +531,14 @@ private fun Grip(
                     val first = start ?: return@awaitEachGesture
                     var moved = first.position - down.position
                     var finger = anchor.coordinates?.localToRoot(first.position) ?: return@awaitEachGesture
-                    onMove(finger, moved)
+                    move(finger, moved)
                     val lifted = drag(first.id) { change ->
                         moved += change.positionChange()
                         change.consume()
                         anchor.coordinates?.let { finger = it.localToRoot(change.position) }
-                        onMove(finger, moved)
+                        move(finger, moved)
                     }
-                    if (lifted) onDrop(finger) else onCancel()
+                    if (lifted) drop(finger) else cancel()
                 }
             }
             .semantics {

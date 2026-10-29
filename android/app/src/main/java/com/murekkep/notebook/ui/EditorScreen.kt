@@ -86,6 +86,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -206,9 +207,12 @@ fun EditorScreen(
                 paletteTarget?.let { target ->
                     PaletteDockHint(target, Modifier.align(target.alignment).padding(paletteInsets(target, bottomInset, leftInset, rightInset)))
                 }
+                // Against the canvas as it is now: a drag outlives a turn of the tablet.
                 val nearest = { finger: Offset ->
-                    val at = canvasPlace.coordinates?.let { it.localPositionOf(it.findRootCoordinates(), finger) } ?: finger
-                    PaletteEdge.nearest(at.x, at.y, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat(), edge)
+                    val place = canvasPlace.coordinates
+                    val at = place?.let { it.localPositionOf(it.findRootCoordinates(), finger) } ?: finger
+                    val size = place?.size ?: IntSize(constraints.maxWidth, constraints.maxHeight)
+                    PaletteEdge.nearest(at.x, at.y, size.width.toFloat(), size.height.toFloat(), edge)
                 }
                 PenBar(
                     state,
