@@ -887,10 +887,11 @@ struct LibrarySidebar: View {
 }
 
 /// Under the wordmark, which brain answers the assistant, as before the zen redesign: "Cihazda yapay
-/// zekâ", "Yerel sunucu", "Çevrimdışı asistan" or "Claude · Sonnet 5.5". The 6-point dot is real
-/// status, so it keeps its colour: green when that brain can answer, orange when it cannot (Claude
-/// without its key). The downloaded model counts as on the device once it is ready; a view of its
-/// own, so only this line follows the download.
+/// zekâ", "Yerel sunucu", "Çevrimdışı asistan" or "Claude · Sonnet 5.5", picked from the chosen
+/// engine the way AssistantModel.resolveEngine picks. The 6-point dot is real status, so it keeps
+/// its colour: green when that brain can answer, orange when it cannot (Claude without its key, the
+/// computer's server without an address). The downloaded model counts as on the device once it is
+/// ready; a view of its own, so only this line follows the download.
 private struct EngineStatus: View {
     @EnvironmentObject private var settings: AppSettings
     @ObservedObject private var brain = DeviceBrain.shared
@@ -909,14 +910,23 @@ private struct EngineStatus: View {
     }
 
     private var label: String {
-        if settings.engine == .claude { return "Claude · \(settings.model.title.replacingOccurrences(of: "Claude ", with: ""))" }
-        if brain.isReady || OnDeviceAI.isAvailable { return Loc.t("Cihazda yapay zekâ") }
-        if !settings.serverURL.isEmpty { return Loc.t("Yerel sunucu") }
-        return Loc.t("Çevrimdışı asistan")
+        switch settings.engine {
+        case .claude: return "Claude · \(settings.model.title.replacingOccurrences(of: "Claude ", with: ""))"
+        case .localServer: return Loc.t("Yerel sunucu")
+        case .offline: return Loc.t("Çevrimdışı asistan")
+        case .onDevice: return OnDeviceAI.isAvailable ? Loc.t("Cihazda yapay zekâ") : Loc.t("Çevrimdışı asistan")
+        case .auto, .deviceBrain:
+            return (brain.isReady || OnDeviceAI.isAvailable) ? Loc.t("Cihazda yapay zekâ") : Loc.t("Çevrimdışı asistan")
+        }
     }
 
+    /// Without an address the server's turn goes to the offline core (resolveEngine).
     private var ready: Bool {
-        settings.engine == .claude ? settings.hasAPIKey : true
+        switch settings.engine {
+        case .claude: return settings.hasAPIKey
+        case .localServer: return LocalServerClient.normalizedBase(settings.serverURL) != nil
+        default: return true
+        }
     }
 }
 

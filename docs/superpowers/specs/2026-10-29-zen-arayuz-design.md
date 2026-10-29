@@ -82,9 +82,12 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
   Lapis, Manyetik sıvı, Işık izi, Buzlu cam, Kâğıt dalga; %90'da hiçbir temada 2,3'ü geçmez).
   Parçalar 18 aralıklı, yukarıdan aşağı:
   - "Mürekkep" (title2 kalın) ve altında yapay zekâ durumu: 6 nokta (hazırsa yeşil, değilse turuncu;
-    gerçek durum olduğu için renkli) + caption muted: "Claude · <model>", "Cihazda yapay zekâ"
-    (Apple'ın modeli ya da indirilen model hazırsa), "Yerel sunucu", "Çevrimdışı asistan"; sağda
-    kenar çubuğunu gizle.
+    gerçek durum olduğu için renkli) + caption muted, seçili motora göre, asistanın motoru seçtiği
+    gibi: Claude → "Claude · <model>" (anahtar yoksa turuncu); Yerel sunucu → "Yerel sunucu"
+    (adres yoksa turuncu, çevrimdışı çekirdek yanıtlar); Qwen3.5 / Otomatik → indirilen model ya da
+    Apple'ın modeli hazırsa "Cihazda yapay zekâ", değilse "Çevrimdışı asistan". Sağda kenar
+    çubuğunu gizle: 44'lük düğme, simgesi yazının büyük harflerinin ortasında (taban çizgisinin 7
+    üstü).
   - Ara (bugünkü gibi).
   - Üç sessiz hızlı oluşturma kutusu, 10 aralıklı: Defter (square.and.pencil, yeni defter), PDF /
     Foto (doc.badge.plus), Ders (folder.badge.plus, yeni ders); açık dersin içine. Simge (18,
