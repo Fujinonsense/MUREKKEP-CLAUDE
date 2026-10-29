@@ -3,6 +3,8 @@ package com.murekkep.notebook.render
 import android.opengl.GLES30
 import android.util.Log
 import com.murekkep.notebook.ink.Brush
+import com.murekkep.notebook.ink.GrassField
+import com.murekkep.notebook.ink.GrassGenerator
 import com.murekkep.notebook.ink.PageInk
 import com.murekkep.notebook.ink.RibbonBuilder
 import com.murekkep.notebook.ink.RibbonOut
@@ -54,6 +56,25 @@ private class PageGpu {
     var latestWetBirth = Double.NEGATIVE_INFINITY
     var latestLavaBirth = Double.NEGATIVE_INFINITY
     var meshes = HashMap<Int, StrokeMesh>()
+    // The grass and flowering-water pens' blades and flowers (GrassGenerator), drawn instanced.
+    var bladeTex = 0
+    var flowerTex = 0
+    var bladeCount = 0
+    var flowerCount = 0
+    var latestGrassBirth = Double.NEGATIVE_INFINITY
+    var grass = HashMap<Int, GrassField>()
+}
+
+/** A growable float list (records for the blade and flower tables). */
+private class FloatBuilder {
+    var data = FloatArray(256)
+    var size = 0
+
+    fun add(a: Float, b: Float, c: Float, d: Float) {
+        if (size + 4 > data.size) data = data.copyOf(data.size * 2)
+        data[size] = a; data[size + 1] = b; data[size + 2] = c; data[size + 3] = d
+        size += 4
+    }
 }
 
 class InkRenderer {
@@ -142,6 +163,7 @@ class InkRenderer {
             }
             if (now - gpu.latestWetBirth < input.dryDuration + 0.3) animationFps = max(animationFps, 30)
             if (now - gpu.latestLavaBirth < input.coolDuration + 0.5) animationFps = 60
+            if (now - gpu.latestGrassBirth < 3.4 || activeHere?.brush?.growsFlowers == true) animationFps = 60
             if (activeHere?.brush == Brush.LAVA) animationFps = 60
         }
         trimCache(visible)
@@ -266,6 +288,7 @@ class InkRenderer {
                     }
                 }
             }
+            if (gpu.bladeCount > 0) drawDecor(frame, gpu, x, y, i + 2, step)
         }
 
         if (active == null || active.points.isEmpty()) return
@@ -288,6 +311,32 @@ class InkRenderer {
     private fun depthWrite() {
         GLES30.glDepthFunc(GLES30.GL_LESS)
         GLES30.glDepthMask(true)
+    }
+
+    /** The grass pens' blades, then their flowers, instanced from the page's tables (drawDecor on iPad). */
+    private fun drawDecor(frame: Frame, gpu: PageGpu, x: Float, y: Float, orderOffset: Int, step: Float) {
+        disableAttributes()
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, gpu.bladeTex)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, if (gpu.flowerTex != 0) gpu.flowerTex else gpu.bladeTex)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, gpu.records)
+        for ((name, count, vertices) in listOf(
+            Triple("blade", gpu.bladeCount, InkShaders.BLADE_VERTICES),
+            Triple("flower", gpu.flowerCount, 4),
+        )) {
+            if (count <= 0) continue
+            val p = use(name, frame) ?: continue
+            GLES30.glUniform2f(p.loc("u_pageOrigin"), x, y)
+            GLES30.glUniform1ui(p.loc("u_orderOffset"), orderOffset)
+            GLES30.glUniform1f(p.loc("u_depthStep"), step)
+            GLES30.glUniform1ui(p.loc("u_depthOnly"), 0)
+            GLES30.glUniform1i(p.loc("u_strokes"), 0)
+            GLES30.glUniform1i(p.loc("u_blades"), 1)
+            GLES30.glUniform1i(p.loc("u_flowers"), 2)
+            GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLE_STRIP, 0, vertices, count)
+        }
     }
 
     /** A depth-only pass, then color for the nearest fragment only: where a ribbon folds over itself
@@ -390,6 +439,10 @@ class InkRenderer {
         var hasWave = false
         var latestWet = Double.NEGATIVE_INFINITY
         var latestLava = Double.NEGATIVE_INFINITY
+        var latestGrass = Double.NEGATIVE_INFINITY
+        val grass = HashMap<Int, GrassField>()
+        val blades = FloatBuilder()
+        val flowers = FloatBuilder()
         for ((slot, s) in ordered.withIndex()) {
             val mesh = meshes.getValue(s.id)
             System.arraycopy(mesh.vertices, 0, vertices, v * 12, mesh.vertexCount * 12)
@@ -426,6 +479,15 @@ class InkRenderer {
             if (s.brush.isFastAnimated) hasWave = true
             if (s.brush == Brush.WET) latestWet = max(latestWet, s.birth)
             if (s.brush == Brush.LAVA) latestLava = max(latestLava, lavaCoolEnd(s))
+            if (s.brush.growsFlowers) {
+                latestGrass = max(latestGrass, s.birth)
+                val field = gpu.grass[s.id] ?: GrassGenerator.field(s.brush, s.points, s.width, s.color, s.seed)
+                grass[s.id] = field
+                // Blades sprout in drawing order over the time the pen took; flowers open after it lifts.
+                val end = (s.birth - epoch).toFloat()
+                val duration = s.duration.coerceIn(0.0, 60.0).toFloat()
+                appendDecor(field, slot, s.color.a, end - duration, duration, end, blades, flowers)
+            }
         }
 
         if (gpu.vbo == 0) {
@@ -450,7 +512,40 @@ class InkRenderer {
         gpu.latestWetBirth = latestWet
         gpu.latestLavaBirth = latestLava
         gpu.meshes = meshes
+        gpu.bladeCount = blades.size / 16
+        gpu.flowerCount = flowers.size / 16
+        if (gpu.bladeCount > 0) {
+            if (gpu.bladeTex == 0) gpu.bladeTex = newRecordTexture()
+            uploadTable(gpu.bladeTex, blades.data, gpu.bladeCount)
+        }
+        if (gpu.flowerCount > 0) {
+            if (gpu.flowerTex == 0) gpu.flowerTex = newRecordTexture()
+            uploadTable(gpu.flowerTex, flowers.data, gpu.flowerCount)
+        }
+        gpu.latestGrassBirth = latestGrass
+        gpu.grass = grass
         gpu.version = page.version
+    }
+
+    /** A grass field as GPU records (appendGPU on iPad): blades sprout between `birthStart` and
+     *  `birthStart + duration` in drawing order; flowers open `delay` seconds after `bloomBase`. */
+    private fun appendDecor(field: GrassField, stroke: Int, alpha: Float, birthStart: Float, duration: Float,
+                            bloomBase: Float, blades: FloatBuilder, flowers: FloatBuilder) {
+        val offset = blades.size / 16
+        val n = max(field.blades.size, 1).toFloat()
+        for ((k, b) in field.blades.withIndex()) {
+            blades.add(b.base.x, b.base.y, b.height, b.width)
+            blades.add(b.lean, b.phase, birthStart + b.arc * duration, 1f - (k + 1f) / (n + 1f))
+            blades.add(b.color.x, b.color.y, b.color.z, alpha)
+            blades.add(stroke.toFloat(), b.kind.raw.toFloat(), b.stiffness, 0f)
+        }
+        for (f in field.flowers) {
+            val stemArc = field.blades.getOrNull(f.stem)?.arc ?: 0f
+            flowers.add((offset + f.stem).toFloat(), f.radius, bloomBase + f.delay + stemArc * 0.3f, f.petals)
+            flowers.add(f.petal.x, f.petal.y, f.petal.z, 1f)
+            flowers.add(f.core.x, f.core.y, f.core.z, 1f)
+            flowers.add(f.spin, f.style, 0f, 0f)
+        }
     }
 
     private fun meshOf(s: Stroke): StrokeMesh {
@@ -482,6 +577,7 @@ class InkRenderer {
     private fun deletePage(gpu: PageGpu) {
         if (gpu.vbo != 0) GLES30.glDeleteBuffers(3, intArrayOf(gpu.vbo, gpu.ibo, gpu.shadowIbo), 0)
         if (gpu.records != 0) GLES30.glDeleteTextures(1, intArrayOf(gpu.records), 0)
+        for (t in intArrayOf(gpu.bladeTex, gpu.flowerTex)) if (t != 0) GLES30.glDeleteTextures(1, intArrayOf(t), 0)
     }
 
     // MARK: uploads
@@ -523,6 +619,20 @@ class InkRenderer {
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texture)
         GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 4)
         GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA32F, RECORDS_PER_ROW * 3, rows, 0,
+            GLES30.GL_RGBA, GLES30.GL_FLOAT, buffer)
+    }
+
+    /** Blade and flower records as InkShaders lays them out: 4 RGBA32F texels each, 256 to a row. */
+    private fun uploadTable(texture: Int, records: FloatArray, count: Int) {
+        val perRow = 256
+        val rows = max(1, (count + perRow - 1) / perRow)
+        val floats = rows * perRow * 16
+        val buffer: FloatBuffer = ByteBuffer.allocateDirect(floats * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+        buffer.put(records, 0, min(records.size, count * 16))
+        buffer.position(0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texture)
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 4)
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA32F, perRow * 4, rows, 0,
             GLES30.GL_RGBA, GLES30.GL_FLOAT, buffer)
     }
 

@@ -34,6 +34,42 @@ jarsigner -keystore %USERPROFILE%\.murekkep-android\upload.jks app-release.aab u
 | Unbuffered pen events + motion prediction | every pen sample, the line a step ahead of the tip | coalesced and predicted touches |
 | 120 Hz panels | the highest refresh rate of the display | ProMotion |
 
-## Status
+## Status (2026-10-29, first night)
 
-See the end of this file (updated with each build).
+**Builds:** every push of the night compiled on Codemagic with the JUnit tests passing (the
+ink logic checked against the iPad's numbers). Debug APK and unsigned AAB come out of each build.
+
+**Seen working:** the ink shaders, drawn in WebGL2 (Chrome, real GPU) in the renderer's own order
+(page shadow, lined paper, highlighters, the raised inks' shadows, the ink): every pen looks as on
+iPad, `docs/ink-check-webgl.png`.
+
+**Not seen yet:** the app itself on a screen. Codemagic's Mac is a virtual machine and cannot run
+the Android emulator (no nested virtualization), and there is no Android SDK on the development
+PC. To try it: install `app-debug.apk` on an Android tablet (or an emulator) and open a notebook;
+a debuggable build started with
+`adb shell am start -n com.murekkep.notebook/.MainActivity --es murekkep.demo pens`
+opens a page with a wave in every pen.
+
+**In the Android edition:**
+- library (new, rename, delete);
+- notebook pages, pinch and fling;
+- all 23 pens with the iPad's shading, including 3D inks, shadows, grass blades and flowers;
+- highlighter, eraser (whole stroke and partial), undo/redo;
+- pen preferences;
+- notebooks saved in the iPad's own ink format;
+- the pen features in the table above.
+
+**Not ported yet:**
+- lasso;
+- shapes and the compass;
+- the text pen (handwriting to text);
+- PDF import and export;
+- page templates beyond plain, lined, grid and dotted;
+- stickers;
+- the break corner (games, Ebru, living ink pond);
+- the assistant;
+- Pro with Play Billing.
+
+**Also left:**
+- grass sprouting while the pen is still down: blades appear when it lifts;
+- the eraser's "keep the meshes" plan from iPad: on Android a change still rebuilds the page.
