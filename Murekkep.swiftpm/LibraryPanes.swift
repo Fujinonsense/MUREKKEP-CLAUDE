@@ -78,7 +78,7 @@ struct PaneScroll<Header: View, Content: View>: View {
                     .padding(.top, 24)
                     .padding(.bottom, 40)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .modifier(NotesWash(reach: pane.size.height))
+                    .modifier(NotesWash(reach: pane.size.height * 2))
                 }
             }
         }

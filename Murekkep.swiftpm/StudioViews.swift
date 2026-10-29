@@ -880,38 +880,37 @@ struct StudioPane: View {
     let actions: LibraryActions
     let showToggle: Bool
 
+    /// Like the other panes (PaneScroll): the header on the theme's picture, the cards and the
+    /// overviews on the notes' wash.
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                PaneHeader(title: Loc.t("Stüdyo"), subtitle: Loc.t("Kaynaklarından video ve sesli özetler"), showToggle: showToggle, actions: actions) {
-                    NewMenu(actions: actions, section: nil)
-                }
-                StudioCreateCards(sectionID: nil, actions: actions)
-                ForEach(studio.jobs) { job in
-                    JobRow(job: job)
-                }
-                if studio.overviews.isEmpty && studio.jobs.isEmpty {
-                    StudioPromo(actions: actions, sectionID: nil)
-                }
-                StudyShelf(sectionID: nil, actions: actions)
-                ForEach(groups, id: \.key) { group in
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 10) {
-                            if let section = group.section {
-                                Image(systemName: section.symbol)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 28, height: 28)
-                                    .background(section.color.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                            SectionTitle(title: group.section?.name ?? Loc.t("Ders dışı"))
+        PaneScroll {
+            PaneHeader(title: Loc.t("Stüdyo"), subtitle: Loc.t("Kaynaklarından video ve sesli özetler"), showToggle: showToggle, actions: actions) {
+                NewMenu(actions: actions, section: nil)
+            }
+        } content: {
+            StudioCreateCards(sectionID: nil, actions: actions)
+            ForEach(studio.jobs) { job in
+                JobRow(job: job)
+            }
+            if studio.overviews.isEmpty && studio.jobs.isEmpty {
+                StudioPromo(actions: actions, sectionID: nil)
+            }
+            StudyShelf(sectionID: nil, actions: actions)
+            ForEach(groups, id: \.key) { group in
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        if let section = group.section {
+                            Image(systemName: section.symbol)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 28, height: 28)
+                                .background(section.color.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
-                        OverviewGrid(overviews: group.overviews, actions: actions)
+                        SectionTitle(title: group.section?.name ?? Loc.t("Ders dışı"))
                     }
+                    OverviewGrid(overviews: group.overviews, actions: actions)
                 }
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 40)
         }
     }
 

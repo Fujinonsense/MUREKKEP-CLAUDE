@@ -244,9 +244,10 @@ struct LibraryBackdrop: ViewModifier {
 
 /// The wash the notes lie on over a Pro theme's picture (`notesWash`). The picture stays clear
 /// behind the sidebar and the pane's header; the wash lies behind the view it modifies (PaneScroll
-/// gives that the pane's full width) and fades in over its top 40 points. `reach` is the pane's
-/// height: the wash runs that far past the notes, so it reaches the bottom of the pane when there
-/// are only a few (the scroll view clips the rest).
+/// gives that the pane's full width) and fades in over its top 40 points. `reach` is twice the
+/// pane's height: the wash runs that far past the notes, so it reaches the bottom of the pane when
+/// there are only a few, even while a short page is pulled up past its end (the scroll view clips
+/// the rest).
 struct NotesWash: ViewModifier {
     @EnvironmentObject private var settings: AppSettings
     @ObservedObject private var pro = ProStore.shared
