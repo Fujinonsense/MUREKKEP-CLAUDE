@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Courses as on the iPad (LibraryView, LibraryPanes, Sections.swift; English from Translations.swift) -->
+    <string name="courses_title">Courses</string>
+    <string name="course_new">New course</string>
+    <string name="course_new_more">New course…</string>
+    <string name="course_first">Add your first course</string>
+    <string name="course_row_edit">Edit</string>
+    <string name="course_edit">Edit course</string>
+    <string name="course_delete_keep">Delete course (its contents stay)</string>
+    <string name="course_delete">Delete course</string>
+    <string name="course_delete_title">Delete this course?</string>
+    <!-- The iPad's says "its notebooks, PDFs and overviews": Android has no Studio overviews. -->
+    <string name="course_delete_message">Only the course folder is removed; its notebooks and PDFs stay in the library.</string>
+    <string name="course_move">Move to course</string>
+    <string name="course_remove">Remove from course</string>
+    <string name="course_tab_label">Section</string>
+    <string name="course_sources">Sources</string>
+    <plurals name="course_source_count">
+        <item quantity="one">%d source</item>
+        <item quantity="other">%d sources</item>
+    </plurals>
+    <plurals name="course_notebook_count">
+        <item quantity="one">%d notebook</item>
+        <item quantity="other">%d notebooks</item>
+    </plurals>
+    <string name="course_drop_title">Drag this course\'s PDFs here</string>
+    <!-- The iPad's goes on about the assistant and the studio, which Android does not have. -->
+    <string name="course_drop_detail">Lecture notes, slides, book chapters.</string>
+    <string name="course_no_sources">No sources yet.</string>
+    <string name="course_no_notebooks">No notebooks in this course yet.</string>
+    <string name="search_courses">Courses</string>
+
+    <!-- SectionEditor -->
+    <string name="section_new_title">New section</string>
+    <string name="section_edit_title">Edit section</string>
+    <string name="section_name_hint">Section name (e.g. Calculus, Anatomy)</string>
+    <string name="section_symbol">Icon</string>
+    <string name="section_create">Create</string>
+    <!-- What TalkBack calls the symbols (in NoteSection.SYMBOLS' order) and the colours. -->
+    <string-array name="section_symbol_names">
+        <item>Function</item>
+        <item>Square root</item>
+        <item>Atom</item>
+        <item>Flask</item>
+        <item>First aid kit</item>
+        <item>Heart</item>
+        <item>Brain</item>
+        <item>Gears</item>
+        <item>Lightning</item>
+        <item>Columns</item>
+        <item>Globe</item>
+        <item>Chart</item>
+        <item>Book</item>
+        <item>Textbook</item>
+        <item>Music note</item>
+        <item>Palette</item>
+        <item>Laptop</item>
+        <item>Leaf</item>
+    </string-array>
+    <string-array name="section_color_names">
+        <item>Blue</item>
+        <item>Purple</item>
+        <item>Teal</item>
+        <item>Green</item>
+        <item>Orange</item>
+        <item>Red</item>
+        <item>Pink</item>
+        <item>Grey</item>
+    </string-array>
+</resources>
