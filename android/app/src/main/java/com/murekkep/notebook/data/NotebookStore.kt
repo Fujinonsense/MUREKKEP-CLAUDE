@@ -7,10 +7,12 @@ import androidx.compose.runtime.setValue
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.ui.EditorState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,6 +52,9 @@ class NotebookStore private constructor(context: Context) {
     var loaded by mutableStateOf(false)
         private set
 
+    /** The one read of the folders: everyone who needs the list waits for the same one. */
+    private var firstLoad: Deferred<Unit>? = null
+
     companion object {
         private const val SAVE_DELAY_MS = 1200L
 
@@ -73,11 +78,19 @@ class NotebookStore private constructor(context: Context) {
 
     // MARK: Library
 
-    /** Reads every notebook's record off the main thread and lists them newest first. */
-    suspend fun refresh() {
-        val list = withContext(Dispatchers.IO) { scan() }
-        notebooks = list
-        loaded = true
+    /** Reads every notebook's record off the main thread, once per process, and lists them newest
+     *  first. After that the list in memory is the newest there is (this store is the folders' only
+     *  writer): a later scan could put an older record over a save, or drop a notebook made while it
+     *  read the disk, and then that notebook's saves would find no record and write nothing. */
+    suspend fun load() {
+        val load = firstLoad ?: scope.async {
+            val scanned = withContext(Dispatchers.IO) { scan() }
+            // Notebooks made while the disk was read stay, with their records from memory.
+            val known = notebooks.mapTo(HashSet()) { it.id }
+            notebooks = (notebooks + scanned.filter { it.id !in known }).sortedByDescending { it.modified }
+            loaded = true
+        }.also { firstLoad = it }
+        load.await()
     }
 
     private fun scan(): List<NotebookMeta> {

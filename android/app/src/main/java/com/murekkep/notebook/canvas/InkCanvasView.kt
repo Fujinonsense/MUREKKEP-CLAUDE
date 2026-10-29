@@ -168,11 +168,20 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         super.onSizeChanged(w, h, oldw, oldh)
         val layout = PageLayout(1)
         val margin = 24f * resources.displayMetrics.density
+        val oldFit = fitZoom
         fitZoom = max(0.1f, (w - 2 * margin) / layout.pageWidth)
         if (!fitted) {
             zoom = fitZoom
             originY = margin
             fitted = true
+        } else {
+            // A turned tablet or a resized window: the same zoom against the page's width (a fitted
+            // page stays fitted) and the same spot of the page at the top left.
+            val left = docX(0f)
+            val top = docY(0f)
+            zoom = zoom * fitZoom / oldFit
+            originX = -left * zoom
+            originY = -top * zoom
         }
         clamp()
         requestFrame()

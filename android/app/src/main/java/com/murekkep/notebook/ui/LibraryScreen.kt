@@ -2,6 +2,7 @@
 
 package com.murekkep.notebook.ui
 
+import android.icu.text.RelativeDateTimeFormatter
 import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -70,7 +71,7 @@ import java.util.Date
 
 @Composable
 fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit) {
-    LaunchedEffect(store) { store.refresh() }
+    LaunchedEffect(store) { store.load() }
     var renaming by remember { mutableStateOf<NotebookMeta?>(null) }
     var deleting by remember { mutableStateOf<NotebookMeta?>(null) }
     val titlePrefix = stringResource(R.string.notebook_default_title)
@@ -223,9 +224,16 @@ private fun NotebookCard(meta: NotebookMeta, onOpen: () -> Unit, onRename: () ->
     }
 }
 
-/** "5 min. ago", "Yesterday", "Oct 12": the system's words, in the user's language. */
-private fun relativeDate(millis: Long): String =
-    DateUtils.getRelativeTimeSpanString(millis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString()
+/** "now", "5 min. ago", "Yesterday", "Oct 12": the system's words, in the user's language. The
+ *  first minute is "now", as the iPad's named style says it, not "0 min. ago". */
+private fun relativeDate(millis: Long): String {
+    val now = System.currentTimeMillis()
+    if (now - millis < DateUtils.MINUTE_IN_MILLIS) {
+        return RelativeDateTimeFormatter.getInstance()
+            .format(RelativeDateTimeFormatter.Direction.PLAIN, RelativeDateTimeFormatter.AbsoluteUnit.NOW)
+    }
+    return DateUtils.getRelativeTimeSpanString(millis, now, DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString()
+}
 
 /** A hint of the page's template on the card: lines, squares or dots. */
 @Composable

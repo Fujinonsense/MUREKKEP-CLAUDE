@@ -9,9 +9,10 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * The check of the Android edition on a build machine's emulator (Codemagic `android-check`): a
- * debuggable build started with `--es murekkep.demo pens` opens a notebook with a line of every
- * pen, so a screenshot shows the renderer, the shaders and the shadows. Never in a release build.
+ * The check of the Android edition on an emulator (`tools/androidcheck`): a debuggable build
+ * started with `--es murekkep.demo pens` opens a notebook with a wave in 21 of the 23 pens (grass
+ * and blooming water grow from a stroke drawn by hand), so a screenshot shows the renderer, the
+ * shaders and the shadows. Never in a release build.
  */
 object DemoInk {
     const val EXTRA = "murekkep.demo"

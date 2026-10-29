@@ -6,13 +6,21 @@ fit together: `PORTING.md`. Google Play listing drafts and your steps: `STORE.md
 
 ## Build
 
-There is no Android SDK on the development PC; builds run on Codemagic:
+On the development PC (since 2026-10-29): Android SDK in `%LOCALAPPDATA%\Android\Sdk` (platform 36,
+build tools 35, emulator, Android 16 x86_64 image), Gradle 8.14.3 in
+`%LOCALAPPDATA%\Programs\gradle-8.14.3`, JDK 21 in `%LOCALAPPDATA%\Programs\jdk-21`. From Git Bash:
 
-1. Codemagic → MUREKKEP-CLAUDE → Start new build → branch **android**, workflow
-   **Murekkep Android (APK + AAB)** (`android-build` in `codemagic.yaml`, written by
-   `tools/make_codemagic.py`).
-2. About 4 minutes. Artifacts: `app-debug.apk` (install on a tablet to try it),
-   `app-release.aab` (unsigned bundle for Google Play) and `android-build.log`.
+```
+export JAVA_HOME="$LOCALAPPDATA/Programs/jdk-21" ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
+"$LOCALAPPDATA/Programs/gradle-8.14.3/bin/gradle" -p android testDebugUnitTest assembleDebug bundleRelease
+```
+
+About 2 minutes the first time, seconds after that. The debug APK is in
+`app/build/outputs/apk/debug/`, the unsigned bundle in `app/build/outputs/bundle/release/`.
+
+Codemagic builds the same without the PC: MUREKKEP-CLAUDE → Start new build → branch **android**,
+workflow **Murekkep Android (APK + AAB)** (`android-build` in `codemagic.yaml`, written by
+`tools/make_codemagic.py`), about 4 minutes of the free Mac minutes.
 
 Sign the bundle for Play with the upload key (kept outside git in `%USERPROFILE%\.murekkep-android\`,
 password in `upload-password.txt` there). SHA-256, as the Android build tools sign; JDK 21's
@@ -22,8 +30,8 @@ jarsigner would pick SHA-384 for this 4096-bit key:
 jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore %USERPROFILE%\.murekkep-android\upload.jks -signedjar app-release-signed.aab app-release.aab upload
 ```
 
-The first signed bundle (build 220f361) is in `Downloads\Murekkep-android\2026-10-29\` on the
-development PC, next to the debug APK.
+Signed bundles and debug APKs are kept in `Downloads\Murekkep-android\<date>\` on the development
+PC; the folder of the newest build is named after its commit.
 
 ## Android pens
 
@@ -38,21 +46,39 @@ development PC, next to the debug APK.
 | Unbuffered pen events + motion prediction | every pen sample, the line a step ahead of the tip | coalesced and predicted touches |
 | 120 Hz panels | the highest refresh rate of the display | ProMotion |
 
-## Status (2026-10-29, first night)
+## Status (2026-10-29)
 
-**Builds:** every push of the night compiled on Codemagic with the JUnit tests passing (the
-ink logic checked against the iPad's numbers). Debug APK and unsigned AAB come out of each build.
+**Builds:** on the PC and on Codemagic, with the 60 JUnit tests passing (the ink logic checked
+against the iPad's numbers).
 
-**Seen working:** the ink shaders, drawn in WebGL2 (Chrome, real GPU) in the renderer's own order
-(page shadow, lined paper, highlighters, the raised inks' shadows, the ink): every pen looks as on
-iPad, `docs/ink-check-webgl.png`.
+**Seen working on the emulator** (Pixel Tablet, Android 16, the PC's GPU through the emulator's
+GLES translator), `docs/emulator-pens.png`:
+- library, new notebook, rename, delete (its folder goes too), English and Turkish;
+- every one of the 23 pens, drawn with a stylus; grass blades and flowers grow when the pen lifts;
+- the eraser, whole stroke and partial; undo, redo;
+- a finger draws until a pen has been seen, then it scrolls the pages;
+- the notebook saved and read back after the app is closed and after a language change;
+- turning the tablet: the page fits the new width;
+- a virtual pen made with Android's `uinput` tool (`tools/androidcheck/pen.py`): pressure makes the
+  line thicker, a tilted pencil shades wide, the side button erases while held, the eraser end
+  erases, hovering shows the ring (red with the side button).
 
-**Not seen yet:** the app itself on a screen. Codemagic's Mac is a virtual machine and cannot run
-the Android emulator (no nested virtualization), and there is no Android SDK on the development
-PC. To try it: install `app-debug.apk` on an Android tablet (or an emulator) and open a notebook;
-a debuggable build started with
-`adb shell am start -n com.murekkep.notebook/.MainActivity --es murekkep.demo pens`
-opens a page with a wave in every pen.
+Not checkable on the emulator: palm rejection by the system (`FLAG_CANCELED`), 120 Hz (the emulator
+runs at 60 Hz) and how prediction feels under a real pen.
+
+**Fixed on the emulator (2026-10-29):**
+- saves lost: the library read the disk again whenever it appeared, and a scan that finished after
+  a notebook was made dropped it from the list; that notebook's saves then found no record and
+  wrote nothing (1 demo start in 3). The disk is now read once per process.
+- turning the tablet kept the old zoom, so in portrait the page ran off the right edge.
+- the library said "0 min. ago" in the first minute; now "now", as on iPad.
+
+**Checking on the emulator:** `tools/androidcheck/` (`drive.py` taps by label, draws with
+`input stylus`, takes screenshots; `pen.py` is the virtual pen; `savecheck.sh` repeats the save
+check). Start the emulator with
+`%LOCALAPPDATA%\Android\Sdk\emulator\emulator -avd murekkep_tab -no-window -gpu host`; a debuggable
+build started with `adb shell am start -n com.murekkep.notebook/.MainActivity --es murekkep.demo pens`
+opens a page with a wave in 21 pens.
 
 **In the Android edition:**
 - library (new, rename, delete);

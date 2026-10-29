@@ -57,7 +57,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
     var editor by remember { mutableStateOf<EditorState?>(null) }
     if (demo) {
         LaunchedEffect(Unit) {
-            if (!store.loaded) store.refresh()
+            store.load()
             val meta = store.create("Demo")
             val state = store.open(meta)
             DemoInk.fill(state)
@@ -81,7 +81,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
     LaunchedEffect(id) {
         // Already open (the demo hands its notebook over open).
         if (editor?.notebookId == id) return@LaunchedEffect
-        if (!store.loaded) store.refresh()
+        store.load()
         val meta = store.notebook(id)
         if (meta == null) {
             openId = null
