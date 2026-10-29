@@ -282,6 +282,10 @@ fun EditorScreen(
                 val badgeShift = if (edge == PaletteEdge.TRAILING && column < PaletteColumnMargin) PenBarHeight + PaletteSideMargin else 0.dp
                 PageBadge(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp + rightInset + badgeShift, bottom = bottomInset + 8.dp + bottomClearance))
                 SnackbarHost(snackbar, Modifier.align(Alignment.TopCenter))
+                // The break corner (ui/games): its tile at the bottom left, its games' panel over the page above it,
+                // clear of the pen bar and of the lasso's bar while that shows.
+                val selecting = state.tool is Tool.Lasso && state.selection != null
+                com.murekkep.notebook.ui.games.BreakCorner(edge, bottomClearance, maxWidth, maxHeight, selectionBar = selecting)
             }
         }
         if (settingsOpen && settings != null) {
