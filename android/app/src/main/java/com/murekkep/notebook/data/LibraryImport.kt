@@ -84,7 +84,7 @@ class LibraryImport private constructor(context: Context) {
 
     /** Files dragged in from another app into [section] or into none; [release] gives back the right
      *  to read them once they are copied. */
-    fun importDropped(uris: List<Uri>, section: String?, release: () -> Unit) =
+    fun importDropped(uris: List<Uri>, release: () -> Unit, section: String? = null) =
         start(uris, open = false, release = release) { importAll(uris, section) }
 
     fun clearFailed() {

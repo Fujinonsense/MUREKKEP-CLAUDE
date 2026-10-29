@@ -316,7 +316,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
         importCourse = it
         askingSource = true
     }
-    val onDrop: (List<Uri>, () -> Unit) -> Unit = { uris, release -> importer.importDropped(uris, null, release) }
+    val onDrop: (List<Uri>, () -> Unit) -> Unit = { uris, release -> importer.importDropped(uris, release) }
     val courseActions = remember(store, importer) {
         CourseActions(
             create = { creatingCourse = true },
@@ -324,7 +324,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
             delete = { deletingCourse = it },
             import = { onImport(it) },
             newNotebook = { onNew(it) },
-            drop = { uris, id, release -> importer.importDropped(uris, id, release) },
+            drop = { uris, id, release -> importer.importDropped(uris, release, id) },
         )
     }
 
