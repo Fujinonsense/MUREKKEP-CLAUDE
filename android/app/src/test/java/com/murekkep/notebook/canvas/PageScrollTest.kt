@@ -50,4 +50,11 @@ class PageScrollTest {
         // A narrow page already clear of the bar stays in the middle.
         assertEquals(250f, PageScroll.clampX(0f, 800f, 300f, Clearance(right = 76f)))
     }
+
+    @Test
+    fun besideABarDownTheRightSideAFittedPageStaysWhereTheCanvasPutsIt() {
+        // The clamp does not centre it (the canvas puts a page it first fits in the middle itself).
+        assertEquals(24f, PageScroll.clampX(24f, 800f, 752f, Clearance(right = 76f)))
+        assertEquals(0f, PageScroll.clampX(0f, 800f, 752f, Clearance(right = 76f)))
+    }
 }

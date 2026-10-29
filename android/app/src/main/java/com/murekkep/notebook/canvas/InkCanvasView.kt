@@ -348,6 +348,9 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         fitZoom = max(0.1f, (w - 2 * margin) / layout.pageWidth)
         if (!fitted) {
             zoom = fitZoom
+            // In the middle: with a bar down the right side the clamp lets a fitted page stand left of
+            // the middle, so it would leave it at the left edge.
+            originX = (w - layout.pageWidth * zoom) / 2f
             originY = margin + clearance.top
             fitted = true
         } else {
