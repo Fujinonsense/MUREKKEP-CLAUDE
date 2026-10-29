@@ -9,13 +9,18 @@ import com.murekkep.notebook.ink.Brush
 import com.murekkep.notebook.ink.EraserMode
 import com.murekkep.notebook.ink.InkColor
 import com.murekkep.notebook.ink.InkEraser
+import com.murekkep.notebook.ink.InkSelection
+import com.murekkep.notebook.ink.Lasso
 import com.murekkep.notebook.ink.PageInk
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.ink.Vec2
+import com.murekkep.notebook.ink.referenceNow
+import com.murekkep.notebook.render.PageLayout
+import kotlin.random.Random
 
 // Ink, tools and undo for one open notebook: the part of Murekkep.swiftpm/EditorModel.swift the
-// Android edition has (pens, the eraser, undo, the blank page at the end; no stickers, shapes,
-// lasso edits, text pen or PDFs yet). The canvas reads `pages` on its render thread, so the list is
+// Android edition has (pens, the eraser, the lasso, undo, the blank page at the end; no stickers,
+// shapes, text pen or PDFs yet). The canvas reads `pages` on its render thread, so the list is
 // replaced whole on every change and never mutated: a frame always sees one consistent snapshot.
 // Everything else runs on the main thread (touch events and the chrome).
 
@@ -25,15 +30,16 @@ sealed class Tool {
 
     data object Eraser : Tool()
 
-    /** Select strokes by drawing around them (the canvas does not do it yet). */
+    /** Select strokes by drawing around them, then move, resize, turn or restyle them. */
     data object Lasso : Tool()
 
     val selectedBrush: com.murekkep.notebook.ink.Brush?
         get() = (this as? Brush)?.brush
 }
 
-/** One undoable change on a page: its strokes before and after. */
-class InkEdit(val page: Int, val before: List<Stroke>, val after: List<Stroke>)
+/** One undoable change on a page: its strokes before and after, and the changes on other pages made
+ *  in the same step (a selection carried to another page). */
+class InkEdit(val page: Int, val before: List<Stroke>, val after: List<Stroke>, val linked: List<InkEdit> = emptyList())
 
 class EditorState(
     /** The notebook's folder name in the store; null for a notebook that is never saved. */
@@ -89,6 +95,7 @@ class EditorState(
                 prefs?.rememberBrush(value.brush)
             }
             if (value !is Tool.Eraser) eraserReturn = null
+            if (value !is Tool.Lasso && selection != null) clearSelection()
         }
 
     /** Tool before the last change (the pen's "switch to previous tool"). */
@@ -129,6 +136,31 @@ class EditorState(
 
     /** The store saves at once (the screen is leaving, or the app goes to the background). */
     var onSaveNow: (() -> Unit)? = null
+
+    // Selection (lasso)
+
+    private val selectionState = mutableStateOf<InkSelection?>(null)
+
+    /** The strokes the lasso picked; observable (the selection bar shows while there is one). The
+     *  canvas frames it, so a change asks for a frame. */
+    var selection: InkSelection?
+        get() = selectionState.value
+        private set(value) {
+            if (selectionState.value == value) return
+            selectionState.value = value
+            onInkChange?.invoke()
+        }
+
+    /** The selection while it is dragged, resized or turned. Kept out of Compose until the drag ends,
+     *  so the chrome is not recomposed on every move. */
+    var liveSelection: InkSelection? = null
+        private set
+
+    /** What the canvas frames: the live selection during a drag, else the selection. */
+    val displayedSelection: InkSelection? get() = liveSelection ?: selection
+
+    /** The selection's page as it was when a drag began, and the ids that were selected then. */
+    private var selectionSnapshot: Pair<List<Stroke>, Set<Int>>? = null
 
     /** Changes since the last `markSaved`. */
     @Volatile
@@ -301,11 +333,149 @@ class EditorState(
         onInkChange?.invoke()
     }
 
+    // MARK: Selection (lasso)
+
+    /** Selects the strokes of `page` that lie mostly inside the lasso (a page-local loop). True when
+     *  it took something. */
+    fun selectStrokes(page: Int, lasso: List<Vec2>): Boolean {
+        if (page !in pages.indices || lasso.size < 3) {
+            clearSelection()
+            return false
+        }
+        updateSelection(page, Lasso.select(pages[page].strokes, lasso))
+        return selection != null
+    }
+
+    /** Selects the one stroke under a lasso tap. False when nothing is there. */
+    fun selectItem(page: Int, at: Vec2, tolerance: Float): Boolean {
+        val s = Lasso.strokeAt(strokes(page), at, tolerance) ?: return false
+        updateSelection(page, setOf(s.id))
+        return true
+    }
+
+    fun clearSelection() {
+        liveSelection = null
+        selectionSnapshot = null
+        if (selection != null) selection = null
+    }
+
+    private fun updateSelection(page: Int, ids: Set<Int>) {
+        val s = makeSelection(page, ids)
+        if (s == null) clearSelection() else selection = s
+    }
+
+    private fun makeSelection(page: Int, ids: Set<Int>): InkSelection? {
+        if (ids.isEmpty() || page !in pages.indices) return null
+        val box = Lasso.bounds(pages[page].strokes, ids) ?: return null
+        return InkSelection(page, ids, box)
+    }
+
+    /** A drag on the selection begins: its moves become one undo step when it ends. */
+    fun beginSelectionEdit() {
+        val sel = selection ?: return
+        if (readOnly || sel.page !in pages.indices) return
+        selectionSnapshot = Pair(pages[sel.page].strokes, sel.ids)
+    }
+
+    /** Moves the selection by `offset`, scales it around `anchor` and turns it by `rotation` radians
+     *  around `anchor`, relative to where the drag began. */
+    fun transformSelection(offset: Vec2, scale: Float, anchor: Vec2, rotation: Float = 0f) {
+        val sel = selection ?: return
+        val (strokes, ids) = selectionSnapshot ?: return
+        if (sel.page !in pages.indices) return
+        val moved = Lasso.transform(strokes, ids, offset, scale, anchor, rotation)
+        // The moved strokes are the ones that were not on the page when the drag began.
+        val before = strokes.mapTo(HashSet()) { it.id }
+        setPage(sel.page, moved)
+        liveSelection = makeSelection(sel.page, moved.filter { it.id !in before }.mapTo(HashSet()) { it.id })
+        onInkChange?.invoke()
+    }
+
+    /** The drag ended: one undo step, or, when the selection's middle is now over another page, the
+     *  strokes move to that page (one step for both pages). */
+    fun endSelectionEdit() {
+        liveSelection?.let {
+            liveSelection = null
+            selection = it
+        }
+        val sel = selection ?: return
+        val (strokes, _) = selectionSnapshot ?: return
+        selectionSnapshot = null
+        if (sel.page !in pages.indices) return
+        val target = dropPage(sel)
+        if (target != null) {
+            carrySelection(sel, strokes, target)
+            return
+        }
+        val after = pages[sel.page].strokes
+        if (after.map { it.id } == strokes.map { it.id }) return
+        pushUndo(InkEdit(sel.page, strokes, after))
+        markDirty()
+    }
+
+    /** The page a selection belongs to once dropped with its middle over another page. */
+    private fun dropPage(sel: InkSelection): Int? {
+        val layout = PageLayout(pages.size)
+        val cx = (sel.bounds.minX + sel.bounds.maxX) / 2f
+        val cy = layout.top(sel.page) + (sel.bounds.minY + sel.bounds.maxY) / 2f
+        val target = layout.pageAt(cx, cy) ?: return null
+        return if (target != sel.page && target in pages.indices) target else null
+    }
+
+    /** Carries the selected strokes from their page to `target`, where they stay at the same place on
+     *  the document. One undo step puts both pages back. */
+    private fun carrySelection(sel: InkSelection, before: List<Stroke>, target: Int) {
+        val layout = PageLayout(pages.size)
+        val dy = layout.top(sel.page) - layout.top(target)
+        val carried = Lasso.shifted(pages[sel.page].strokes.filter { it.id in sel.ids }, 0f, dy)
+        val after = pages[sel.page].strokes.filter { it.id !in sel.ids }
+        val targetBefore = pages[target].strokes
+        val targetAfter = targetBefore + carried
+        setPage(sel.page, after)
+        setPage(target, targetAfter)
+        pushUndo(InkEdit(sel.page, before, after, linked = listOf(InkEdit(target, targetBefore, targetAfter))))
+        markDirty()
+        onInkChange?.invoke()
+        keepBlankPageAtEnd()
+        updateSelection(target, carried.mapTo(HashSet()) { it.id })
+    }
+
+    fun deleteSelection() {
+        val sel = selection ?: return
+        replaceStrokes(sel.page, removing = sel.ids, adding = emptyList())
+        clearSelection()
+    }
+
+    /** A copy of the selection a little lower and to the right; the copy is selected. */
+    fun duplicateSelection() {
+        val sel = selection ?: return
+        if (readOnly) return
+        val copies = Lasso.shifted(strokes(sel.page).filter { it.id in sel.ids }, 18f, 18f)
+        replaceStrokes(sel.page, removing = emptySet(), adding = copies)
+        updateSelection(sel.page, copies.mapTo(HashSet()) { it.id })
+    }
+
+    /** Gives the selected strokes the current pen and its color (3D inks included); they are drawn
+     *  anew, so wet ink dries and lava cools again. */
+    fun restyleSelection() {
+        val sel = selection ?: return
+        if (readOnly) return
+        val brush = activeBrush
+        val c = color(brush)
+        val now = referenceNow()
+        val restyled = strokes(sel.page).filter { it.id in sel.ids }.map { s ->
+            val seed = if (brush == Brush.GRASS) Random.nextFloat() else s.seed
+            Stroke(brush, c, s.width, now, seed, s.points)
+        }
+        replaceStrokes(sel.page, removing = sel.ids, adding = restyled)
+        updateSelection(sel.page, restyled.mapTo(HashSet()) { it.id })
+    }
+
     // MARK: Undo
 
     fun undo() {
         val edit = undoStack.removeLastOrNull() ?: return
-        if (edit.page in pages.indices) setPage(edit.page, edit.before)
+        restore(edit, before = true)
         redoStack.addLast(edit)
         updateUndoFlags()
         markDirty()
@@ -314,11 +484,20 @@ class EditorState(
 
     fun redo() {
         val edit = redoStack.removeLastOrNull() ?: return
-        if (edit.page in pages.indices) setPage(edit.page, edit.after)
+        restore(edit, before = false)
         undoStack.addLast(edit)
         updateUndoFlags()
         markDirty()
         onInkChange?.invoke()
+    }
+
+    /** Sets the edit's page, and the pages linked to it, as they were before or after the edit. The
+     *  selection goes: the strokes it names were replaced (the iPad keeps a frame round nothing). */
+    private fun restore(edit: InkEdit, before: Boolean) {
+        clearSelection()
+        for (e in listOf(edit) + edit.linked) {
+            if (e.page in pages.indices) setPage(e.page, if (before) e.before else e.after)
+        }
     }
 
     /** Applies a page's new strokes as one undo step. */

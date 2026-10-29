@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.opengl.GLSurfaceView
 import android.os.Build
+import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.Surface
@@ -14,6 +16,8 @@ import android.widget.OverScroller
 import androidx.input.motionprediction.MotionEventPredictor
 import com.murekkep.notebook.ink.Brush
 import com.murekkep.notebook.ink.InputSample
+import com.murekkep.notebook.ink.Lasso
+import com.murekkep.notebook.ink.SelectionDrag
 import com.murekkep.notebook.ink.Stroke
 import com.murekkep.notebook.ink.StrokeBuilder
 import com.murekkep.notebook.ink.Vec2
@@ -24,11 +28,15 @@ import com.murekkep.notebook.render.InkRenderer
 import com.murekkep.notebook.render.PageLayout
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.Tool
+import java.text.NumberFormat
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 // The iPad's CanvasView (Murekkep.swiftpm/CanvasView.swift) on Android: the pages, the pen and
@@ -44,12 +52,27 @@ import kotlin.random.Random
 /** A pen hovering over the canvas: where (view pixels) and the radius of what it would draw or erase. */
 data class HoverRing(val x: Float, val y: Float, val radius: Float, val erasing: Boolean)
 
+/** A rectangle in view pixels. */
+data class ViewRect(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+/** A measurement next to the pen ("%120", "90°"), at a view point. */
+data class OverlayLabel(val x: Float, val y: Float, val text: String)
+
+/** What the screen draws over the ink, in view pixels (CanvasOverlay.swift on iPad): the lasso's
+ *  loop while it is drawn (x, y pairs), the box of the selected strokes (its dashed frame and
+ *  handles go round it) and a measurement next to the pen. */
+class CanvasOverlay(val lasso: FloatArray?, val selection: ViewRect?, val label: OverlayLabel?)
+
 class InkCanvasView(context: Context, private val state: EditorState) : GLSurfaceView(context) {
     private val renderer = InkRenderer()
     @Volatile private var frameInput: FrameInput? = null
 
     /** Told where a hovering pen is (null when it leaves or touches): the screen draws the ring. */
     var onHover: ((HoverRing?) -> Unit)? = null
+
+    /** Told what to draw over the ink (null when nothing): the screen draws it. */
+    var onOverlay: ((CanvasOverlay?) -> Unit)? = null
+    private var overlayShown = false
 
     // Where the document is: its origin in view pixels and view pixels per document point.
     private var originX = 0f
@@ -69,6 +92,16 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
     private var temporaryEraser = false
     private var stylusSeen = false
     private val predictor: MotionEventPredictor = MotionEventPredictor.newInstance(this)
+
+    // The lasso: the loop being drawn (document points), how long it is on screen (dp) for the
+    // pen's ticks, and a drag on the selection with the measurement it shows.
+    private var lassoPage: Int? = null
+    private val lassoPoints = ArrayList<Vec2>()
+    private var lassoTravel = 0f
+    private var lastLassoTick = 0L
+    private var selectionDrag: SelectionDrag? = null
+    private var lastTurnSnap: Int? = null
+    private var dragLabel: Pair<Vec2, String>? = null
 
     // The fingers.
     private val scaleDetector = ScaleGestureDetector(context, ScaleListener())
@@ -124,6 +157,37 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             animate = true,
         )
         requestRender()
+        publishOverlay()
+    }
+
+    /** Hands the screen the lasso, the selection's box and the measurement in view pixels; they
+     *  follow every scroll and zoom, as every change asks for a frame. */
+    private fun publishOverlay() {
+        val sel = if (state.tool is Tool.Lasso) state.displayedSelection else null
+        val loop = if (lassoPage != null && lassoPoints.size >= 2) {
+            FloatArray(lassoPoints.size * 2).also { a ->
+                for ((i, p) in lassoPoints.withIndex()) {
+                    a[2 * i] = viewX(p.x)
+                    a[2 * i + 1] = viewY(p.y)
+                }
+            }
+        } else {
+            null
+        }
+        val label = dragLabel
+        if (sel == null && loop == null && label == null) {
+            if (overlayShown) {
+                overlayShown = false
+                onOverlay?.invoke(null)
+            }
+            return
+        }
+        val box = sel?.let { s ->
+            val top = pageLayout().top(s.page)
+            ViewRect(viewX(s.bounds.minX), viewY(top + s.bounds.minY), viewX(s.bounds.maxX), viewY(top + s.bounds.maxY))
+        }
+        overlayShown = true
+        onOverlay?.invoke(CanvasOverlay(loop, box, label?.let { (p, text) -> OverlayLabel(viewX(p.x), viewY(p.y), text) }))
     }
 
     private fun setAnimating(on: Boolean) {
@@ -203,6 +267,11 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
 
     private fun docX(x: Float) = (x - originX) / zoom
     private fun docY(y: Float) = (y - originY) / zoom
+    private fun viewX(x: Float) = originX + x * zoom
+    private fun viewY(y: Float) = originY + y * zoom
+
+    /** Document points per dp at the current zoom: the iPad's view points become dp here. */
+    private fun unit() = resources.displayMetrics.density / zoom
 
     // MARK: hover
 
@@ -217,6 +286,11 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
                 val erasing = state.tool is Tool.Eraser || tool == MotionEvent.TOOL_TYPE_ERASER ||
                     event.isButtonPressed(MotionEvent.BUTTON_STYLUS_PRIMARY) ||
                     event.isButtonPressed(MotionEvent.BUTTON_STYLUS_SECONDARY)
+                // The lasso draws no ink: no ring.
+                if (state.tool is Tool.Lasso && !erasing) {
+                    onHover?.invoke(null)
+                    return true
+                }
                 val brush = (state.tool as? Tool.Brush)?.brush ?: state.activeBrush
                 val radius = if (erasing) state.eraserSize / 2f else state.width(brush) / 2f
                 onHover?.invoke(HoverRing(event.x, event.y, max(radius * zoom, 3f), erasing))
@@ -307,13 +381,20 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         val x = docX(event.getX(i))
         val y = docY(event.getY(i))
         val l = pageLayout()
-        val page = l.pageAt(x, y, tolerance = 24f) ?: return
-        penPointer = event.getPointerId(i)
-        penIsStylus = stylus
         val sideButton = event.isButtonPressed(MotionEvent.BUTTON_STYLUS_PRIMARY) ||
             event.isButtonPressed(MotionEvent.BUTTON_STYLUS_SECONDARY)
         val eraserEnd = event.getToolType(i) == MotionEvent.TOOL_TYPE_ERASER
-        temporaryEraser = stylus && (sideButton || eraserEnd)
+        val borrowsEraser = stylus && (sideButton || eraserEnd)
+        if (state.tool is Tool.Lasso && !borrowsEraser) {
+            if (!lassoBegan(Vec2(x, y))) return
+            penPointer = event.getPointerId(i)
+            penIsStylus = stylus
+            return
+        }
+        val page = l.pageAt(x, y, tolerance = 24f) ?: return
+        penPointer = event.getPointerId(i)
+        penIsStylus = stylus
+        temporaryEraser = borrowsEraser
         if (state.tool is Tool.Eraser || temporaryEraser) {
             state.temporaryEraser = temporaryEraser
             eraserPage = page
@@ -339,6 +420,16 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         if (page != null) {
             for (h in 0 until event.historySize) erasePoint(page, sample(event, i, h))
             erasePoint(page, sample(event, i, -1))
+            return
+        }
+        if (selectionDrag != null) {
+            // Only where the pen is now matters to a drag.
+            lassoMoved(Vec2(docX(event.getX(i)), docY(event.getY(i))))
+            return
+        }
+        if (lassoPage != null) {
+            for (h in 0 until event.historySize) lassoMoved(Vec2(docX(event.getHistoricalX(i, h)), docY(event.getHistoricalY(i, h))))
+            lassoMoved(Vec2(docX(event.getX(i)), docY(event.getY(i))))
             return
         }
         val b = builder ?: return
@@ -371,6 +462,11 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             finishEraser()
             return
         }
+        if (selectionDrag != null || lassoPage != null) {
+            penMoved(event, i)
+            lassoEnded()
+            return
+        }
         val b = builder
         val a = active
         if (b != null && a != null) {
@@ -393,10 +489,122 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
             finishEraser()
             return
         }
+        // A cancelled drag keeps where the selection got to, as on iPad; a cancelled loop selects nothing.
+        if (selectionDrag != null) state.endSelectionEdit()
+        selectionDrag = null
+        dragLabel = null
+        lassoPage = null
+        lassoPoints.clear()
         builder = null
         active = null
         penPointer = -1
         requestFrame()
+    }
+
+    // MARK: lasso
+
+    /** The pen touched down with the lasso: on the selection's frame or a handle it takes the
+     *  selection (the turn handle may stand above the page); anywhere else on a page it starts a new
+     *  loop. False off the pages. */
+    private fun lassoBegan(doc: Vec2): Boolean {
+        val l = pageLayout()
+        state.displayedSelection?.let { sel ->
+            val drag = Lasso.grab(Vec2(doc.x, doc.y - l.top(sel.page)), sel.bounds, unit())
+            if (drag != null) {
+                selectionDrag = drag
+                // A turn starts settled at 0°: no click until it leaves and comes back.
+                lastTurnSnap = if (drag is SelectionDrag.Rotate) 0 else null
+                state.beginSelectionEdit()
+                return true
+            }
+        }
+        val page = l.pageAt(doc.x, doc.y, tolerance = 16f) ?: return false
+        state.clearSelection()
+        lassoPage = page
+        lassoPoints.clear()
+        lassoPoints.add(doc)
+        lassoTravel = 0f
+        requestFrame()
+        return true
+    }
+
+    private fun lassoMoved(doc: Vec2) {
+        val drag = selectionDrag
+        if (drag != null) {
+            val sel = state.displayedSelection ?: return
+            val p = Vec2(doc.x, doc.y - pageLayout().top(sel.page))
+            when (drag) {
+                is SelectionDrag.Move -> state.transformSelection(p - drag.start, 1f, Vec2.ZERO)
+                is SelectionDrag.Scale -> {
+                    val k = hypot(p.x - drag.anchor.x, p.y - drag.anchor.y) / drag.startDistance
+                    dragLabel = Pair(doc, NumberFormat.getPercentInstance().format(k.toDouble().coerceIn(0.05, 20.0)))
+                    state.transformSelection(Vec2.ZERO, k, drag.anchor)
+                }
+                is SelectionDrag.Rotate -> {
+                    val (angle, settled) = Lasso.settleTurn(atan2(p.y - drag.center.y, p.x - drag.center.x) - drag.startAngle)
+                    if (settled != null) {
+                        if (lastTurnSnap != settled) {
+                            lastTurnSnap = settled
+                            tick()
+                        }
+                    } else {
+                        lastTurnSnap = null
+                    }
+                    dragLabel = Pair(doc, "${(-angle * 180.0 / PI).roundToInt()}°")
+                    state.transformSelection(Vec2.ZERO, 1f, drag.center, angle)
+                }
+            }
+            return
+        }
+        if (lassoPage == null) return
+        val last = lassoPoints.last()
+        val step = hypot(doc.x - last.x, doc.y - last.y)
+        if (step < 2f) return
+        // The pen ticks each time the loop grows by one dash and gap of its outline on screen.
+        val before = Lasso.dashCount(lassoTravel)
+        lassoTravel += step / unit()
+        val now = SystemClock.uptimeMillis()
+        if (Lasso.dashCount(lassoTravel) > before && now - lastLassoTick > 25) {
+            lastLassoTick = now
+            tick()
+        }
+        lassoPoints.add(doc)
+        requestFrame()
+    }
+
+    private fun lassoEnded() {
+        if (selectionDrag != null) {
+            selectionDrag = null
+            dragLabel = null
+            state.endSelectionEdit()
+            penPointer = -1
+            requestFrame()
+            return
+        }
+        val page = lassoPage
+        penPointer = -1
+        if (page == null) return
+        val top = pageLayout().top(page)
+        val polygon = lassoPoints.map { Vec2(it.x, it.y - top) }
+        lassoPage = null
+        lassoPoints.clear()
+        var length = 0f
+        for (j in 1 until polygon.size) length += hypot(polygon[j].x - polygon[j - 1].x, polygon[j].y - polygon[j - 1].y)
+        // A tap (no loop drawn) picks the stroke under the pen.
+        val took = if (length < Lasso.TAP_LENGTH * unit()) {
+            state.selectItem(page, polygon.first(), 8f * unit())
+        } else {
+            state.selectStrokes(page, polygon)
+        }
+        if (took) {
+            performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY)
+        }
+        requestFrame()
+    }
+
+    /** A light click: the loop growing by a dash, a turn settling at a right angle. */
+    private fun tick() {
+        performHapticFeedback(if (Build.VERSION.SDK_INT >= 34) HapticFeedbackConstants.SEGMENT_FREQUENT_TICK else HapticFeedbackConstants.CLOCK_TICK)
     }
 
     private fun finishEraser() {

@@ -23,6 +23,10 @@
     <string name="back">Geri</string>
     <string name="undo">Geri al</string>
     <string name="redo">Yinele</string>
+    <string name="lasso">Kement</string>
+    <string name="duplicate">Çoğalt</string>
+    <string name="apply_ink">Mürekkebi uygula</string>
+    <string name="done">Bitti</string>
     <string name="eraser">Silgi</string>
     <string name="eraser_whole_stroke">Tüm çizgi</string>
     <string name="eraser_partial">Kısmi</string>

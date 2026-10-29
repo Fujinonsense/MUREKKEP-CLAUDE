@@ -23,6 +23,10 @@
     <string name="back">Back</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
+    <string name="lasso">Lasso</string>
+    <string name="duplicate">Duplicate</string>
+    <string name="apply_ink">Apply ink</string>
+    <string name="done">Done</string>
     <string name="eraser">Eraser</string>
     <string name="eraser_whole_stroke">Whole stroke</string>
     <string name="eraser_partial">Partial</string>

@@ -5,6 +5,7 @@
     py -3 drive.py xy 500 600            # tap a point
     py -3 drive.py wave x y w h [n]      # a stylus wave in that box, n periods
     py -3 drive.py line x1 y1 x2 y2      # a straight stylus stroke
+    py -3 drive.py loop cx cy rx ry      # a stylus loop round an ellipse (the lasso)
     py -3 drive.py finger x1 y1 x2 y2    # a finger drag (pans the page)
     py -3 drive.py shot name             # screenshot to %TEMP%\murekkep-androidcheck
 ame.png
@@ -52,6 +53,8 @@ def stylus_path(points):
 
 
 def main(argv):
+    # The Windows console's code page cannot print every log line (emoji in other apps' logs).
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     cmd = argv[1]
     if cmd == "ui":
         for label, x, y, b, click, enabled in nodes():
@@ -75,6 +78,10 @@ def main(argv):
         steps = 28
         pts = [(x + w * i / steps, y + h / 2 + h / 2 * math.sin(2 * math.pi * periods * i / steps)) for i in range(steps + 1)]
         stylus_path(pts)
+    elif cmd == "loop":
+        cx, cy, rx, ry = map(float, argv[2:6])
+        steps = 40
+        stylus_path([(cx + rx * math.cos(2 * math.pi * i / steps), cy + ry * math.sin(2 * math.pi * i / steps)) for i in range(steps + 1)])
     elif cmd == "line":
         x1, y1, x2, y2 = map(float, argv[2:6])
         stylus_path([(x1 + (x2 - x1) * i / 12, y1 + (y2 - y1) * i / 12) for i in range(13)])

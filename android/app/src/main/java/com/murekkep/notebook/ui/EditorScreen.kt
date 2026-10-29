@@ -45,11 +45,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.murekkep.notebook.R
+import com.murekkep.notebook.canvas.CanvasOverlay
 import com.murekkep.notebook.canvas.HoverRing
 import com.murekkep.notebook.canvas.InkCanvasView
 
-// One open notebook: a calm top bar (back, title, undo, redo), the ink canvas, and the pen dock
-// under it (PenStrip.kt). The canvas is a GLSurfaceView: it pauses and resumes with the screen's
+// One open notebook: a calm top bar (back, title, undo, redo), the ink canvas with the lasso's
+// overlay and selection bar over it (LassoChrome.kt), and the pen dock under it (PenStrip.kt). The canvas is a GLSurfaceView: it pauses and resumes with the screen's
 // lifecycle and is released when the screen leaves; the notebook is saved at both moments.
 
 @Composable
@@ -57,7 +58,13 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = remember(context) { context.findLifecycleOwner() }
     var hover by remember { mutableStateOf<HoverRing?>(null) }
-    val canvas = remember(state) { InkCanvasView(context, state).also { it.onHover = { ring -> hover = ring } } }
+    var overlay by remember { mutableStateOf<CanvasOverlay?>(null) }
+    val canvas = remember(state) {
+        InkCanvasView(context, state).also {
+            it.onHover = { ring -> hover = ring }
+            it.onOverlay = { o -> overlay = o }
+        }
+    }
 
     DisposableEffect(lifecycleOwner, canvas) {
         val observer = LifecycleEventObserver { _, event ->
@@ -82,6 +89,10 @@ fun EditorScreen(state: EditorState, onBack: () -> Unit) {
         EditorTopBar(state, onBack)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(factory = { canvas }, modifier = Modifier.fillMaxSize())
+            overlay?.let { CanvasOverlayLayer(it) }
+            if (state.tool is Tool.Lasso && state.selection != null) {
+                SelectionBar(state, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
+            }
             // A hovering pen (S Pen, USI) shows the size of what it would draw, or erase in red.
             hover?.let { ring ->
                 Canvas(Modifier.fillMaxSize()) {

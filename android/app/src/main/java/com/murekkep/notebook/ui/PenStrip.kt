@@ -58,8 +58,8 @@ import com.murekkep.notebook.ink.EraserMode
 import com.murekkep.notebook.ink.InkColor
 import java.util.Locale
 
-// The pen dock under the canvas (Murekkep.swiftpm/PenStrip.swift, ToolPalette.swift): the eraser
-// and every pen by group in one scrolling strip, each pen named in the user's language and the Pro
+// The pen dock under the canvas (Murekkep.swiftpm/PenStrip.swift, ToolPalette.swift): the eraser,
+// the lasso and every pen by group in one scrolling strip, each pen named in the user's language and the Pro
 // pens starred (all usable for now; Play Billing comes later). Under it, the chosen pen's six colors
 // and a width slider, or for the eraser its mode (whole stroke, partial) and size.
 
@@ -111,6 +111,10 @@ private fun PenStrip(state: EditorState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         EraserChip(selected = tool is Tool.Eraser, onClick = { state.toggleEraser() })
+        LassoChip(
+            selected = tool is Tool.Lasso,
+            onClick = { state.tool = if (tool is Tool.Lasso) Tool.Brush(state.lastBrush) else Tool.Lasso },
+        )
         VerticalDivider(Modifier.height(24.dp).padding(horizontal = 4.dp))
         for (group in BrushGroup.entries) {
             Text(
@@ -183,6 +187,28 @@ private fun EraserChip(selected: Boolean, onClick: () -> Unit) {
         ) {
             EraserGlyph(Modifier.size(16.dp))
             Text(stringResource(R.string.eraser), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        }
+    }
+}
+
+/** The lasso (LassoChrome.kt): pick strokes by drawing round them. */
+@Composable
+private fun LassoChip(selected: Boolean, onClick: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) scheme.primaryContainer else scheme.surfaceVariant.copy(alpha = 0.55f),
+        contentColor = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+        border = if (selected) BorderStroke(1.dp, scheme.primary.copy(alpha = 0.6f)) else null,
+    ) {
+        Row(
+            Modifier.padding(start = 10.dp, end = 12.dp, top = 7.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            LassoGlyph(Modifier.size(16.dp), if (selected) scheme.onPrimaryContainer else scheme.onSurface)
+            Text(stringResource(R.string.lasso), style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
 }
