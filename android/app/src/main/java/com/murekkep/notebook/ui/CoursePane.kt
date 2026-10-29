@@ -211,7 +211,8 @@ private val MenuTextWidth = 260.dp
 /**
  * "Derse taşı" in a note's menu (the iPad's submenu, opened in the menu's place with its title on
  * top, which folds it back): every course, the note's own ticked, the others with their symbols;
- * "Dersten çıkar" while the note is in one; "Yeni ders…".
+ * "Dersten çıkar" while the note is in one; "Yeni ders…". A rule stands only under something, as
+ * iOS drops a Divider with nothing above it: with no courses the title's rule is the only one.
  */
 @Composable
 internal fun ColumnScope.MoveToCourseItems(
@@ -232,10 +233,10 @@ internal fun ColumnScope.MoveToCourseItems(
         MenuItem(section.name, if (section.id == current) Icons.Outlined.Check else courseGlyph(section.symbol)) { onMove(section.id) }
     }
     if (current != null) {
-        HorizontalDivider(Modifier.padding(vertical = 4.dp), color = rule)
+        if (sections.isNotEmpty()) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = rule)
         MenuItem(stringResource(R.string.course_remove), Icons.Outlined.Inbox) { onMove(null) }
     }
-    HorizontalDivider(Modifier.padding(vertical = 4.dp), color = rule)
+    if (sections.isNotEmpty() || current != null) HorizontalDivider(Modifier.padding(vertical = 4.dp), color = rule)
     MenuItem(stringResource(R.string.course_new_more), Icons.Outlined.Add, onClick = onNewCourse)
 }
 
