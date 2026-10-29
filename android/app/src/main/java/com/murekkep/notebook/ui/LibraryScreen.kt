@@ -127,6 +127,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -563,19 +564,22 @@ private fun NavRow(icon: ImageVector, title: String, count: Int?, selected: Bool
     }
 }
 
-/** The search over the titles: a 38 dp field in a hairline on paper, with a clear button while it holds a query. */
+/** The search over the titles: a 38 dp field in a hairline on paper, with a clear button while it
+ *  holds a query; no autocorrection, and the keyboard's search key ends the editing (Return on iPad). */
 @Composable
 private fun SearchField(query: String, onQuery: (String) -> Unit) {
     val z = Zen.colors
     val label = stringResource(R.string.search)
     val clear = stringResource(R.string.clear_search)
+    val focusManager = LocalFocusManager.current
     BasicTextField(
         value = query,
         onValueChange = onQuery,
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = z.ink),
         cursorBrush = SolidColor(z.accent),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
         decorationBox = { inner ->
             Row(
