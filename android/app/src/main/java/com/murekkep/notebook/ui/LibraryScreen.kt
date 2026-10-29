@@ -1124,11 +1124,11 @@ private fun NoteCard(
     }.joinToString(", ")
     val more = stringResource(R.string.more_actions)
     val shape = RoundedCornerShape(Zen.control)
+    // One button for TalkBack, read from its texts once each: the title, then "PDF, 3 sayfa, dün".
     Column(
         modifier
             .clip(shape)
-            .combinedClickable(onClick = onOpen, onLongClickLabel = more, onLongClick = { menuOpen = true })
-            .semantics { contentDescription = meta.title },
+            .combinedClickable(onClick = onOpen, onLongClickLabel = more, onLongClick = { menuOpen = true }),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(

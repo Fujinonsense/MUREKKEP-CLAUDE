@@ -48,9 +48,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -156,7 +156,8 @@ private fun ThemeTile(option: AppTheme, chosen: Boolean, width: Dp, onClick: () 
             .width(width)
             .clip(shape)
             .clickable(onClick = onClick)
-            .semantics {
+            // Its name once (and "Pro'da" for a locked one), not again from the badge and the caption.
+            .clearAndSetSemantics {
                 contentDescription = if (option.locked) "$title, $pro" else title
                 this.selected = chosen
             },

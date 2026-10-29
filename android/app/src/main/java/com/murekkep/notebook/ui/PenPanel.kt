@@ -177,10 +177,8 @@ private fun PanelPen(state: EditorState, brush: Brush, modifier: Modifier, onPic
                 .background(paper)
                 .border(if (selected) 1.5.dp else 1.dp, if (selected) z.accent else z.rule, shape)
                 .combinedClickable(onClick = onPick, onLongClick = { menu = true }, onLongClickLabel = favoriteLabel)
-                .semantics {
-                    contentDescription = name
-                    this.selected = selected
-                }
+                // Named by its text, once.
+                .semantics { this.selected = selected }
                 .padding(start = 10.dp, end = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
