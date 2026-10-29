@@ -6,11 +6,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +39,7 @@ import com.murekkep.notebook.data.NotebookStore
 import com.murekkep.notebook.export.PdfShare
 import com.murekkep.notebook.ui.ActivityBars
 import com.murekkep.notebook.ui.AppTheme
+import com.murekkep.notebook.ui.EditorBar
 import com.murekkep.notebook.ui.EditorScreen
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.LibraryScreen
@@ -43,6 +47,7 @@ import com.murekkep.notebook.ui.MurekkepTheme
 import com.murekkep.notebook.ui.SettingsScreen
 import com.murekkep.notebook.ui.Zen
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -136,7 +141,7 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
 
     val state = editor
     if (state == null || state.notebookId != id) {
-        Opening()
+        Opening(store.notebook(id)?.title ?: "", onBack = close)
     } else {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
@@ -176,17 +181,30 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, on
     }
 }
 
+/**
+ * A note on its way in, while its ink (and an imported PDF's pages) are read off the main thread:
+ * the editor's ground and its bar with "‹ Notlar" and the title at once, so the note opens as the
+ * editor appearing, as the iPad's does with no loading screen. Only a read that takes longer than
+ * 300 ms brings in a spinner and "Açılıyor…".
+ */
 @Composable
-private fun Opening() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator()
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(R.string.opening),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+private fun Opening(title: String, onBack: () -> Unit) {
+    val z = Zen.colors
+    var slow by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(300)
+        slow = true
+    }
+    Column(Modifier.fillMaxSize().background(z.paper3)) {
+        EditorBar(title, onBack) {}
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (slow) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(Modifier.size(28.dp), color = z.muted, strokeWidth = 2.5.dp)
+                    Spacer(Modifier.height(16.dp))
+                    Text(stringResource(R.string.opening), style = MaterialTheme.typography.bodyMedium, color = z.muted)
+                }
+            }
         }
     }
 }

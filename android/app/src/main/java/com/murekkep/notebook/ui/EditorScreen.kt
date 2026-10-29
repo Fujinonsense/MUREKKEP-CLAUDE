@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -346,12 +347,53 @@ private fun Context.findLifecycleOwner(): LifecycleOwner? {
     return null
 }
 
-/** "‹ Notlar" in the accent on the left, the title in the middle, Paylaş and Diğer on the right, on
- *  paper-2 over a hairline (the iPad's navigation bar). */
+/** Paylaş and Diğer on the editor's bar. */
 @Composable
 private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> Unit, onSettings: (() -> Unit)?) {
     val z = Zen.colors
     var menuOpen by remember { mutableStateOf(false) }
+    EditorBar(state.title, onBack) {
+        BarButton(stringResource(R.string.share), onClick = onShare) {
+            Icon(Icons.Outlined.IosShare, contentDescription = null, modifier = Modifier.size(22.dp))
+        }
+        Box {
+            BarButton(stringResource(R.string.more), onClick = { menuOpen = true }) {
+                Icon(Icons.Outlined.MoreHoriz, contentDescription = null, modifier = Modifier.size(22.dp))
+            }
+            ZenMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                MenuSwitch(stringResource(R.string.editor_straighten_on_hold), Icons.Outlined.Gesture, state.straightLine) {
+                    state.straightLine = it
+                    menuOpen = false
+                }
+                MenuSwitch(stringResource(R.string.editor_animations), Icons.Outlined.AutoAwesome, state.animations) {
+                    state.animations = it
+                    menuOpen = false
+                }
+                if (onSettings != null) {
+                    HorizontalDivider(color = z.rule)
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.settings)) },
+                        leadingIcon = { Spacer(Modifier.size(24.dp)) },
+                        trailingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                        onClick = {
+                            menuOpen = false
+                            onSettings()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The editor's top bar (the iPad's navigation bar): "‹ Notlar" in the accent on the left, [title] in
+ * the middle, [actions] on the right, on paper-2 over a hairline. A note on its way in shows it with
+ * no actions yet.
+ */
+@Composable
+internal fun EditorBar(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit) {
+    val z = Zen.colors
     Box(
         Modifier
             .fillMaxWidth()
@@ -372,39 +414,10 @@ private fun EditorTopBar(state: EditorState, onBack: () -> Unit, onShare: () -> 
                 Text(stringResource(R.string.notes), style = MaterialTheme.typography.bodyLarge, color = z.accent)
             }
             Spacer(Modifier.weight(1f))
-            BarButton(stringResource(R.string.share), onClick = onShare) {
-                Icon(Icons.Outlined.IosShare, contentDescription = null, modifier = Modifier.size(22.dp))
-            }
-            Box {
-                BarButton(stringResource(R.string.more), onClick = { menuOpen = true }) {
-                    Icon(Icons.Outlined.MoreHoriz, contentDescription = null, modifier = Modifier.size(22.dp))
-                }
-                ZenMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    MenuSwitch(stringResource(R.string.editor_straighten_on_hold), Icons.Outlined.Gesture, state.straightLine) {
-                        state.straightLine = it
-                        menuOpen = false
-                    }
-                    MenuSwitch(stringResource(R.string.editor_animations), Icons.Outlined.AutoAwesome, state.animations) {
-                        state.animations = it
-                        menuOpen = false
-                    }
-                    if (onSettings != null) {
-                        HorizontalDivider(color = z.rule)
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.settings)) },
-                            leadingIcon = { Spacer(Modifier.size(24.dp)) },
-                            trailingIcon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onSettings()
-                            },
-                        )
-                    }
-                }
-            }
+            actions()
         }
         Text(
-            state.title,
+            title,
             style = MaterialTheme.typography.titleMedium,
             color = z.ink,
             maxLines = 1,
