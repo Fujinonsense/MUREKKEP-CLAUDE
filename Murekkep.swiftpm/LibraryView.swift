@@ -965,12 +965,14 @@ private struct WeekCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 // In the app's language (Loc.locale), not the iPad's: formatted() does not read
-                // SwiftUI's locale. One line beside the streak ("Wednesday, September 30").
+                // SwiftUI's locale. One line beside the streak: the longest, "Wednesday, September
+                // 30", is about 185 points and has about 155 next to "12 days", so it may shrink to
+                // 80 % (12 points, the caption's size).
                 Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Loc.locale)))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.8)
                 Spacer()
                 if streak > 1 {
                     HStack(spacing: 4) {

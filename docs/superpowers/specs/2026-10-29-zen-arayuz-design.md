@@ -93,7 +93,7 @@ kâğıdı yok (Pro tema seçiliyse görsel kenar çubuğunun arkasında ve baş
     Foto (doc.badge.plus), Ders (folder.badge.plus, yeni ders); açık dersin içine. Simge (18,
     medium, ink-2) üstte, ad altta (caption semibold, ink); 58 yüksek, paper + 1 rule, köşe 12.
   - Hafta kartı: paper + 1 rule, köşe 14, iç boşluk 14, satırlar 10 aralıklı. Tarih satırı (gün adı,
-    gün, ay; subheadline semibold ink; tek satır, gerekirse %85'e küçülür); seri 1 günü geçince
+    gün, ay; subheadline semibold ink; tek satır, gerekirse %80'e küçülür); seri 1 günü geçince
     turuncu alev + "{0} gün" (caption semibold ink); yedi sütun Pt Sa Ça Pe Cu Ct Pz (10 semibold
     muted), 6 altında 22'lik daireler: çalışılan gün accent dolu + beyaz tik, diğerleri paper-3;
     bugün dairenin 2 dışında 2'lik accent halka (30 çap; çalışılmış günün dolgusunda da görünsün
