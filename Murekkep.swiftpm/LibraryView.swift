@@ -594,14 +594,14 @@ struct LibraryView: View {
 
 // MARK: - Sidebar
 
-/// The sidebar: the wordmark, search, the lists with their counts, the courses, and at the bottom
-/// the Studio, the voices and Settings. Paper in black and white; a Pro theme's picture shows
-/// through a material.
+/// The sidebar: the wordmark, search, the lists with their counts, the courses, and pinned at the
+/// bottom the Studio, the voices and Settings. One even surface for its full height, under the
+/// status bar and the home indicator too: paper-2 in black and white (and on the ruled paper), an
+/// even frosted panel on a Pro theme's picture.
 struct LibrarySidebar: View {
     @EnvironmentObject private var store: LibraryStore
-    @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var studio: StudioStore
-    @ObservedObject private var pro = ProStore.shared
+    @Environment(\.onPicture) private var onPicture
     let place: LibraryPlace
     @Binding var query: String
     let actions: LibraryActions
@@ -610,9 +610,6 @@ struct LibrarySidebar: View {
     @State private var dropTarget: UUID?
 
     private static let rowShape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-
-    /// Black and white draws its own flat paper; a Pro theme shows its picture through a material.
-    private var flat: Bool { !settings.shownBackground(locked: pro.locks).isPremium }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -645,11 +642,19 @@ struct LibrarySidebar: View {
             .padding(.vertical, 12)
         }
         .background {
-            if flat {
-                Theme.paper2
-            } else {
-                Rectangle().fill(.regularMaterial)
+            Group {
+                if onPicture {
+                    // Frosted evenly: paper-2 at 0.80 over the thinnest material, so the picture
+                    // shows only as a faint blur and no band of it reads darker or lighter, the
+                    // bottom block included.
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Theme.paper2.opacity(0.80))
+                } else {
+                    Theme.paper2
+                }
             }
+            .ignoresSafeArea()
         }
     }
 
