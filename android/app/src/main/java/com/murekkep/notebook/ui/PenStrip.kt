@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -87,8 +89,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -243,17 +247,20 @@ fun PenBar(
             UndoRedo(state, vertical)
             BarDivider(vertical)
             PenTray(state, edge, sheet, { sheet = it }, popoverRoom, if (fits) weighted else Modifier)
-            BarButton(stringResource(R.string.all_pens), selected = sheet == Sheet.ALL_PENS, onClick = { sheet = Sheet.ALL_PENS }) {
+            val allPens = stringResource(R.string.all_pens)
+            BarButton(allPens, selected = sheet == Sheet.ALL_PENS, onClick = { sheet = Sheet.ALL_PENS }) {
                 AllPensGlyph(LocalContentColor.current)
                 if (sheet == Sheet.ALL_PENS) {
-                    BarPopover(edge, popoverRoom, onDismiss = close, width = 548.dp, padding = 0.dp, spacing = 0.dp) { PenPanel(state, onPicked = close) }
+                    BarPopover(edge, popoverRoom, allPens, onDismiss = close, width = 548.dp, padding = 0.dp, spacing = 0.dp) { PenPanel(state, onPicked = close) }
                 }
             }
             BarDivider(vertical)
             val active = state.activeBrush
             ColorDot(state.color(active).toColor(), onClick = { sheet = Sheet.PEN_FROM_DOT }) {
                 if (sheet == Sheet.PEN_FROM_DOT) {
-                    BarPopover(edge, min(popoverRoom, PenCardHeight), onDismiss = close) { PenSettings(state, active) }
+                    BarPopover(edge, min(popoverRoom, PenCardHeight), stringResource(R.string.pen_settings, active.localizedTitle()), onDismiss = close) {
+                        PenSettings(state, active)
+                    }
                 }
             }
             BarDivider(vertical)
@@ -278,7 +285,9 @@ fun PenBar(
             ) {
                 ShapeGlyph(state.shapeKind, LocalContentColor.current)
                 if (sheet == Sheet.SHAPES) {
-                    BarPopover(edge, popoverRoom, onDismiss = close, width = 360.dp, padding = 18.dp, spacing = 14.dp) { ShapeSettings(state, close) }
+                    BarPopover(edge, popoverRoom, stringResource(R.string.shape_settings), onDismiss = close, width = 360.dp, padding = 18.dp, spacing = 14.dp) {
+                        ShapeSettings(state, close)
+                    }
                 }
             }
             if (!state.isPdf) {
@@ -369,7 +378,9 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
             onToggleFavorite = { state.toggleFavorite(brush) },
         ) {
             if (sheet == Sheet.PEN_FROM_SLOT && selected) {
-                BarPopover(edge, min(popoverRoom, PenCardHeight), onDismiss = close) { PenSettings(state, brush) }
+                BarPopover(edge, min(popoverRoom, PenCardHeight), stringResource(R.string.pen_settings, brush.localizedTitle()), onDismiss = close) {
+                    PenSettings(state, brush)
+                }
             }
         }
     }
@@ -394,7 +405,7 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
             favorite = null,
         ) {
             if (sheet == Sheet.ERASER) {
-                BarPopover(edge, popoverRoom, onDismiss = close) { EraserSettings(state) }
+                BarPopover(edge, popoverRoom, stringResource(R.string.eraser_settings), onDismiss = close) { EraserSettings(state) }
             }
         }
     }
@@ -789,12 +800,13 @@ private class BesideAnchor(private val edge: PaletteEdge, private val pad: Int, 
 /**
  * A popover of the bar on [edge]: paper with a hairline and the float shadow, [width] wide, closed by
  * a tap outside (its shadow's margin included, which lies over the bar beside the anchor) or Back;
- * taller than [maxHeight], it scrolls.
+ * taller than [maxHeight], it scrolls. TalkBack names it [title] as it opens.
  */
 @Composable
 private fun BarPopover(
     edge: PaletteEdge,
     maxHeight: Dp,
+    title: String,
     onDismiss: () -> Unit,
     width: Dp = 320.dp,
     padding: Dp = 16.dp,
@@ -811,6 +823,7 @@ private fun BarPopover(
         Box(Modifier.dismissInMargin(PopoverShadowPad, onDismiss).padding(PopoverShadowPad)) {
             Column(
                 Modifier
+                    .semantics { paneTitle = title }
                     .width(width)
                     .heightIn(max = maxHeight)
                     .floating(Zen.popover)
@@ -863,9 +876,13 @@ fun ZenSlider(value: Float, onChange: (Float) -> Unit, range: ClosedFloatingPoin
 /** The system's light grey fill (a switch's off track, a stepper), lighter than the card at night too. */
 internal fun systemFill(dark: Boolean): Color = if (dark) Color(0xFF39393D) else Color(0xFFE9E9EA)
 
-/** A switch in the accent; off, a white knob of the same size on the system's light grey track, as iOS draws one. */
+/**
+ * A switch in the accent; off, a white knob of the same size on the system's light grey track, as
+ * iOS draws one. [onChange] null leaves the touch to the row it stands in ([SwitchRow]), which
+ * TalkBack then reads as one switch with its name.
+ */
 @Composable
-fun ZenSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
+fun ZenSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?) {
     val z = Zen.colors
     Switch(
         checked = checked,
@@ -877,6 +894,25 @@ fun ZenSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
             uncheckedTrackColor = systemFill(z.dark), uncheckedThumbColor = Color.White, uncheckedBorderColor = Color.Transparent,
         ),
     )
+}
+
+/**
+ * A switch's row, as the iPad's Toggle with its label: [label] (it takes the room left), then the
+ * switch. The row takes the touch and is one switch for TalkBack, named by its text.
+ */
+@Composable
+fun SwitchRow(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, label: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = Zen.target)
+            // Only the switch moves, as on the iPad; the row does not light up.
+            .toggleable(value = checked, interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        label()
+        ZenSwitch(checked, null)
+    }
 }
 
 /**
@@ -960,11 +996,10 @@ private fun ShapeSettings(state: EditorState, close: () -> Unit) {
             }
         }
     }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    SwitchRow(state.shapeDashed, { state.shapeDashed = it }) {
         Icon(Icons.Outlined.DensityMedium, contentDescription = null, tint = z.ink2, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
         Text(stringResource(R.string.dashed_line), style = MaterialTheme.typography.bodyLarge, color = z.ink2, modifier = Modifier.weight(1f))
-        ZenSwitch(state.shapeDashed) { state.shapeDashed = it }
     }
     if (state.shapeKind == ShapeKind.POLYGON) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

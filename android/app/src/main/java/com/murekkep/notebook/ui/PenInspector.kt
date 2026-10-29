@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -136,15 +134,14 @@ private fun PenOptions(state: EditorState, brush: Brush) {
     }
 }
 
-/** A switch of the pen, under a hairline. */
+/** A switch of the pen, under a hairline: one switch named [title] for TalkBack. */
 @Composable
 private fun InspectorSwitch(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     val z = Zen.colors
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(z.rule))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        SwitchRow(checked, onChange) {
             Text(title, style = Subheadline, color = z.ink2, modifier = Modifier.weight(1f))
-            ZenSwitch(checked, onChange)
         }
     }
 }
