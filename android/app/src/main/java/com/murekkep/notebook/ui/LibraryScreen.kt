@@ -86,6 +86,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -178,7 +179,13 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit, onSettin
         )
     }
 
+    val appTheme = LocalAppTheme.current.shown
     BoxWithConstraints(Modifier.fillMaxSize().background(z.paper)) {
+        // A Pro theme's picture lies behind the sidebar and the title area, under its wash of paper or night.
+        if (z.proTheme && appTheme.picture != null) {
+            Image(painterResource(appTheme.picture), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background((if (z.dark) Color.Black else z.paper3).copy(alpha = appTheme.wash)))
+        }
         if (maxWidth >= WideLayout) {
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.width(SidebarWidth).fillMaxHeight()) { sidebar {} }
@@ -252,7 +259,7 @@ private fun Sidebar(
     Column(
         Modifier
             .fillMaxSize()
-            .background(z.paper2)
+            .background(if (z.proTheme) z.paper2.copy(alpha = 0.84f) else z.paper2)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Start + WindowInsetsSides.Bottom))
             .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -644,10 +651,10 @@ private fun CoverPicture(file: File, version: Int, kind: NoteKind, modifier: Mod
 
 /** Ruled paper: blue lines and a red margin on white, the mockup's cover of a note without ink. */
 @Composable
-private fun RuledPaper(modifier: Modifier) {
+internal fun RuledPaper(modifier: Modifier) {
     val rule = Color(0xFFBFD3EA)
     val margin = Color(0xFFE6A5A5)
-    Canvas(modifier) {
+    Canvas(modifier.background(Color.White)) {
         val step = size.height / 26f
         var y = step * 3f
         while (y < size.height) {

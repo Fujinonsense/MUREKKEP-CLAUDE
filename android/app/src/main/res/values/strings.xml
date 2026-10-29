@@ -110,4 +110,26 @@
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>
     </plurals>
+
+    <!-- Zen settings -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_hint">Black and white follows the system’s light or dark look. The Pro themes come with their own pictures and accents.</string>
+    <string name="theme_black_white">Black and white</string>
+    <string name="theme_free">Free</string>
+    <string name="theme_ebru">Marbling</string>
+    <string name="theme_hokka">Inkwell</string>
+    <string name="theme_lapis">Lapis</string>
+    <string name="theme_cini">Glaze</string>
+    <string name="theme_varak">Gold leaf</string>
+    <string name="theme_lavi">Ink wash</string>
+    <string name="theme_ruled">Ruled paper</string>
+    <string name="theme_ferro">Ferro</string>
+    <string name="theme_holo">Holo</string>
+    <string name="theme_silk">Silk</string>
+    <string name="theme_molten">Molten gold</string>
+    <string name="theme_glass">Liquid glass</string>
+    <string name="theme_pearl">Pearl</string>
+    <string name="pro_soon_title">Pro is coming</string>
+    <string name="pro_soon_message">The Pro themes arrive with the Play Store edition. Until then the look stays black and white.</string>
 </resources>

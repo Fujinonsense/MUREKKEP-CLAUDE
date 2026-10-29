@@ -173,16 +173,20 @@ private val ZenShapes = Shapes(
 )
 
 /**
- * The app's theme. Black and white follows the system's light or dark look; [proTheme] says a Pro
- * theme is in force (its picture is drawn by the screens, the pens get their realistic bodies).
+ * The app's theme, from the choice in Ayarlar › Görünüm. Black and white follows the system's
+ * light or dark look; a Pro theme (shown only once Pro is bought) brings its own light or dark
+ * look and accent, and the pens get their realistic bodies.
  */
 @Composable
-fun MurekkepTheme(darkTheme: Boolean = isSystemInDarkTheme(), proTheme: Boolean = false, content: @Composable () -> Unit) {
-    val base = if (darkTheme) ZenDark else ZenLight
-    val zen = if (proTheme == base.proTheme) base else ZenColors(
-        base.paper, base.paper2, base.paper3, base.ink, base.ink2, base.muted, base.rule, base.accent, base.onPage, base.dark, proTheme,
+fun MurekkepTheme(theme: AppTheme = AppTheme.BLACK_WHITE, darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    val shown = theme.shown
+    val dark = shown.darkLook ?: darkTheme
+    val base = if (dark) ZenDark else ZenLight
+    val zen = if (shown == AppTheme.BLACK_WHITE) base else ZenColors(
+        base.paper, base.paper2, base.paper3, base.ink, base.ink2, base.muted, base.rule,
+        shown.accent ?: base.accent, base.onPage, base.dark, proTheme = true,
     )
-    CompositionLocalProvider(LocalZen provides zen) {
+    CompositionLocalProvider(LocalZen provides zen, LocalAppTheme provides theme) {
         MaterialTheme(
             colorScheme = materialScheme(zen),
             typography = ZenTypography,

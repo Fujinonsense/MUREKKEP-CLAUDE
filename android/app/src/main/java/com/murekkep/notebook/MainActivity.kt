@@ -29,12 +29,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.murekkep.notebook.data.AppearancePreferences
 import com.murekkep.notebook.data.NotebookStore
 import com.murekkep.notebook.export.PdfShare
+import com.murekkep.notebook.ui.AppTheme
 import com.murekkep.notebook.ui.EditorScreen
 import com.murekkep.notebook.ui.EditorState
 import com.murekkep.notebook.ui.LibraryScreen
 import com.murekkep.notebook.ui.MurekkepTheme
+import com.murekkep.notebook.ui.SettingsScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -42,23 +45,32 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val store = NotebookStore.get(this)
+        val appearance = AppearancePreferences(this)
         // The emulator check (DemoInk): debuggable builds only.
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val demo = debuggable && savedInstanceState == null && intent?.getStringExtra(DemoInk.EXTRA) != null
         setContent {
-            MurekkepTheme {
+            var theme by remember { mutableStateOf(appearance.theme) }
+            MurekkepTheme(theme = theme) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MurekkepApp(store, demo)
+                    MurekkepApp(
+                        store, demo, theme,
+                        onTheme = {
+                            theme = it
+                            appearance.theme = it
+                        },
+                    )
                 }
             }
         }
     }
 }
 
-/** The library, and the editor over it while a notebook is open: plain state, no navigation library. */
+/** The library (or the settings), and the editor over it while a notebook is open: plain state, no navigation library. */
 @Composable
-private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
+private fun MurekkepApp(store: NotebookStore, demo: Boolean, theme: AppTheme, onTheme: (AppTheme) -> Unit) {
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var editor by remember { mutableStateOf<EditorState?>(null) }
     if (demo) {
         LaunchedEffect(Unit) {
@@ -72,7 +84,12 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
     }
     val id = openId
     if (id == null) {
-        LibraryScreen(store = store, onOpen = { openId = it.id })
+        if (settingsOpen) {
+            BackHandler { settingsOpen = false }
+            SettingsScreen(theme = theme, onTheme = onTheme, onBack = { settingsOpen = false })
+        } else {
+            LibraryScreen(store = store, onOpen = { openId = it.id }, onSettings = { settingsOpen = true })
+        }
         return
     }
 
