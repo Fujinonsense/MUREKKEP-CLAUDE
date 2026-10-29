@@ -155,7 +155,6 @@ struct CalculatorView: View {
                     Text(Loc.t("Geçmiş"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
                     ForEach(history) { entry in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {

@@ -1133,6 +1133,9 @@ extension PaletteEdge {
 
 // MARK: - Inspector
 
+/// One pen's settings, a quiet card: the pen's name and a sentence about it, the ink's look, the
+/// colours, the width, what is the pen's own (the cooling time, the flowers, the nib's angle…) and
+/// its animation.
 struct BrushInspector: View {
     @ObservedObject var editor: EditorModel
     @EnvironmentObject private var settings: AppSettings
@@ -1141,49 +1144,38 @@ struct BrushInspector: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    Image(systemName: brush.symbol)
-                        .font(.title2)
-                        .foregroundStyle(editor.color(for: brush).swiftUIColor)
-                        .frame(width: 44, height: 44)
-                        .background(editor.color(for: brush).swiftUIColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(brush.title)
-                            .font(.headline)
-                        Text(brush.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(brush.title)
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                    Text(brush.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 StrokePreview(brush: brush, color: editor.color(for: brush).swiftUIColor,
                               width: CGFloat(editor.width(for: brush)))
-                    .frame(height: 72)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.black.opacity(0.08)))
+                    .frame(height: 120)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1))
 
-                section(Loc.t("Renk")) {
+                InspectorRow(Loc.t("Renk")) {
                     ColorGrid(editor: editor, brush: brush)
                 }
 
-                section(Loc.t("Kalınlık")) {
-                    HStack {
-                        Image(systemName: "circle.fill").font(.system(size: 6))
-                        Slider(value: Binding(get: { Double(editor.width(for: brush)) },
-                                              set: { editor.setWidth(Float($0), for: brush) }),
-                               in: Double(brush.widthRange.lowerBound)...Double(brush.widthRange.upperBound))
-                        Image(systemName: "circle.fill").font(.system(size: 16))
-                    }
-                    .foregroundStyle(.secondary)
+                InspectorRow(Loc.t("Kalınlık"), value: "\(Int(editor.width(for: brush).rounded()))") {
+                    Slider(value: Binding(get: { Double(editor.width(for: brush)) },
+                                          set: { editor.setWidth(Float($0), for: brush) }),
+                           in: Double(brush.widthRange.lowerBound)...Double(brush.widthRange.upperBound))
                 }
 
                 extraOptions
             }
-            .padding(18)
+            .padding(16)
         }
-        .frame(width: 330)
-        .frame(maxHeight: 560)
+        .frame(width: 320)
+        .frame(maxHeight: 600)
         .onDisappear {
             let c = editor.color(for: brush)
             if !brush.palette.contains(c) {
@@ -1196,63 +1188,111 @@ struct BrushInspector: View {
     private var extraOptions: some View {
         switch brush {
         case .calligraphy:
-            section(Loc.t("Uç açısı: {0}°", "\(Int(settings.nibAngle))")) {
+            InspectorRow(Loc.t("Uç açısı"), value: "\(Int(settings.nibAngle))°") {
                 Slider(value: $settings.nibAngle, in: 0...180, step: 1)
-                Toggle(Loc.t("Pencil Pro'yu döndürünce uç da dönsün"), isOn: $settings.rollRotatesNib)
-                    .font(.subheadline)
             }
+            InspectorSwitch(Loc.t("Pencil Pro'yu döndürünce uç da dönsün"), isOn: $settings.rollRotatesNib)
         case .grass:
-            section(Loc.t("Çiçekler")) {
+            InspectorRow(Loc.t("Çiçekler")) {
                 Picker(Loc.t("Çiçekler"), selection: $settings.flowerLevel) {
                     Text(Loc.t("Yok")).tag(0)
                     Text(Loc.t("Az")).tag(1)
                     Text(Loc.t("Bol")).tag(2)
                 }
                 .pickerStyle(.segmented)
-                Text(Loc.t("Kısa çim çizdikçe biter, küçük yazıda da harfler okunur. Kalemi kaldırdıktan 1–2 saniye sonra tomurcuklar açar."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle(Loc.t("Rüzgârda salınsın"), isOn: $settings.animations)
-                    .font(.subheadline)
+                InspectorNote(Loc.t("Kısa çim çizdikçe biter, küçük yazıda da harfler okunur. Kalemi kaldırdıktan 1–2 saniye sonra tomurcuklar açar."))
             }
+            InspectorSwitch(Loc.t("Rüzgârda salınsın"), isOn: $settings.animations)
         case .wet:
-            section(Loc.t("Kuruma süresi: {0} sn", "\(Int(settings.dryDuration))")) {
+            InspectorRow(Loc.t("Kuruma süresi"), value: Loc.t("{0} sn", "\(Int(settings.dryDuration))")) {
                 Slider(value: $settings.dryDuration, in: 1...15, step: 1)
             }
         case .lava:
-            section(Loc.t("Soğuma süresi: {0} sn", "\(Int(settings.lavaCoolDuration))")) {
+            InspectorRow(Loc.t("Soğuma süresi"), value: Loc.t("{0} sn", "\(Int(settings.lavaCoolDuration))")) {
                 Slider(value: $settings.lavaCoolDuration, in: 2...20, step: 1)
-                Text(Loc.t("Lav önce akar ve parlar, sonra kabuk bağlar; çatlaklarındaki kor yanmaya devam eder."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle(Loc.t("Akış ve kor animasyonu"), isOn: $settings.animations)
-                    .font(.subheadline)
+                InspectorNote(Loc.t("Lav önce akar ve parlar, sonra kabuk bağlar; çatlaklarındaki kor yanmaya devam eder."))
             }
+            InspectorSwitch(Loc.t("Akış ve kor animasyonu"), isOn: $settings.animations)
         case .fountain:
-            Label(Loc.t("Bastırdıkça uç açılır ve çizgi kalınlaşır; aşağı çekişler daha dolgun çıkar. Mürekkep kabarık ve parlak kalır."),
-                  systemImage: "applepencil")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            InspectorNote(Loc.t("Bastırdıkça uç açılır ve çizgi kalınlaşır; aşağı çekişler daha dolgun çıkar. Mürekkep kabarık ve parlak kalır."))
         case .wave, .glitter, .sea, .ice, .jelly, .bloom, .galaxy, .lightning:
-            Toggle(Loc.t("Animasyon"), isOn: $settings.animations)
-                .font(.subheadline)
+            InspectorSwitch(Loc.t("Animasyon"), isOn: $settings.animations)
         case .pencil:
-            Label(Loc.t("Pencil'ı yatırarak geniş ve yumuşak tara, bastırdıkça koyulaşır."), systemImage: "applepencil")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            InspectorNote(Loc.t("Pencil'ı yatırarak geniş ve yumuşak tara, bastırdıkça koyulaşır."))
         default:
             EmptyView()
         }
     }
+}
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+/// A setting of the pen: its name on the left, its value on the right, the control under them.
+struct InspectorRow<Content: View>: View {
+    let title: String
+    var value: String? = nil
+    @ViewBuilder var content: () -> Content
+
+    init(_ title: String, value: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.value = value
+        self.content = content
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            HStack {
+                Text(title)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.muted)
+                Spacer()
+                if let value {
+                    Text(value)
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(Theme.text2)
+                }
+            }
             content()
         }
+    }
+}
+
+/// A switch of the pen, under a hairline.
+struct InspectorSwitch: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    init(_ title: String, isOn: Binding<Bool>) {
+        self.title = title
+        _isOn = isOn
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Rectangle()
+                .fill(Theme.hairline)
+                .frame(height: 1)
+            Toggle(isOn: $isOn) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.text2)
+            }
+            .tint(Theme.ink)
+        }
+    }
+}
+
+/// A sentence about the pen.
+struct InspectorNote: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(Theme.muted)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -1261,26 +1301,30 @@ struct TextPenInspector: View {
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(Loc.t("Metin kalemi"), systemImage: "pencil.and.scribble")
-                .font(.headline)
-            Text(Loc.t("Elle yaz; kalemi kaldırıp kısa bir an bekleyince yazdıkların şablonun çizgilerine hizalı, düzgün yazıya dönüşür. Mürekkep ve renk son seçtiğin kalemden gelir; 3B mürekkepler 3B kalır."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Text(Loc.t("Mürekkep"))
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Loc.t("Metin kalemi"))
+                    .font(.headline)
+                    .foregroundStyle(Theme.text)
+                Text(Loc.t("Elle yaz; kalemi kaldırıp kısa bir an bekleyince yazdıkların şablonun çizgilerine hizalı, düzgün yazıya dönüşür. Mürekkep ve renk son seçtiğin kalemden gelir; 3B mürekkepler 3B kalır."))
                     .font(.subheadline)
-                Spacer()
-                ToolIcon(brush: editor.lastBrush, ink: editor.color(for: editor.lastBrush).swiftUIColor, side: 28)
-                Text(editor.lastBrush.title)
-                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(Loc.t("Bekleme süresi"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+            HStack(spacing: 8) {
+                Text(Loc.t("Mürekkep"))
+                    .font(.footnote)
+                    .foregroundStyle(Theme.muted)
+                Spacer()
+                Circle()
+                    .fill(editor.color(for: editor.lastBrush).swiftUIColor)
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                Text(editor.lastBrush.title)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.text2)
+            }
+            InspectorRow(Loc.t("Bekleme süresi")) {
                 Picker(Loc.t("Bekleme süresi"), selection: $settings.textPenDelay) {
                     Text(Loc.t("Hızlı")).tag(0.8)
                     Text("Normal").tag(1.3)
@@ -1288,11 +1332,7 @@ struct TextPenInspector: View {
                 }
                 .pickerStyle(.segmented)
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(Loc.t("Punto"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+            InspectorRow(Loc.t("Punto")) {
                 Picker(Loc.t("Punto"), selection: $settings.textPenScale) {
                     Text(Loc.t("Küçük")).tag(0.8)
                     Text("Normal").tag(1.0)
@@ -1301,12 +1341,9 @@ struct TextPenInspector: View {
                 }
                 .pickerStyle(.segmented)
             }
-            Text(Loc.t("Başka bir kalem seçince bekleyen yazı hemen dönüştürülür. Geri al ile el yazısına dönebilirsin."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            InspectorNote(Loc.t("Başka bir kalem seçince bekleyen yazı hemen dönüştürülür. Geri al ile el yazısına dönebilirsin."))
         }
-        .padding(18)
+        .padding(16)
         .frame(width: 320)
     }
 }
@@ -1315,38 +1352,35 @@ struct EraserInspector: View {
     @ObservedObject var editor: EditorModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(Loc.t("Silgi"), systemImage: "eraser")
+        VStack(alignment: .leading, spacing: 16) {
+            Text(Loc.t("Silgi"))
                 .font(.headline)
+                .foregroundStyle(Theme.text)
             Picker(Loc.t("Silgi"), selection: $editor.eraserMode) {
                 ForEach(EraserMode.allCases) { mode in
                     Text(mode.title).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
-            HStack {
-                Image(systemName: "circle").font(.caption)
+            InspectorRow(Loc.t("Boyut"), value: "\(Int(editor.eraserSize.rounded()))") {
                 Slider(value: Binding(get: { Double(editor.eraserSize) }, set: { editor.eraserSize = Float($0) }), in: 6...60)
-                Image(systemName: "circle").font(.title3)
             }
-            .foregroundStyle(.secondary)
-            Text(Loc.t("Pencil Pro'yu sık: silgiye geçer, tekrar sıkınca kalemin geri gelir; silmeyi bitirince de kaldığın kaleme, fosforlu kaleme… kendiliğinden döner. Kaleme çift dokununca açılan menüde de silgi var."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            InspectorNote(Loc.t("Pencil Pro'yu sık: silgiye geçer, tekrar sıkınca kalemin geri gelir; silmeyi bitirince de kaldığın kaleme, fosforlu kaleme… kendiliğinden döner. Kaleme çift dokununca açılan menüde de silgi var."))
         }
-        .padding(18)
-        .frame(width: 300)
+        .padding(16)
+        .frame(width: 320)
     }
 }
 
+/// The pen's colours: its six, a custom one, and the ones picked lately.
 struct ColorGrid: View {
     @ObservedObject var editor: EditorModel
     @EnvironmentObject private var settings: AppSettings
     let brush: Brush
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
                 ForEach(Array(brush.palette.enumerated()), id: \.offset) { _, color in
                     swatch(color)
                 }
@@ -1358,7 +1392,7 @@ struct ColorGrid: View {
             }
             let recents = settings.recentColors.filter { !brush.palette.contains($0) }
             if !recents.isEmpty {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     ForEach(Array(recents.prefix(7).enumerated()), id: \.offset) { _, color in
                         swatch(color, small: true)
                     }
@@ -1367,14 +1401,15 @@ struct ColorGrid: View {
         }
     }
 
+    /// A dot of the colour; the chosen one wears a ring of the body's grey with paper between.
     private func swatch(_ color: InkColor, small: Bool = false) -> some View {
         let selected = editor.color(for: brush) == color
-        let size: CGFloat = small ? 24 : 30
+        let size: CGFloat = small ? 24 : 32
         return Circle()
             .fill(color.swiftUIColor)
             .frame(width: size, height: size)
-            .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
-            .overlay(Circle().stroke(Color.primary.opacity(selected ? 0.85 : 0), lineWidth: 2).padding(-3))
+            .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+            .overlay(Circle().stroke(selected ? Theme.text2 : Color.clear, lineWidth: 2).padding(-3))
             .contentShape(Circle())
             .onTapGesture {
                 editor.setColor(color, for: brush)

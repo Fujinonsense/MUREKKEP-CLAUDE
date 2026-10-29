@@ -24,8 +24,9 @@ struct ShapePicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(Loc.t("Şekiller"), systemImage: "square.on.circle")
+            Text(Loc.t("Şekiller"))
                 .font(.headline)
+                .foregroundStyle(Theme.text)
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(ShapeKind.allCases) { kind in
                     let selected = editor.shapeKind == kind
@@ -43,10 +44,12 @@ struct ShapePicker: View {
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
                         }
-                        .foregroundStyle(selected ? Color.white : Color.primary)
+                        .foregroundStyle(selected ? Color.white : Theme.text2)
                         .frame(maxWidth: .infinity, minHeight: 64)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(selected ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Color.primary.opacity(0.06))))
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(selected ? AnyShapeStyle(Theme.ink) : AnyShapeStyle(Theme.paper2)))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(selected ? Color.clear : Theme.hairline, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected ? .isSelected : [])
@@ -75,9 +78,15 @@ struct PageAnglePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(Loc.t("Sayfa açısı: {0}°", "\(Int(settings.pageAngle.rounded()))"), systemImage: "rotate.right")
-                .font(.headline)
-                .monospacedDigit()
+            HStack {
+                Text(Loc.t("Sayfa açısı"))
+                    .font(.headline)
+                    .foregroundStyle(Theme.text)
+                Spacer()
+                Text("\(Int(settings.pageAngle.rounded()))°")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Theme.text2)
+            }
             Slider(value: $settings.pageAngle, in: -90...90, step: 1)
             HStack(spacing: 6) {
                 ForEach([-30, -15, 0, 15, 30], id: \.self) { d in

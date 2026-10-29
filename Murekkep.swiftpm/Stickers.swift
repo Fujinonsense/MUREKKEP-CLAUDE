@@ -865,7 +865,6 @@ struct StickerLibrary: View {
                             Text(group.title)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
                             LazyVGrid(columns: columns, spacing: 10) {
                                 ForEach(group.symbols, id: \.self) { symbol in
                                     Button {

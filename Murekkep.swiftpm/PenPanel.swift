@@ -88,9 +88,10 @@ struct PenPanel: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(Loc.t("Kalemler"))
                 .font(Theme.display(.title2, weight: .bold))
-            Label(Loc.t("Kalbe dokun: o kalem defterin kalem çubuğunda hep durur."), systemImage: "heart")
+                .foregroundStyle(Theme.text)
+            Text(Loc.t("Kalbe dokun: o kalem defterin kalem çubuğunda hep durur."))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.muted)
         }
     }
 
@@ -145,8 +146,8 @@ struct PenPanel: View {
             .padding(.leading, 10)
             .padding(.trailing, 12)
             .frame(height: Self.rowHeight)
-            .background(shape.fill(selected ? Theme.ink.opacity(0.13) : Color.primary.opacity(0.045)))
-            .overlay(shape.strokeBorder(selected ? Theme.ink : Color.primary.opacity(0.07), lineWidth: selected ? 1.5 : 0.5))
+            .background(shape.fill(selected ? Theme.ink.opacity(0.10) : Theme.paper2))
+            .overlay(shape.strokeBorder(selected ? Theme.ink : Theme.hairline, lineWidth: selected ? 1.5 : 1))
             .contentShape(shape)
         }
         .buttonStyle(PressableStyle())
