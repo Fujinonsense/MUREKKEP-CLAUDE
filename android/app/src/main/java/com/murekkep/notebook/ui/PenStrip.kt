@@ -643,16 +643,18 @@ private fun FoldedTool(state: EditorState, edge: PaletteEdge, onUnfold: () -> Un
     }
 }
 
-/** The tool in hand in 30 dp: the pen or the eraser laid at an angle, else the tool's glyph. */
+/** The tool in hand in 30 dp: in black and white its symbol, 18 dp in ink-2 (the iPad's
+ *  compactSymbol); in a Pro theme the pen's or the eraser's body laid at an angle; the lasso's and
+ *  the shapes' glyphs in either. */
 @Composable
 private fun ToolInHand(state: EditorState) {
     val z = Zen.colors
     when (val tool = state.tool) {
         is Tool.Brush -> {
             val ink = state.color(tool.brush).toColor()
-            if (z.proTheme) ToolIcon(tool.brush, ink, side = 30.dp) else PenIcon(tool.brush, ink)
+            if (z.proTheme) ToolIcon(tool.brush, ink, side = 30.dp) else CompactSymbol(tool.brush.symbol)
         }
-        Tool.Eraser -> if (z.proTheme) ToolIcon(null, Color.Transparent, side = 30.dp) else PenIcon(null, Color.Transparent)
+        Tool.Eraser -> if (z.proTheme) ToolIcon(null, Color.Transparent, side = 30.dp) else CompactSymbol(EraserGlyph)
         Tool.Lasso -> LassoGlyph(Modifier.size(18.dp), z.ink2)
         Tool.Shape -> ShapeToolGlyph(z.ink2)
     }
@@ -1038,9 +1040,10 @@ private fun ShapeSettings(state: EditorState, close: () -> Unit) {
     Text(stringResource(R.string.shapes), style = MaterialTheme.typography.titleMedium, color = z.ink)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (row in ShapeKind.entries.chunked(3)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // A row is as tall as its tallest tile, and every tile in it that tall.
+            Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (kind in row) {
-                    ShapeTile(kind, selected = state.shapeKind == kind, modifier = Modifier.weight(1f)) {
+                    ShapeTile(kind, selected = state.shapeKind == kind, modifier = Modifier.weight(1f).fillMaxHeight()) {
                         state.shapeKind = kind
                         if (state.tool !is Tool.Shape) state.tool = Tool.Shape
                         close()
@@ -1073,10 +1076,12 @@ private fun ShapeSettings(state: EditorState, close: () -> Unit) {
             )
         }
     }
-    Text(stringResource(R.string.shapes_help), style = MaterialTheme.typography.bodySmall, color = z.muted)
+    Text(stringResource(R.string.shapes_help), style = Caption, color = z.muted)
 }
 
-/** A shape's tile: its glyph over its name in two lines at most; the one in use in the accent with white. */
+/** A shape's tile, 64 dp high as the iPad's with no padding above or below (a two-line name fits:
+ *  24 + 5 + 2 × 13): its glyph over its name in two lines at most; the one in use in the accent
+ *  with white. */
 @Composable
 private fun ShapeTile(kind: ShapeKind, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val z = Zen.colors
@@ -1090,7 +1095,7 @@ private fun ShapeTile(kind: ShapeKind, selected: Boolean, modifier: Modifier, on
             .then(if (selected) Modifier else Modifier.border(1.dp, z.rule, shape))
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { this.selected = selected }
-            .padding(horizontal = 4.dp, vertical = 8.dp),
+            .padding(horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
     ) {
