@@ -663,9 +663,12 @@ struct LibrarySidebar: View {
         }
     }
 
-    /// "Mürekkep" with the brain that answers under it, and the button that hides the sidebar.
+    /// "Mürekkep" with the brain that answers under it, and the button that hides the sidebar. The
+    /// row lines up on the wordmark's baseline: the button's icon centres on its capitals (7 points
+    /// above the baseline), not on the two lines, and the wordmark's centre comes down to about 41
+    /// points, where it sat before the status line came back (42), near the pane's big title (46).
     private var brand: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Loc.t("Mürekkep"))
                     .font(.title2.weight(.bold))
@@ -683,6 +686,7 @@ struct LibrarySidebar: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 7 }
             .accessibilityLabel(Loc.t("Kenar çubuğunu gizle"))
         }
         .frame(minHeight: 44)
