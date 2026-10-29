@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Çokgenin adımlayıcısı, TalkBack için iki yarısı (UIStepper'ın kendi adları) -->
+    <string name="stepper_decrease">Azalt</string>
+    <string name="stepper_increase">Artır</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The polygon's stepper, its halves for TalkBack (UIStepper's own names) -->
+    <string name="stepper_decrease">Decrease</string>
+    <string name="stepper_increase">Increase</string>
+</resources>

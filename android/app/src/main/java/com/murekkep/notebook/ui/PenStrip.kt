@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -89,9 +90,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -1002,12 +1005,21 @@ private fun ShapeSettings(state: EditorState, close: () -> Unit) {
         Text(stringResource(R.string.dashed_line), style = MaterialTheme.typography.bodyLarge, color = z.ink2, modifier = Modifier.weight(1f))
     }
     if (state.shapeKind == ShapeKind.POLYGON) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.polygon_sides, state.polygonSides), style = MaterialTheme.typography.bodyLarge, color = z.ink2)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stepper(Icons.Outlined.Remove, enabled = state.polygonSides > 3) { state.polygonSides = (state.polygonSides - 1).coerceAtLeast(3) }
-                Stepper(Icons.Outlined.Add, enabled = state.polygonSides < 12) { state.polygonSides = (state.polygonSides + 1).coerceAtMost(12) }
-            }
+        val sides = state.polygonSides
+        Row(Modifier.fillMaxWidth().heightIn(min = Zen.target), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            // TalkBack reads the new count after a step.
+            Text(
+                stringResource(R.string.polygon_sides, sides),
+                style = MaterialTheme.typography.bodyLarge,
+                color = z.ink2,
+                modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            Stepper(
+                canDecrease = sides > 3,
+                onDecrease = { state.polygonSides = (sides - 1).coerceAtLeast(3) },
+                canIncrease = sides < 12,
+                onIncrease = { state.polygonSides = (sides + 1).coerceAtMost(12) },
+            )
         }
     }
     Text(stringResource(R.string.shapes_help), style = MaterialTheme.typography.bodySmall, color = z.muted)
@@ -1043,17 +1055,35 @@ private fun ShapeTile(kind: ShapeKind, selected: Boolean, modifier: Modifier, on
     }
 }
 
+/**
+ * The system's stepper, as the iPad's Stepper draws it: one 94 x 32 pill on the light grey fill,
+ * − and + in its two halves with a hairline between them; a half that would pass the end greys out.
+ * TalkBack reads the halves as "Azalt" and "Artır" buttons.
+ */
 @Composable
-private fun Stepper(icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
+private fun Stepper(canDecrease: Boolean, onDecrease: () -> Unit, canIncrease: Boolean, onIncrease: () -> Unit) {
+    val z = Zen.colors
+    Row(
+        Modifier.size(94.dp, 32.dp).clip(RoundedCornerShape(8.dp)).background(systemFill(z.dark)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StepperHalf(Icons.Outlined.Remove, stringResource(R.string.stepper_decrease), canDecrease, onDecrease)
+        Box(Modifier.size(1.dp, 18.dp).background(z.muted.copy(alpha = 0.35f)))
+        StepperHalf(Icons.Outlined.Add, stringResource(R.string.stepper_increase), canIncrease, onIncrease)
+    }
+}
+
+@Composable
+private fun RowScope.StepperHalf(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
     val z = Zen.colors
     Box(
         Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(Zen.control))
-            .border(1.dp, z.rule, RoundedCornerShape(Zen.control))
-            .clickable(enabled = enabled, onClick = onClick),
+            .weight(1f)
+            .fillMaxHeight()
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (enabled) z.ink2 else z.rule, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = if (enabled) z.ink else z.muted.copy(alpha = 0.45f), modifier = Modifier.size(18.dp))
     }
 }
