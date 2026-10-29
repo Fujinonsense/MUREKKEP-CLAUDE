@@ -6,12 +6,10 @@
 
 package com.murekkep.notebook.ui
 
-import android.graphics.Bitmap
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,7 +26,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -50,6 +47,7 @@ import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.DensityMedium
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HeartBroken
 import androidx.compose.material.icons.outlined.NoteAdd
@@ -76,15 +74,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -107,26 +102,21 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.murekkep.notebook.R
-import com.murekkep.notebook.export.FlatInk
 import com.murekkep.notebook.ink.Brush
 import com.murekkep.notebook.ink.BrushGroup
 import com.murekkep.notebook.ink.EraserMode
 import com.murekkep.notebook.ink.InkColor
-import com.murekkep.notebook.ink.InkPoint
 import com.murekkep.notebook.ink.ShapeKind
 import com.murekkep.notebook.ink.ShapeName
-import com.murekkep.notebook.ink.Stroke
-import com.murekkep.notebook.ink.referenceNow
 import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 // The editor's floating pen bar (the spec's "kalem rafı"; FloatingToolPalette and PenStrip on iPad,
 // Murekkep.swiftpm/ToolPalette.swift and PenStrip.swift), along the bottom by default, along the top
@@ -266,7 +256,7 @@ fun PenBar(
             val active = state.activeBrush
             ColorDot(state.color(active).toColor(), onClick = { sheet = Sheet.PEN_FROM_DOT }) {
                 if (sheet == Sheet.PEN_FROM_DOT) {
-                    BarPopover(edge, popoverRoom, onDismiss = close) { PenSettings(state, active) }
+                    BarPopover(edge, min(popoverRoom, PenCardHeight), onDismiss = close) { PenSettings(state, active) }
                 }
             }
             BarDivider(vertical)
@@ -291,7 +281,7 @@ fun PenBar(
             ) {
                 ShapeGlyph(state.shapeKind, LocalContentColor.current)
                 if (sheet == Sheet.SHAPES) {
-                    BarPopover(edge, popoverRoom, onDismiss = close) { ShapeSettings(state) }
+                    BarPopover(edge, popoverRoom, onDismiss = close, width = 360.dp, padding = 18.dp, spacing = 14.dp) { ShapeSettings(state, close) }
                 }
             }
             if (!state.isPdf) {
@@ -382,7 +372,7 @@ private fun PenTray(state: EditorState, edge: PaletteEdge, sheet: Sheet?, setShe
             onToggleFavorite = { state.toggleFavorite(brush) },
         ) {
             if (sheet == Sheet.PEN_FROM_SLOT && selected) {
-                BarPopover(edge, popoverRoom, onDismiss = close) { PenSettings(state, brush) }
+                BarPopover(edge, min(popoverRoom, PenCardHeight), onDismiss = close) { PenSettings(state, brush) }
             }
         }
     }
@@ -764,6 +754,9 @@ private fun ColorDot(color: Color, onClick: () -> Unit, popover: @Composable Box
 
 // MARK: Popovers
 
+/** The pen's card is no taller than the iPad's (it scrolls past it). */
+private val PenCardHeight = 600.dp
+
 /** The transparent margin round a popover, where its shadow is drawn (the popup window is cut at its edge). */
 private val PopoverShadowPad = 44.dp
 
@@ -828,7 +821,7 @@ private fun BarPopover(
 
 /** A control's name on the left and its value on the right, in the muted text of the popovers. */
 @Composable
-private fun LabelRow(label: String, value: String? = null) {
+internal fun LabelRow(label: String, value: String? = null) {
     val z = Zen.colors
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = z.muted)
@@ -905,134 +898,9 @@ fun ZenSegments(options: List<String>, selected: Int, onSelect: (Int) -> Unit, m
     }
 }
 
-/** A choice in a hairline; filled with paper-3 while it is the one picked. */
-@Composable
-private fun ZenChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val z = Zen.colors
-    Box(
-        Modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) z.paper3 else Color.Transparent)
-            .border(1.dp, if (selected) z.ink2 else z.rule, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .semantics { this.selected = selected }
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) z.ink else z.ink2,
-        )
-    }
-}
-
-/** "7", "2.2": a width in points, whole when it is whole. */
-internal fun widthText(width: Float): String =
-    if (abs(width - width.roundToInt()) < 0.05f) width.roundToInt().toString() else String.format(Locale.ROOT, "%.1f", width)
-
-// MARK: The pen's settings
-
-@Composable
-private fun PenSettings(state: EditorState, brush: Brush) {
-    val z = Zen.colors
-    val color = state.color(brush)
-    val width = state.width(brush)
-    val starred = state.isFavorite(brush)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(brush.localizedTitle(), style = MaterialTheme.typography.titleMedium, color = z.ink, modifier = Modifier.weight(1f))
-            if (brush.isPremium) Text(stringResource(R.string.pro), style = MaterialTheme.typography.labelSmall, color = z.muted)
-        }
-        Text(stringResource(brush.descriptionRes), style = MaterialTheme.typography.bodyMedium, color = z.ink2)
-    }
-    InkSample(brush, color, width)
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        LabelRow(stringResource(R.string.color))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            brush.palette.forEachIndexed { index, c ->
-                Swatch(c, selected = c == color, label = stringResource(R.string.color_number, index + 1)) { state.setColor(brush, c) }
-            }
-        }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        LabelRow(stringResource(R.string.pen_width), widthText(width))
-        ZenSlider(width, { state.setWidth(brush, it) }, brush.widthRange, stringResource(R.string.pen_width))
-    }
-    Row(
-        Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(stringResource(R.string.favorite), style = MaterialTheme.typography.bodyLarge, color = z.ink2)
-        ZenSwitch(starred) { state.toggleFavorite(brush) }
-    }
-}
-
-/** One of the pen's six colours, 32 dp; the picked one in a ring of ink-2 a little way out. */
-@Composable
-private fun Swatch(color: InkColor, selected: Boolean, label: String, onClick: () -> Unit) {
-    val z = Zen.colors
-    Box(
-        Modifier
-            .size(40.dp)
-            .then(if (selected) Modifier.border(2.dp, z.ink2, CircleShape) else Modifier)
-            .padding(4.dp)
-            .clip(CircleShape)
-            .background(color.toColor())
-            .border(1.dp, z.ink.copy(alpha = 0.12f), CircleShape)
-            .clickable(onClick = onClick)
-            .semantics {
-                contentDescription = label
-                this.selected = selected
-            },
-    )
-}
-
-/** The ink as it lands: a wave in the pen, its colour and width, drawn by FlatInk on paper. */
-@Composable
-private fun InkSample(brush: Brush, color: InkColor, width: Float) {
-    val z = Zen.colors
-    val density = LocalDensity.current.density
-    val image = remember(brush, color, width, density) { renderInkSample(brush, color, width, density) }
-    Image(
-        image, contentDescription = null, contentScale = ContentScale.FillWidth,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(InkSampleHeight.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, z.rule, RoundedCornerShape(12.dp)),
-    )
-}
-
-private const val InkSampleWidth = 288f
-private const val InkSampleHeight = 120f
-
-/** The page's points are about 1.4 dp on a tablet at the fitting zoom; the sample keeps that scale. */
-private const val InkSampleScale = 1.4f
-
-private fun renderInkSample(brush: Brush, color: InkColor, width: Float, density: Float): ImageBitmap {
-    val bitmap = Bitmap.createBitmap((InkSampleWidth * density).toInt(), (InkSampleHeight * density).toInt(), Bitmap.Config.ARGB_8888)
-    bitmap.eraseColor(android.graphics.Color.WHITE)
-    val canvas = android.graphics.Canvas(bitmap)
-    canvas.scale(density * InkSampleScale, density * InkSampleScale)
-    val w = InkSampleWidth / InkSampleScale
-    val h = InkSampleHeight / InkSampleScale
-    val r = max(width * 0.5f, 0.35f)
-    val count = 120
-    val points = (0..count).map { i ->
-        val t = i.toFloat() / count
-        InkPoint(w * (0.08f + 0.84f * t), h * (0.5f + 0.2f * sin(t * 2.0 * PI * 1.5).toFloat()), r, 0.55f)
-    }
-    // Born a minute ago: wet ink dry, lava cooled, as the iPad's settings show them.
-    FlatInk.draw(listOf(Stroke(brush, color, width, referenceNow() - 60.0, 0.37f, points)), canvas)
-    return bitmap.asImageBitmap()
-}
-
 // MARK: The eraser's settings
 
+/** The eraser's card (EraserInspector on iPad): what it takes, its size in points, how to borrow it. */
 @Composable
 private fun EraserSettings(state: EditorState) {
     val z = Zen.colors
@@ -1043,25 +911,41 @@ private fun EraserSettings(state: EditorState) {
         onSelect = { state.eraserMode = if (it == 0) EraserMode.STROKE else EraserMode.PARTIAL },
     )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        LabelRow(stringResource(R.string.eraser_size), widthText(state.eraserSize))
-        ZenSlider(state.eraserSize, { state.eraserSize = it }, 4f..64f, stringResource(R.string.eraser_size))
+        LabelRow(stringResource(R.string.eraser_size), state.eraserSize.roundToInt().toString())
+        ZenSlider(state.eraserSize, { state.eraserSize = it }, 6f..60f, stringResource(R.string.eraser_size))
     }
     Text(stringResource(R.string.eraser_help), style = MaterialTheme.typography.bodySmall, color = z.muted)
 }
 
 // MARK: The shape tool's settings
 
+/**
+ * The shapes (ShapePicker on iPad): a tile for each, its glyph over its name, the one in use filled
+ * with the accent; a tap takes the shape and closes the popover. Then the dashes, the polygon's
+ * sides and how the tool works.
+ */
 @Composable
-private fun ShapeSettings(state: EditorState) {
+private fun ShapeSettings(state: EditorState, close: () -> Unit) {
     val z = Zen.colors
     Text(stringResource(R.string.shapes), style = MaterialTheme.typography.titleMedium, color = z.ink)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (kind in ShapeKind.entries) {
-            ZenChip(kind.shapeName.localizedTitle(), selected = state.shapeKind == kind) { state.shapeKind = kind }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (row in ShapeKind.entries.chunked(3)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (kind in row) {
+                    ShapeTile(kind, selected = state.shapeKind == kind, modifier = Modifier.weight(1f)) {
+                        state.shapeKind = kind
+                        if (state.tool !is Tool.Shape) state.tool = Tool.Shape
+                        close()
+                    }
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.dashed_line), style = MaterialTheme.typography.bodyLarge, color = z.ink2)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.DensityMedium, contentDescription = null, tint = z.ink2, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(stringResource(R.string.dashed_line), style = MaterialTheme.typography.bodyLarge, color = z.ink2, modifier = Modifier.weight(1f))
         ZenSwitch(state.shapeDashed) { state.shapeDashed = it }
     }
     if (state.shapeKind == ShapeKind.POLYGON) {
@@ -1076,14 +960,44 @@ private fun ShapeSettings(state: EditorState) {
     Text(stringResource(R.string.shapes_help), style = MaterialTheme.typography.bodySmall, color = z.muted)
 }
 
+/** A shape's tile: its glyph over its name in two lines at most; the one in use in the accent with white. */
+@Composable
+private fun ShapeTile(kind: ShapeKind, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val z = Zen.colors
+    val shape = RoundedCornerShape(Zen.control)
+    val content = if (selected) Color.White else z.ink2
+    Column(
+        modifier
+            .heightIn(min = 64.dp)
+            .clip(shape)
+            .background(if (selected) z.accent else z.paper2)
+            .then(if (selected) Modifier else Modifier.border(1.dp, z.rule, shape))
+            .clickable(onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
+    ) {
+        ShapeGlyph(kind, content, size = 24.dp)
+        Text(
+            kind.shapeName.localizedTitle(),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Normal),
+            color = content,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
 @Composable
 private fun Stepper(icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
     val z = Zen.colors
     Box(
         Modifier
             .size(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, z.rule, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(Zen.control))
+            .border(1.dp, z.rule, RoundedCornerShape(Zen.control))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

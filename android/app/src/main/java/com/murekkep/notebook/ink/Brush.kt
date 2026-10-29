@@ -18,7 +18,7 @@ enum class Brush(val raw: Int, val titleTr: String, val titleEn: String) {
     WAVE(2, "Okyanus", "Ocean"),
     HIGHLIGHTER(3, "Fosforlu", "Highlighter"),
     PENCIL(4, "Kurşun kalem", "Pencil"),
-    CALLIGRAPHY(5, "Hat kalemi", "Calligraphy"),
+    CALLIGRAPHY(5, "Hat kalemi", "Calligraphy pen"),
     WATERCOLOR(6, "Sulu boya", "Watercolor"),
     NEON(7, "Neon", "Neon"),
     RAINBOW(8, "Gökkuşağı", "Rainbow"),
@@ -26,16 +26,16 @@ enum class Brush(val raw: Int, val titleTr: String, val titleEn: String) {
     GRASS(10, "Çim ve çiçek", "Grass and flowers"),
     SEA(11, "Deniz dalgası", "Sea wave"),
     LAVA(12, "Lav", "Lava"),
-    FOUNTAIN(13, "Dolma kalem 3B", "3D fountain pen"),
+    FOUNTAIN(13, "Dolma kalem 3B", "Fountain pen 3D"),
     GOLD(14, "Sıvı altın", "Liquid gold"),
     CHROME(15, "Krom", "Chrome"),
     ICE(16, "Buz kristali", "Ice crystal"),
     JELLY(17, "Jöle", "Jelly"),
     GALAXY(18, "Galaksi", "Galaxy"),
     LIGHTNING(19, "Şimşek", "Lightning"),
-    PEARL(20, "İnci dizisi", "Pearls"),
+    PEARL(20, "İnci dizisi", "Pearl string"),
     IMPASTO(21, "Yağlı boya", "Oil paint"),
-    BLOOM(22, "Çiçekli su", "Blooming water");
+    BLOOM(22, "Çiçekli su", "Flowering water");
 
     val group: BrushGroup
         get() = when (this) {
