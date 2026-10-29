@@ -174,7 +174,7 @@ fun LibraryScreen(store: NotebookStore, onOpen: (NotebookMeta) -> Unit) {
 
     renaming?.let { meta ->
         RenameDialog(
-            meta = meta,
+            initial = meta.title,
             onDismiss = { renaming = null },
             onRename = { title ->
                 store.rename(meta.id, title)
@@ -335,8 +335,8 @@ private fun PaperPreview(paper: PaperStyle, modifier: Modifier) {
 }
 
 @Composable
-private fun RenameDialog(meta: NotebookMeta, onDismiss: () -> Unit, onRename: (String) -> Unit) {
-    var text by remember(meta.id) { mutableStateOf(meta.title) }
+internal fun RenameDialog(initial: String, onDismiss: () -> Unit, onRename: (String) -> Unit) {
+    var text by remember(initial) { mutableStateOf(initial) }
     val focus = remember { FocusRequester() }
     val submit: () -> Unit = {
         if (text.isNotBlank()) onRename(text.trim())

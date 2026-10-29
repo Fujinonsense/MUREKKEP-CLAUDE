@@ -274,6 +274,7 @@ class NotebookStore private constructor(context: Context) {
             readOnly = result.readOnly,
             pageSizes = sizes,
             pdfFile = if (result.pdfSizes != null) pdfFile(meta.id) else null,
+            paper = meta.paper,
         )
         state.title = meta.title
         state.onDirty = { scheduleSave(state) }

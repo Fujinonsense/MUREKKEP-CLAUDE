@@ -1,8 +1,10 @@
 package com.murekkep.notebook.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -18,12 +20,11 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LibraryAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -54,8 +55,8 @@ import kotlin.math.sin
 // shape tool's preview and the measurement next to the pen; the bar of what can be done with the
 // selection; the lasso's glyph for the pen dock.
 
-/** The iPad's overlay blue. */
-private val Accent = Color(0xFF1A54CC)
+/** The overlay's blue: the brand's ink blue (the iPad's overlay colour). */
+private val Accent = Color(0xFF2457D6)
 
 /** The lasso's loop, the selection's dashed frame with its turn handle and corner handles, the
  *  shape tool's preview, a recognized shape's handles and the measurement next to the pen, as the
@@ -159,37 +160,31 @@ private fun DrawScope.drawShapeHandles(a: FloatArray) {
 }
 
 /** What can be done with the lasso's strokes: delete them, duplicate them, give them the current
- *  pen, or let them go. */
+ *  pen, or let them go. Floats above the pen bar, on the same paper. */
 @Composable
 fun SelectionBar(state: EditorState, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
+    val z = Zen.colors
+    Row(
+        modifier.floating(Zen.bar).padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SelectionAction(stringResource(R.string.delete), Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
-                state.deleteSelection()
-            }
-            SelectionAction(stringResource(R.string.duplicate), Icons.Outlined.LibraryAdd) { state.duplicateSelection() }
-            SelectionAction(stringResource(R.string.apply_ink), Icons.Outlined.Brush) { state.restyleSelection() }
-            VerticalDivider(Modifier.height(26.dp))
-            SelectionAction(stringResource(R.string.done), Icons.Filled.Check) { state.clearSelection() }
+        SelectionAction(stringResource(R.string.delete), Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
+            state.deleteSelection()
         }
+        SelectionAction(stringResource(R.string.duplicate), Icons.Outlined.LibraryAdd) { state.duplicateSelection() }
+        SelectionAction(stringResource(R.string.apply_ink), Icons.Outlined.Brush) { state.restyleSelection() }
+        Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 28.dp).background(z.rule))
+        SelectionAction(stringResource(R.string.done), Icons.Filled.Check) { state.clearSelection() }
     }
 }
 
 @Composable
 private fun SelectionAction(title: String, icon: ImageVector, tint: Color = Color.Unspecified, onClick: () -> Unit) {
-    val color = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onSurface else tint
+    val color = if (tint == Color.Unspecified) Zen.colors.ink2 else tint
     Column(
         Modifier
+            .clip(RoundedCornerShape(Zen.control))
             .clickable(onClick = onClick)
             .defaultMinSize(minWidth = 56.dp, minHeight = 48.dp)
             .padding(horizontal = 8.dp, vertical = 4.dp),

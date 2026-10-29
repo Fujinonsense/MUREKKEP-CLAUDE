@@ -94,7 +94,14 @@ private fun MurekkepApp(store: NotebookStore, demo: Boolean) {
     if (state == null || state.notebookId != id) {
         Opening()
     } else {
-        EditorScreen(state = state, onBack = close)
+        EditorScreen(
+            state = state,
+            onBack = close,
+            onRename = { title ->
+                store.rename(id, title)
+                state.title = title
+            },
+        )
     }
 }
 

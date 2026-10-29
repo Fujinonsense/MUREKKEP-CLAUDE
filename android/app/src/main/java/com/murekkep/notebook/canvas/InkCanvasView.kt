@@ -221,6 +221,18 @@ class InkCanvasView(context: Context, private val state: EditorState) : GLSurfac
         )
         requestRender()
         publishOverlay()
+        publishCurrentPage()
+    }
+
+    /** The page under the middle of the view, for the page badge. */
+    private fun publishCurrentPage() {
+        val l = pageLayout()
+        if (l.pageCount == 0 || height <= 0) return
+        val y = docY(height / 2f)
+        // The last page that starts above the middle (the gap between pages belongs to the page above).
+        var page = 0
+        while (page + 1 < l.pageCount && l.top(page + 1) <= y) page++
+        if (state.currentPage != page) state.currentPage = page
     }
 
     /** Hands the screen the lasso, the selection's box and the measurement in view pixels; they

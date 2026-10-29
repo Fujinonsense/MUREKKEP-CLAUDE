@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.murekkep.notebook.data.PaperStyle
 import com.murekkep.notebook.data.PenPreferences
 import com.murekkep.notebook.ink.Brush
 import com.murekkep.notebook.ink.EraserMode
@@ -69,6 +70,8 @@ class EditorState(
     val pageSizes: List<PageSize>? = null,
     /** The PDF the pages are drawn on (its `source.pdf`), for the canvas and the export. */
     val pdfFile: File? = null,
+    /** The notebook's page template, for the export and the library's cover. */
+    val paper: PaperStyle = PaperStyle.LINED,
 ) {
     companion object {
         /** A4 in points. */
@@ -100,6 +103,9 @@ class EditorState(
     var pageCount by mutableStateOf(1)
         private set
 
+    /** The page in the middle of the view, from the canvas; the page badge shows it. */
+    var currentPage by mutableStateOf(0)
+
     // Tools
 
     private val firstBrush: Brush = prefs?.lastBrush() ?: Brush.PEN
@@ -120,6 +126,7 @@ class EditorState(
             if (value is Tool.Brush) {
                 lastBrushState.value = value.brush
                 prefs?.rememberBrush(value.brush)
+                rememberRecent(value.brush)
             }
             if (value !is Tool.Eraser) eraserReturn = null
             if (value !is Tool.Lasso && selection != null) clearSelection()
@@ -137,6 +144,33 @@ class EditorState(
 
     private val colors = mutableStateMapOf<Brush, InkColor>()
     private val widths = mutableStateMapOf<Brush, Float>()
+
+    /** The starred pens: always in the bar (PenStripRule). */
+    var favoriteBrushes: List<Brush> by mutableStateOf(prefs?.favoriteBrushes() ?: emptyList())
+        private set
+
+    /** The pens picked last, newest first: they fill the bar up. */
+    var recentBrushes: List<Brush> by mutableStateOf(prefs?.recentBrushes() ?: PenStripRule.defaultRecent)
+        private set
+
+    /** The bar's pens: the favourites, then the recent ones, each in the panel's order. */
+    val barPens: Pair<List<Brush>, List<Brush>>
+        get() = PenStripRule.pens(favoriteBrushes, recentBrushes, Brush.paletteOrder)
+
+    fun isFavorite(brush: Brush): Boolean = brush in favoriteBrushes
+
+    /** Stars a pen, or takes its star away (a long press on it in the bar). */
+    fun toggleFavorite(brush: Brush) {
+        favoriteBrushes = PenStripRule.toggled(brush, favoriteBrushes)
+        prefs?.setFavoriteBrushes(favoriteBrushes)
+    }
+
+    private fun rememberRecent(brush: Brush) {
+        val list = PenStripRule.remembered(brush, recentBrushes)
+        if (list === recentBrushes) return
+        recentBrushes = list
+        prefs?.setRecentBrushes(list)
+    }
 
     var eraserMode by mutableStateOf(EraserMode.STROKE)
 
