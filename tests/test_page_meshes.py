@@ -1,10 +1,12 @@
-"""Page meshes (InkRenderer): neighbouring pages are made off the main thread, and the shadow passes
-draw only the raised inks' triangles. Both must leave the picture as it was."""
+"""Page meshes (InkRenderer): neighbouring pages are made off the main thread, the shadow passes draw
+only the raised inks' triangles, and erasing or moving strokes keeps the other strokes' meshes. All
+of it must leave the picture as it was."""
 import re
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent / "Murekkep.swiftpm"
 RENDERER = (APP / "InkRenderer.swift").read_text(encoding="utf-8")
+SHADERS = (APP / "InkShaders.swift").read_text(encoding="utf-8")
 
 
 def body(source, signature):
@@ -57,3 +59,28 @@ def test_neighbouring_pages_are_made_off_the_main_thread():
     # The mesh maker touches only its arguments: no renderer state off the main thread.
     fill = body(RENDERER, "private static func fill(")
     assert "self." not in fill and "grassCache" not in fill and "pageCache" not in fill
+
+
+def test_the_records_carry_the_drawing_order_on_both_sides():
+    swift = re.findall(r"var (\w+):", body(RENDERER, "struct StrokeGPU {"))
+    metal = re.findall(r"^\s*\w+\s+(\w+);", body(SHADERS, "struct StrokeGPU {"), flags=re.M)
+    assert swift == metal == ["color", "brush", "birth", "width", "seed", "order"]
+    # Depth comes from the record's place in the drawing order, not from its slot.
+    ribbon = body(SHADERS, "static RibbonOut makeRibbon(")
+    assert "float order = float(su.orderOffset + rank);" in ribbon
+    for fn in ("vertex RibbonOut ribbon_vertex(", "vertex RibbonOut ribbon_shadow_vertex("):
+        assert "makeRibbon(v, s.order," in body(SHADERS, fn)
+    # A rebuilt page's slots are its drawing order; appended strokes come after every other one.
+    assert "seed: s.seed, order: idx)" in body(RENDERER, "private static func fill(")
+    assert "order: UInt32(firstOrder + infos.count)" in body(RENDERER, "private func append(_ added: [Stroke]")
+
+
+def test_erasing_keeps_the_other_strokes_meshes():
+    cached = without_demo(body(RENDERER, "private func cached("))
+    assert "case .keep:" in cached and "if !keep(gpu, page: page) {" in cached
+    keep = body(RENDERER, "private func keep(")
+    assert "records[Int(span.slot)].order = UInt32(rank)" in keep
+    # Grass blades are numbered by slot: a page with grass is rebuilt.
+    assert "gpu.bladeCount == 0" in keep and "growsFlowers" in keep
+    # Only strokes without a mesh are meshed; the rest is copied from the old list.
+    assert keep.count("RibbonBuilder.append") == 1 and "if let known = gpu.spans[s.id], let mesh = gpu.ribbons[s.id]" in keep

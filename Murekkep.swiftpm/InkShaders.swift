@@ -44,6 +44,7 @@ struct StrokeGPU {
     float  birth;
     float  width;
     float  seed;
+    uint   order;          // place in the page's drawing order (its depth), apart from the record's slot
 };
 
 struct BladeGPU {
@@ -310,13 +311,13 @@ static float shadowHeight(constant FrameUniforms& fu, StrokeGPU s) {
     return 0.0;
 }
 
-static RibbonOut makeRibbon(RibbonVertexGPU v, float extra, float2 shift,
+static RibbonOut makeRibbon(RibbonVertexGPU v, uint rank, float extra, float2 shift,
                             constant FrameUniforms& fu, constant SegUniforms& su) {
     RibbonOut o;
     float r = max(v.r, 1e-4);
     float ext = r + extra + 2.0 * fu.pixelSize;
     float2 p = v.center + shift + v.offset * ext;
-    float order = float(su.orderOffset + v.stroke);
+    float order = float(su.orderOffset + rank);
     o.zBase = 1.0 - (order + 1.0) * su.depthStep;
     o.position = float4(docToNDC(su.pageOrigin + p, fu), o.zBase, 1.0);
     o.local = p;
@@ -340,7 +341,8 @@ vertex RibbonOut ribbon_vertex(uint vid [[vertex_id]],
                                const device StrokeGPU* strokes [[buffer(3)]])
 {
     RibbonVertexGPU v = verts[vid];
-    return makeRibbon(v, glowExtra(strokes[v.stroke].brush, v.r), float2(0.0), fu, su);
+    StrokeGPU s = strokes[v.stroke];
+    return makeRibbon(v, s.order, glowExtra(s.brush, v.r), float2(0.0), fu, su);
 }
 
 vertex RibbonOut ribbon_shadow_vertex(uint vid [[vertex_id]],
@@ -350,9 +352,10 @@ vertex RibbonOut ribbon_shadow_vertex(uint vid [[vertex_id]],
                                       const device StrokeGPU* strokes [[buffer(3)]])
 {
     RibbonVertexGPU v = verts[vid];
-    float h = shadowHeight(fu, strokes[v.stroke]);
+    StrokeGPU s = strokes[v.stroke];
+    float h = shadowHeight(fu, s);
     float blur = 0.55 * v.r + fu.pixelSize;
-    RibbonOut o = makeRibbon(v, blur, float2(0.30, 0.42) * (v.r * h), fu, su);
+    RibbonOut o = makeRibbon(v, s.order, blur, float2(0.30, 0.42) * (v.r * h), fu, su);
     o.zBase = 1.0 - float(su.orderOffset + 1) * su.depthStep;
     o.position.z = o.zBase;
     o.h = h;

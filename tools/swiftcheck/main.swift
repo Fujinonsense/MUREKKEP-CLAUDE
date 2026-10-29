@@ -201,10 +201,14 @@ check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 5, 6])) == .same, "mesh:
 check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 5, 6, 9, 10])) == .append(from: 3), "mesh: new pen strokes are appended")
 check(InkMeshPlan.plan(old: [2, 4, 5], new: strokes([4, 2, 5, 9], highlighter: [2])) == .append(from: 3),
       "mesh: buffer order puts highlighters first")
-check(InkMeshPlan.plan(old: [4, 5], new: strokes([4, 5, 9], highlighter: [9])) == .rebuild, "mesh: a new highlighter rebuilds")
+check(InkMeshPlan.plan(old: [4, 5], new: strokes([4, 5, 9], highlighter: [9])) == .keep,
+      "mesh: a new highlighter goes among the highlighters, the meshes stay")
 check(InkMeshPlan.plan(old: [4, 5], new: strokes([4, 5, 9], grass: [9])) == .rebuild, "mesh: new grass rebuilds")
-check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 6, 9])) == .rebuild, "mesh: an erased stroke rebuilds")
-check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([5, 4, 6])) == .rebuild, "mesh: a reordered page rebuilds")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 6])) == .keep, "mesh: an erased stroke keeps the others' meshes")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 6, 9])) == .keep, "mesh: an erased and a new stroke keep the meshes")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 7, 8, 6])) == .keep, "mesh: a cut stroke's pieces in its place")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([5, 4, 6])) == .keep, "mesh: a reordered page keeps the meshes")
+check(InkMeshPlan.plan(old: [4, 5, 6], new: strokes([4, 9, 6], grass: [9])) == .rebuild, "mesh: grass among the others rebuilds")
 check(InkMeshPlan.plan(old: [], new: strokes([1, 2])) == .rebuild, "mesh: an empty page is built")
 
 // MARK: Ink layer (InkLayer)

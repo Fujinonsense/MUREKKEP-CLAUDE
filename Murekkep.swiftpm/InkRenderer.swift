@@ -48,6 +48,16 @@ struct StrokeGPU {
     var birth: Float
     var width: Float
     var seed: Float
+    /// The stroke's place in the page's drawing order (highlighters first), which sets its depth.
+    /// Apart from the record's slot: a stroke keeps its slot while strokes before it are erased.
+    var order: UInt32 = 0
+}
+
+/// Where a stroke's mesh is in its page's buffers: its record's slot and its run of indices.
+struct StrokeSpan {
+    var slot: UInt32
+    var firstIndex: Int
+    var indexCount: Int
 }
 
 struct BladeGPU {
@@ -134,6 +144,11 @@ final class PageGPU {
     var indices: MTLBuffer?
     var strokes: MTLBuffer?
     var vertexCount = 0
+    /// Each stroke's slot and indices (see `InkRenderer.keep`).
+    var spans: [Int: StrokeSpan] = [:]
+    /// The records behind `strokes`, one per slot. Erased strokes' slots stay until the next rebuild,
+    /// so there can be more slots than strokes.
+    var records: [StrokeGPU] = []
     var blades: MTLBuffer?
     var flowers: MTLBuffer?
     var highlighterIndexCount = 0
@@ -956,6 +971,17 @@ final class InkRenderer {
                 if !append(added, to: gpu, version: page.version) {
                     rebuild(gpu, from: page)
                 }
+            case .keep:
+                #if DEMO
+                // The check of erasing (tools/demo, scene erasedenseold): builds up to 239 rebuilt the page here.
+                if DemoStage.oldInkMesh {
+                    rebuild(gpu, from: page)
+                    break
+                }
+                #endif
+                if !keep(gpu, page: page) {
+                    rebuild(gpu, from: page)
+                }
             case .rebuild:
                 rebuild(gpu, from: page)
             }
@@ -972,9 +998,12 @@ final class InkRenderer {
         var shadowIdxs: [UInt32] = []
         var infos: [StrokeGPU] = []
         var runs = gpu.inkRuns
-        let firstInfo = gpu.highlighterStrokes + gpu.inkStrokes
+        // New records take the next free slots; in the drawing order they come after every stroke.
+        let firstInfo = gpu.records.count
+        let firstOrder = gpu.highlighterStrokes + gpu.inkStrokes
         let firstIndex = gpu.highlighterIndexCount + gpu.inkIndexCount
         var meshes: [(Int, RibbonMesh)] = []
+        var spans: [(Int, StrokeSpan)] = []
         for s in added {
             var v: [RibbonVertexGPU] = []
             var i: [UInt32] = []
@@ -982,8 +1011,8 @@ final class InkRenderer {
             let mesh = RibbonMesh(vertices: v, indices: i)
             meshes.append((s.id, mesh))
             let info = UInt32(firstInfo + infos.count)
-            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.shading),
-                                   birth: Float(s.birth - epoch), width: s.width, seed: s.seed))
+            infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.shading), birth: Float(s.birth - epoch),
+                                   width: s.width, seed: s.seed, order: UInt32(firstOrder + infos.count)))
             let base = UInt32(gpu.vertexCount + verts.count)
             let start = firstIndex + idxs.count
             for var vertex in mesh.vertices {
@@ -997,6 +1026,7 @@ final class InkRenderer {
                 shadowIdxs.append(contentsOf: idxs[(start - firstIndex)...])
             }
             let count = mesh.indices.count
+            spans.append((s.id, StrokeSpan(slot: info, firstIndex: start, indexCount: count)))
             if count > 0 {
                 if !s.brush.blendsOnce, let last = runs.last, !last.blendsOnce, last.first + last.count == start {
                     runs[runs.count - 1].count += count
@@ -1046,6 +1076,10 @@ final class InkRenderer {
             }
         }
         gpu.shadowIndexCount += shadowIdxs.count
+        gpu.records.append(contentsOf: infos)
+        for (id, span) in spans {
+            gpu.spans[id] = span
+        }
         for (id, mesh) in meshes {
             gpu.ribbons[id] = mesh
             gpu.order.append(id)
@@ -1062,6 +1096,159 @@ final class InkRenderer {
         gpu.inkStrokes += infos.count
         gpu.inkRuns = runs
         gpu.version = version
+        return true
+    }
+
+    /// Follows erased, cut, moved or inserted strokes without remaking the other strokes' meshes:
+    /// the eraser and the lasso change a page many times a second, and a rebuild copies all of a
+    /// dense page's ink (about 10 ms). Kept strokes' vertices stay where they are and new strokes'
+    /// vertices go after them; only the lists are made again: the triangles to draw, the shadow list
+    /// and the records with each stroke's place in the drawing order, so the picture is a rebuild's.
+    /// Erased strokes' vertices and slots stay unused until the next rebuild. False (the page is then
+    /// rebuilt) when the vertex buffer is full, or with grass, whose blades are numbered by slot.
+    private func keep(_ gpu: PageGPU, page: PageInk) -> Bool {
+        guard let vb = gpu.vertices, let ib = gpu.indices, gpu.bladeCount == 0, !page.strokes.isEmpty,
+              !page.strokes.contains(where: { $0.brush.growsFlowers }) else { return false }
+        let ordered = page.strokes.filter(\.brush.isHighlighter) + page.strokes.filter { !$0.brush.isHighlighter }
+        let vStride = MemoryLayout<RibbonVertexGPU>.stride
+        let iStride = MemoryLayout<UInt32>.stride
+        var records = gpu.records
+        var spans: [Int: StrokeSpan] = [:]
+        spans.reserveCapacity(ordered.count)
+        var ribbons: [Int: RibbonMesh] = [:]
+        ribbons.reserveCapacity(ordered.count)
+        var verts: [RibbonVertexGPU] = []
+        var made: [Int: [UInt32]] = [:]
+        var indexTotal = 0
+        var shadowTotal = 0
+        for s in ordered {
+            let span: StrokeSpan
+            if let known = gpu.spans[s.id], let mesh = gpu.ribbons[s.id] {
+                span = known
+                ribbons[s.id] = mesh
+            } else {
+                // A new stroke (a cut piece, a moved copy): its mesh after the vertices in use, a new slot.
+                var v: [RibbonVertexGPU] = []
+                var i: [UInt32] = []
+                RibbonBuilder.append(s.points, stroke: 0, relax: s.brush.relaxesCorners, vertices: &v, indices: &i)
+                let slot = UInt32(records.count)
+                records.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.shading),
+                                         birth: Float(s.birth - epoch), width: s.width, seed: s.seed))
+                let base = UInt32(gpu.vertexCount + verts.count)
+                for var vertex in v {
+                    vertex.stroke = slot
+                    verts.append(vertex)
+                }
+                made[s.id] = i.map { $0 + base }
+                ribbons[s.id] = RibbonMesh(vertices: v, indices: i)
+                span = StrokeSpan(slot: slot, firstIndex: 0, indexCount: i.count)
+            }
+            spans[s.id] = span
+            indexTotal += span.indexCount
+            if !s.brush.isHighlighter, s.brush.castsShadow { shadowTotal += span.indexCount }
+        }
+        guard vb.length >= (gpu.vertexCount + verts.count) * vStride, indexTotal > 0,
+              let newIndices = device.makeBuffer(length: indexTotal * iStride * 3 / 2 + 4096, options: .storageModeShared)
+        else { return false }
+
+        // The index list in drawing order: kept strokes' runs copied from the old list.
+        let src = ib.contents()
+        let dst = newIndices.contents()
+        var at = 0
+        var highlighters = 0
+        var highlighterIndices = 0
+        var runs: [InkRun] = []
+        var shadowRuns: [(first: Int, count: Int)] = []
+        var hasWave = false
+        var hasAnimated = false
+        var has3D = false
+        var latestWet = -Double.infinity
+        var latestLava = -Double.infinity
+        for (rank, s) in ordered.enumerated() {
+            guard var span = spans[s.id] else { continue }
+            let count = span.indexCount
+            if let indices = made[s.id] {
+                indices.withUnsafeBytes { raw in
+                    if let base = raw.baseAddress {
+                        dst.advanced(by: at * iStride).copyMemory(from: base, byteCount: raw.count)
+                    }
+                }
+            } else if count > 0 {
+                dst.advanced(by: at * iStride).copyMemory(from: src.advanced(by: span.firstIndex * iStride),
+                                                          byteCount: count * iStride)
+            }
+            span.firstIndex = at
+            spans[s.id] = span
+            records[Int(span.slot)].order = UInt32(rank)
+            if s.brush.isHighlighter {
+                highlighters += 1
+                highlighterIndices += count
+            } else {
+                if count > 0 {
+                    if !s.brush.blendsOnce, let last = runs.last, !last.blendsOnce, last.first + last.count == at {
+                        runs[runs.count - 1].count += count
+                    } else {
+                        runs.append(InkRun(first: at, count: count, blendsOnce: s.brush.blendsOnce))
+                    }
+                }
+                if s.brush.castsShadow {
+                    has3D = true
+                    shadowRuns.append((first: at, count: count))
+                }
+                if s.brush.isAnimated { hasAnimated = true }
+                if s.brush.isFastAnimated { hasWave = true }
+                if s.brush == .lava { latestLava = max(latestLava, Self.lavaCoolEnd(s)) }
+                if s.brush == .wet { latestWet = max(latestWet, s.birth) }
+            }
+            at += count
+        }
+        var shadows: MTLBuffer?
+        if shadowTotal > 0 {
+            guard let list = device.makeBuffer(length: shadowTotal * iStride * 3 / 2 + 4096, options: .storageModeShared) else {
+                return false
+            }
+            var filled = 0
+            for run in shadowRuns where run.count > 0 {
+                list.contents().advanced(by: filled * iStride).copyMemory(from: dst.advanced(by: run.first * iStride),
+                                                                          byteCount: run.count * iStride)
+                filled += run.count
+            }
+            shadows = list
+        }
+        guard let strokeBuffer = Self.roomyBuffer(records, device: device) else { return false }
+
+        // Nothing has changed until here; frames in flight still read the old lists, and the new
+        // vertices go past the ones they use.
+        verts.withUnsafeBytes { raw in
+            if let base = raw.baseAddress {
+                vb.contents().advanced(by: gpu.vertexCount * vStride).copyMemory(from: base, byteCount: raw.count)
+            }
+        }
+        gpu.vertexCount += verts.count
+        gpu.indices = newIndices
+        gpu.strokes = strokeBuffer
+        gpu.records = records
+        gpu.spans = spans
+        gpu.ribbons = ribbons
+        gpu.order = ordered.map(\.id)
+        gpu.shadowIndices = shadows
+        gpu.shadowIndexCount = shadowTotal
+        gpu.highlighterIndexCount = highlighterIndices
+        gpu.inkIndexCount = at - highlighterIndices
+        gpu.inkRuns = runs
+        gpu.highlighterStrokes = highlighters
+        gpu.inkStrokes = ordered.count - highlighters
+        gpu.blades = nil
+        gpu.flowers = nil
+        gpu.bladeCount = 0
+        gpu.flowerCount = 0
+        gpu.hasWave = hasWave
+        gpu.hasAnimated = hasAnimated
+        gpu.has3D = has3D
+        gpu.latestWetBirth = latestWet
+        gpu.latestGrassBirth = -.infinity
+        gpu.latestLavaBirth = latestLava
+        gpu.version = page.version
         return true
     }
 
@@ -1120,11 +1307,14 @@ final class InkRenderer {
         var flowerRecords: [FlowerGPU] = []
         var ribbons: [Int: RibbonMesh] = [:]
         ribbons.reserveCapacity(page.strokes.count)
+        var spans: [Int: StrokeSpan] = [:]
+        spans.reserveCapacity(page.strokes.count)
 
+        // A rebuilt page's slots follow the drawing order, highlighters first.
         func append(_ s: Stroke) -> UInt32 {
             let idx = UInt32(infos.count)
             infos.append(StrokeGPU(color: s.color.simd, brush: UInt32(s.brush.shading),
-                                   birth: Float(s.birth - epoch), width: s.width, seed: s.seed))
+                                   birth: Float(s.birth - epoch), width: s.width, seed: s.seed, order: idx))
             let mesh: RibbonMesh
             if let known = previous[s.id] {
                 mesh = known
@@ -1135,6 +1325,7 @@ final class InkRenderer {
                 mesh = RibbonMesh(vertices: v, indices: i)
             }
             ribbons[s.id] = mesh
+            spans[s.id] = StrokeSpan(slot: idx, firstIndex: idxs.count, indexCount: mesh.indices.count)
             let base = UInt32(verts.count)
             for var v in mesh.vertices {
                 v.stroke = idx
@@ -1217,6 +1408,8 @@ final class InkRenderer {
         gpu.latestGrassBirth = latestGrass
         gpu.latestLavaBirth = latestLava
         gpu.ribbons = ribbons
+        gpu.spans = spans
+        gpu.records = infos
         gpu.version = page.version
         return usedGrass
     }
