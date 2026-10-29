@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The pen bar -->
+    <string name="bar_move">Move the pen bar</string>
+    <string name="bar_move_hint">Drag it: it settles at the top, the bottom or the right</string>
+    <string name="bar_to_top">Move to the top</string>
+    <string name="bar_to_bottom">Move to the bottom</string>
+    <string name="bar_to_right">Move to the right</string>
+    <string name="bar_hide_tools">Hide tools</string>
+    <string name="bar_show_tools">Show tools</string>
+    <string name="bar_shape_in_use">Shape: %1$s</string>
+
+    <!-- The pen's settings -->
+    <string name="pen_custom_color">Custom color</string>
+    <string name="picker_hue">Hue</string>
+    <string name="picker_shade">Saturation and brightness</string>
+    <string name="picker_opacity">Opacity</string>
+    <string name="pen_nib_angle">Nib angle</string>
+    <string name="pen_flowers">Flowers</string>
+    <string name="pen_flowers_none">None</string>
+    <string name="pen_flowers_some">Some</string>
+    <string name="pen_flowers_lots">Lots</string>
+    <string name="pen_note_grass">Short grass grows as you draw, and letters stay readable even in small writing. Buds open 1–2 seconds after you lift the pen.</string>
+    <string name="pen_sway_in_wind">Sway in the wind</string>
+    <string name="pen_drying_time">Drying time</string>
+    <string name="pen_cooling_time">Cooling time</string>
+    <string name="pen_seconds">%1$d s</string>
+    <string name="pen_note_lava">Lava first flows and glows, then forms a crust; embers keep burning in its cracks.</string>
+    <string name="pen_lava_animation">Flow and ember animation</string>
+    <string name="pen_note_fountain">Press harder and the nib opens, the line thickens; downstrokes come out fuller. The ink stays raised and glossy.</string>
+    <string name="pen_note_pencil">Tilt the pen to shade wide and soft; it gets darker as you press.</string>
+    <string name="pen_animation">Animation</string>
+
+    <!-- Every pen -->
+    <string name="pen_panel_title">Pens</string>
+    <string name="pen_panel_hint">Tap the heart: that pen always stays in the notebook\'s pen bar.</string>
+    <string name="pen_panel_shelf">Shelf</string>
+    <string name="pen_shelf_favorites">Favourites</string>
+    <string name="pen_shelf_writing">Writing</string>
+    <string name="pen_shelf_paint">Paint</string>
+    <string name="pen_shelf_nature">Nature</string>
+    <string name="pen_shelf_3d">3D</string>
+    <string name="no_favorite_pens">No favourite pens yet</string>
+    <string name="no_favorite_pens_hint">Tap the heart beside a pen; it stays here and in the notebook\'s pen bar.</string>
+    <string name="browse_pens">Browse pens</string>
+    <string name="pen_add_favorite">%1$s: add to favourites</string>
+    <string name="pen_remove_favorite">%1$s: remove from favourites</string>
+
+    <!-- Diğer -->
+    <string name="editor_straighten_on_hold">Fix the shape when you hold</string>
+    <string name="editor_animations">Animations</string>
+</resources>

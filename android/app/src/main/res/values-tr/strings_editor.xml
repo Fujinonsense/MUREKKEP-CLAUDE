@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kalem çubuğu -->
+    <string name="bar_move">Kalem çubuğunu taşı</string>
+    <string name="bar_move_hint">Sürükle: üste, alta ya da sağa yerleşir</string>
+    <string name="bar_to_top">Üste taşı</string>
+    <string name="bar_to_bottom">Alta taşı</string>
+    <string name="bar_to_right">Sağa taşı</string>
+    <string name="bar_hide_tools">Araçları gizle</string>
+    <string name="bar_show_tools">Araçları göster</string>
+    <string name="bar_shape_in_use">Şekil: %1$s</string>
+
+    <!-- Kalemin ayarları -->
+    <string name="pen_custom_color">Özel renk</string>
+    <string name="picker_hue">Ton</string>
+    <string name="picker_shade">Doygunluk ve parlaklık</string>
+    <string name="picker_opacity">Opaklık</string>
+    <string name="pen_nib_angle">Uç açısı</string>
+    <string name="pen_flowers">Çiçekler</string>
+    <string name="pen_flowers_none">Yok</string>
+    <string name="pen_flowers_some">Az</string>
+    <string name="pen_flowers_lots">Bol</string>
+    <string name="pen_note_grass">Kısa çim çizdikçe biter, küçük yazıda da harfler okunur. Kalemi kaldırdıktan 1–2 saniye sonra tomurcuklar açar.</string>
+    <string name="pen_sway_in_wind">Rüzgârda salınsın</string>
+    <string name="pen_drying_time">Kuruma süresi</string>
+    <string name="pen_cooling_time">Soğuma süresi</string>
+    <string name="pen_seconds">%1$d sn</string>
+    <string name="pen_note_lava">Lav önce akar ve parlar, sonra kabuk bağlar; çatlaklarındaki kor yanmaya devam eder.</string>
+    <string name="pen_lava_animation">Akış ve kor animasyonu</string>
+    <string name="pen_note_fountain">Bastırdıkça uç açılır ve çizgi kalınlaşır; aşağı çekişler daha dolgun çıkar. Mürekkep kabarık ve parlak kalır.</string>
+    <string name="pen_note_pencil">Kalemi yatırarak geniş ve yumuşak tara, bastırdıkça koyulaşır.</string>
+    <string name="pen_animation">Animasyon</string>
+
+    <!-- Tüm kalemler -->
+    <string name="pen_panel_title">Kalemler</string>
+    <string name="pen_panel_hint">Kalbe dokun: o kalem defterin kalem çubuğunda hep durur.</string>
+    <string name="pen_panel_shelf">Raf</string>
+    <string name="pen_shelf_favorites">Favoriler</string>
+    <string name="pen_shelf_writing">Yazı</string>
+    <string name="pen_shelf_paint">Boya</string>
+    <string name="pen_shelf_nature">Doğa</string>
+    <string name="pen_shelf_3d">3B</string>
+    <string name="no_favorite_pens">Henüz favori kalem yok</string>
+    <string name="no_favorite_pens_hint">Bir kalemin yanındaki kalbe dokun; o kalem burada ve defterin kalem çubuğunda hep durur.</string>
+    <string name="browse_pens">Kalemlere göz at</string>
+    <string name="pen_add_favorite">%1$s: favorilere ekle</string>
+    <string name="pen_remove_favorite">%1$s: favorilerden çıkar</string>
+
+    <!-- Diğer -->
+    <string name="editor_straighten_on_hold">Bekleyince şekli düzelt</string>
+    <string name="editor_animations">Animasyonlar</string>
+</resources>

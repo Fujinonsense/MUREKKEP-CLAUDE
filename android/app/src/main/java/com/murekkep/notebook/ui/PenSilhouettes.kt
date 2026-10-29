@@ -18,10 +18,11 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.dp
 import com.murekkep.notebook.ink.Brush
 
-// The pens of the black and white theme: flat silhouettes, as the approved mockup draws them (a
-// thin outline barrel in paper, the tip that belongs to the pen's kind, a band in the ink's colour).
-// Drawn in a 24 x 64 box, tip up, as the mockup's SVGs; the bodies run to the box's bottom edge and
-// the bar cuts them there. The Pro themes draw the realistic bodies of ToolArt.kt instead.
+// The pens of the black and white theme: flat silhouettes, as the iPad draws them
+// (Murekkep.swiftpm/ToolPalette.swift, PenSilhouette): a thin outline barrel in paper with the ink's
+// colour as a band and at the point; the pen in hand carries its whole tip in the ink. Drawn in a
+// 24 x 64 box, tip up, as the mockup's SVGs; the bodies run to the box's bottom edge and the bar cuts
+// them there. The Pro themes draw the realistic bodies of ToolArt.kt instead.
 
 object PenSilhouette {
     /** The drawing's box in dp. */
@@ -29,21 +30,25 @@ object PenSilhouette {
 
     private const val LINE = 1.2f
 
-    /** Draws [brush] (null is the eraser) filling the scope, one unit of the drawing per `size / box`. */
-    fun draw(scope: DrawScope, brush: Brush?, ink: Color, z: ZenColors) = with(scope) {
+    /** Draws [brush] (null is the eraser) filling the scope, one unit of the drawing per `size / box`;
+     *  [selected] is the pen in hand. */
+    fun draw(scope: DrawScope, brush: Brush?, ink: Color, selected: Boolean, z: ZenColors) = with(scope) {
         scale(size.width / box.width, size.height / box.height, pivot = Offset.Zero) {
-            when {
-                brush == null -> eraser(z)
-                brush == Brush.PENCIL -> pencil(ink, z)
-                else -> when (brush.nibStyle) {
-                    NibStyle.CHISEL -> marker(ink, z)
-                    NibStyle.FLAT -> nibPen(ink, z)
-                    NibStyle.BRUSH -> paintBrush(ink, z)
-                    NibStyle.LEAF -> grassBrush(ink, z)
-                    NibStyle.CONE, NibStyle.ERASER -> pen(ink, z)
-                }
+            drawUnits(this, brush, ink, selected, z)
+        }
+    }
+
+    /** Draws in the box's own units (one per dp of the 24 x 64 box), whatever the scope's size. */
+    fun drawUnits(scope: DrawScope, brush: Brush?, ink: Color, selected: Boolean, z: ZenColors) = with(scope) {
+        when {
+            brush == null -> eraser(z)
+            brush == Brush.PENCIL -> pencil(ink, z)
+            else -> when (brush.nibStyle) {
+                NibStyle.CHISEL -> highlighter(ink, z)
+                NibStyle.FLAT -> nibPen(ink, selected, z)
+                NibStyle.BRUSH, NibStyle.LEAF -> paintBrush(ink, z)
+                NibStyle.CONE, NibStyle.ERASER -> pen(ink, selected, z)
             }
-            if (brush != null && brush.isPremium) star(z)
         }
     }
 
@@ -67,80 +72,62 @@ object PenSilhouette {
         if (edge != null) drawPath(path, edge, style = outline)
     }
 
-    /** The lower body: a stroked barrel in paper and the ink's band on it. */
-    private fun DrawScope.barrel(ink: Color, z: ZenColors, top: Float, band: Float, radius: Float = 2f) {
+    /** The outlined barrel from [top] to the bottom of the box, with the ink's band 7 below its top. */
+    private fun DrawScope.barrel(ink: Color, z: ZenColors, top: Float, band: Boolean = true, radius: Float = 2f) {
         shape(rounded(6f, top, 12f, 64f - top, radius), z.paper, z.ink2)
-        drawRect(ink, Offset(6.6f, band), Size(10.8f, 4f))
-        // A dark ink on the dark barrel of the night look still reads as a band.
-        drawRect(z.rule, Offset(6.6f, band), Size(10.8f, 4f), style = Stroke(width = 0.5f))
+        if (band) drawRect(ink, Offset(6.6f, top + 7f), Size(10.8f, 4f))
     }
 
     /** The plain pen, gel, neon and every other fine tip: a cone with the ink at its point. */
-    private fun DrawScope.pen(ink: Color, z: ZenColors) {
-        shape(polygon(6f, 20f, 12f, 5f, 18f, 20f), z.paper2, z.ink2)
-        drawPath(polygon(10.7f, 8.4f, 12f, 4.8f, 13.3f, 8.4f), ink)
-        barrel(ink, z, top = 20f, band = 27f)
+    private fun DrawScope.pen(ink: Color, selected: Boolean, z: ZenColors) {
+        shape(polygon(6f, 20f, 12f, 5f, 18f, 20f), if (selected) ink else z.paper2, z.ink2)
+        if (!selected) drawPath(polygon(10.7f, 8.4f, 12f, 4.8f, 13.3f, 8.4f), ink)
+        barrel(ink, z, top = 20f)
     }
 
-    /** A sharpened pencil: the wood cone, the lead in the ink, two facet lines down the body. */
+    /** A sharpened pencil: the wood, the lead in the ink, two facet lines down the barrel. */
     private fun DrawScope.pencil(ink: Color, z: ZenColors) {
         shape(polygon(6f, 20f, 12f, 4f, 18f, 20f), z.paper3, z.ink2)
         drawPath(polygon(10.2f, 8.8f, 12f, 4f, 13.8f, 8.8f), ink)
-        shape(rounded(6f, 20f, 12f, 44f, 1f), z.paper, z.ink2)
+        barrel(ink, z, top = 20f, band = false, radius = 1f)
         drawLine(z.rule, Offset(10f, 20f), Offset(10f, 64f), strokeWidth = 1f)
         drawLine(z.rule, Offset(14f, 20f), Offset(14f, 64f), strokeWidth = 1f)
-        drawRect(ink, Offset(6.6f, 30f), Size(10.8f, 2.4f))
     }
 
     /** Fountain and calligraphy pens: a nib with its slit and breather hole. */
-    private fun DrawScope.nibPen(ink: Color, z: ZenColors) {
+    private fun DrawScope.nibPen(ink: Color, selected: Boolean, z: ZenColors) {
         val nib = Path().apply {
             moveTo(7f, 21f)
             cubicTo(7f, 14f, 9.5f, 9f, 12f, 3f)
             cubicTo(14.5f, 9f, 17f, 14f, 17f, 21f)
             close()
         }
-        shape(nib, z.paper3, z.ink2)
-        drawLine(z.ink2, Offset(12f, 8f), Offset(12f, 15f), strokeWidth = 1f)
-        drawCircle(z.ink2, radius = 1f, center = Offset(12f, 16f))
-        barrel(ink, z, top = 21f, band = 27f)
+        shape(nib, if (selected) ink else z.paper3, z.ink2)
+        if (!selected) {
+            drawLine(z.ink2, Offset(12f, 8f), Offset(12f, 15f), strokeWidth = 1f)
+            drawCircle(z.ink2, radius = 1f, center = Offset(12f, 16f))
+        }
+        barrel(ink, z, top = 21f)
     }
 
-    /** Watercolor and the other wet brushes: a tuft loaded with the ink above a ferrule. */
+    /** A marker: a wider body and a slanted felt tip in the ink. */
+    private fun DrawScope.highlighter(ink: Color, z: ZenColors) {
+        shape(rounded(5f, 18f, 14f, 46f, 2f), z.paper, z.ink2)
+        drawRect(ink, Offset(5.6f, 26f), Size(12.8f, 4f))
+        shape(polygon(8f, 18f, 8f, 8f, 16f, 4f, 16f, 18f), ink, z.ink2)
+    }
+
+    /** Watercolour, the wet brushes and the grass: a tuft loaded with the ink above a ferrule. */
     private fun DrawScope.paintBrush(ink: Color, z: ZenColors) {
         val tuft = Path().apply {
-            moveTo(7.5f, 21f)
-            cubicTo(7.5f, 14f, 9.5f, 9f, 12f, 3f)
-            cubicTo(14.5f, 9f, 16.5f, 14f, 16.5f, 21f)
+            moveTo(8f, 20f)
+            cubicTo(7f, 12f, 10f, 7f, 12f, 2f)
+            cubicTo(14f, 7f, 17f, 12f, 16f, 20f)
             close()
         }
-        drawPath(tuft, ink)
-        shape(rounded(6f, 21f, 12f, 6f, 0f), z.paper3, z.ink2)
-        shape(rounded(6f, 27f, 12f, 37f, 2f), z.paper, z.ink2)
-    }
-
-    /** The grass brush: three blades standing out of the ferrule. */
-    private fun DrawScope.grassBrush(ink: Color, z: ZenColors) {
-        for ((base, tip) in listOf(9f to Offset(7f, 7f), 12f to Offset(12.5f, 3.5f), 15f to Offset(17f, 7f))) {
-            val blade = Path().apply {
-                moveTo(base - 1.5f, 21.5f)
-                quadraticTo(base - 1f, 13f, tip.x, tip.y)
-                quadraticTo(base + 1.4f, 13f, base + 1.5f, 21.5f)
-                close()
-            }
-            drawPath(blade, ink)
-        }
-        shape(rounded(6f, 21f, 12f, 6f, 0f), z.paper3, z.ink2)
-        shape(rounded(6f, 27f, 12f, 37f, 2f), z.paper, z.ink2)
-    }
-
-    /** A chunky marker: a slanted felt tip in the ink over a cap shoulder, a wider body. */
-    private fun DrawScope.marker(ink: Color, z: ZenColors) {
-        drawPath(polygon(8f, 14f, 8f, 8f, 16f, 4f, 16f, 14f), ink)
-        shape(rounded(5f, 14f, 14f, 6f, 0f), z.paper3, z.ink2)
-        shape(rounded(5f, 20f, 14f, 44f, 2f), z.paper, z.ink2)
-        drawRect(ink, Offset(5.6f, 27f), Size(12.8f, 4f))
-        drawRect(z.rule, Offset(5.6f, 27f), Size(12.8f, 4f), style = Stroke(width = 0.5f))
+        shape(tuft, ink, z.ink2)
+        shape(rounded(7f, 17f, 10f, 5f, 0f), z.paper3, z.ink2)
+        barrel(ink, z, top = 22f)
     }
 
     /** A block eraser standing in its sleeve. */
@@ -149,23 +136,14 @@ object PenSilhouette {
         drawPath(rounded(5.6f, 8.6f, 12.8f, 12.8f, 3.5f), z.paper3)
         drawLine(z.ink2, Offset(5f, 22f), Offset(19f, 22f), strokeWidth = LINE)
     }
-
-    /** The small star of the Pro pens, on the barrel under the band (as ToolArt sets it). */
-    private fun DrawScope.star(z: ZenColors) {
-        val pts = ToolArt.starPoints(Offset(12f, 40f), 2.6f)
-        val path = Path().apply {
-            pts.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
-            close()
-        }
-        drawPath(path, z.muted)
-    }
 }
 
-/** One pen (null: the eraser) as its flat silhouette in its 24 x 64 dp box, or scaled by [scale]. */
+/** One pen (null: the eraser) as its flat silhouette in its 24 x 64 dp box, or scaled by [scale];
+ *  [selected] fills the tip of the pen in hand with its ink. */
 @Composable
-fun PenSilhouetteArt(brush: Brush?, ink: Color, modifier: Modifier = Modifier, scale: Float = 1f) {
+fun PenSilhouetteArt(brush: Brush?, ink: Color, selected: Boolean, modifier: Modifier = Modifier, scale: Float = 1f) {
     val z = Zen.colors
     Canvas(modifier.size((PenSilhouette.box.width * scale).dp, (PenSilhouette.box.height * scale).dp)) {
-        PenSilhouette.draw(this, brush, ink, z)
+        PenSilhouette.draw(this, brush, ink, selected, z)
     }
 }

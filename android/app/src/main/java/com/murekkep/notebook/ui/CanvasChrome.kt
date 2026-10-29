@@ -37,9 +37,11 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -160,39 +162,53 @@ private fun DrawScope.drawShapeHandles(a: FloatArray) {
 }
 
 /** What can be done with the lasso's strokes: delete them, duplicate them, give them the current
- *  pen, or let them go. Floats above the pen bar, on the same paper. */
+ *  pen, or let them go. A capsule over the page, on the pen bar's paper (the iPad's SelectionBar);
+ *  every touch on it stays on it. */
 @Composable
 fun SelectionBar(state: EditorState, modifier: Modifier = Modifier) {
     val z = Zen.colors
     Row(
-        modifier.floating(Zen.bar).padding(horizontal = 8.dp, vertical = 6.dp),
+        modifier
+            .floating(28.dp)
+            .pointerInput(Unit) {}
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SelectionAction(stringResource(R.string.delete), Icons.Outlined.Delete, MaterialTheme.colorScheme.error) {
+        SelectionAction(stringResource(R.string.delete), Icons.Outlined.Delete, if (z.dark) SystemRedDark else SystemRed) {
             state.deleteSelection()
         }
         SelectionAction(stringResource(R.string.duplicate), Icons.Outlined.LibraryAdd) { state.duplicateSelection() }
         SelectionAction(stringResource(R.string.apply_ink), Icons.Outlined.Brush) { state.restyleSelection() }
-        Box(Modifier.padding(horizontal = 4.dp).size(1.dp, 28.dp).background(z.rule))
+        Box(Modifier.size(1.dp, 26.dp).background(z.rule))
         SelectionAction(stringResource(R.string.done), Icons.Filled.Check) { state.clearSelection() }
     }
 }
 
+/** The system's red by day and at night: the iPad's destructive button. */
+private val SystemRed = Color(0xFFFF3B30)
+private val SystemRedDark = Color(0xFFFF453A)
+
+/** An action of the selection bar: an 18 dp icon over its 11 sp name, in ink (delete in red). */
 @Composable
 private fun SelectionAction(title: String, icon: ImageVector, tint: Color = Color.Unspecified, onClick: () -> Unit) {
-    val color = if (tint == Color.Unspecified) Zen.colors.ink2 else tint
+    val color = if (tint == Color.Unspecified) Zen.colors.ink else tint
     Column(
         Modifier
             .clip(RoundedCornerShape(Zen.control))
             .clickable(onClick = onClick)
-            .defaultMinSize(minWidth = 56.dp, minHeight = 48.dp)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .defaultMinSize(minWidth = 52.dp, minHeight = 44.dp)
+            .padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-        Text(title, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium),
+            color = color,
+            maxLines = 1,
+        )
     }
 }
 
