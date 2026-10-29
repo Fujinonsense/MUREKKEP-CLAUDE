@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The break corner (the iPad's GameCorner; English from Translations.swift, "the device" where
+         the iPad says "the iPad"): its tile and its panel -->
+    <string name="games_tile_open">Break: small games</string>
+    <string name="games_tile_close">Close the break</string>
+    <string name="games_break">Break</string>
+    <string name="games_break_subtitle">A short break; with the pen or a finger.</string>
+    <string name="games_back">Back to the games</string>
+    <string name="games_restart">Restart</string>
+    <string name="games_enlarge">Enlarge</string>
+    <string name="games_shrink">Shrink</string>
+    <string name="games_close">Close</string>
+    <string name="games_layer">Layer</string>
+    <string name="games_layer_games">Games</string>
+    <string name="games_layer_creative">Create</string>
+
+    <!-- What every game shares: the difficulty, the best, the end of a round -->
+    <string name="games_difficulty">Difficulty</string>
+    <string name="games_easy">Easy</string>
+    <string name="games_medium">Medium</string>
+    <string name="games_hard">Hard</string>
+    <string name="games_best">Best: %1$d</string>
+    <string name="games_wins">Wins: %1$d</string>
+    <string name="games_best_time">Best time: %1$s</string>
+    <string name="games_new_best">New best!</string>
+    <string name="games_again">Again</string>
+    <string name="games_you_won">You won!</string>
+    <string name="games_device_won">The device won.</string>
+    <string name="games_draw">A draw.</string>
+    <string name="games_device_thinking">The device is thinking…</string>
+
+    <!-- The levelled games' map and stars -->
+    <string name="games_stars">%1$d stars</string>
+    <string name="games_stars_in_all">%1$d stars in all</string>
+    <string name="games_level">Level %1$d</string>
+    <string name="games_level_open">Level %1$d open</string>
+    <string name="games_level_locked">Level %1$d, locked</string>
+    <string name="games_level_done">Level done!</string>
+    <string name="games_not_this_time">Not this time.</string>
+    <string name="games_levels">Levels</string>
+    <string name="games_next">Next</string>
+
+    <!-- Ink bubbles -->
+    <string name="games_bubbles">Ink bubbles</string>
+    <string name="games_bubbles_hint">Pop the bubbles, leave the blots. 60 seconds.</string>
+    <string name="games_score">Score</string>
+    <string name="games_best_label">Best</string>
+    <string name="games_seconds_left">%1$d seconds left</string>
+    <string name="games_bubble_field">Bubble field</string>
+    <string name="games_leave_the_blots">Leave the blots</string>
+    <string name="games_multiplier">Multiplier %1$d</string>
+    <string name="games_times_up">Time\'s up</string>
+    <string name="games_score_value">Score: %1$d</string>
+    <string name="games_bubbles_blots">%1$d bubbles · %2$d blots</string>
+    <!-- What a touched blot costs, floating up from it: points and seconds -->
+    <string name="games_blot_cost">−%1$d · −%2$d s</string>
+
+    <!-- XOX -->
+    <string name="games_xox">Tic-tac-toe</string>
+    <string name="games_xox_hint">Against the device; you are X.</string>
+    <string name="games_xox_your_turn">Your turn: draw an X.</string>
+    <string name="games_xox_board">Tic-tac-toe board</string>
+    <string name="games_xox_easy">Easy: the device mostly plays at random.</string>
+    <string name="games_xox_medium">Medium: the device knows how to win and block.</string>
+    <string name="games_xox_hard">Hard: the device makes no mistakes; a draw is a win.</string>
+
+    <!-- Kare kapmaca (dots and boxes) -->
+    <string name="games_dots">Dots and boxes</string>
+    <string name="games_dots_hint">Join the dots; whoever closes a box takes it and goes again.</string>
+    <string name="games_you">You</string>
+    <string name="games_device">Device</string>
+    <string name="games_dots_your_turn">Your turn: draw a line.</string>
+    <string name="games_dots_board">Dots and boxes board</string>
+    <string name="games_dots_easy">Easy: 3×3; the device is often careless.</string>
+    <string name="games_dots_medium">Medium: 4×4; the device gives nothing away lightly.</string>
+    <string name="games_dots_hard">Hard: 5×5; the device counts the endgame through.</string>
+
+    <!-- Sudoku -->
+    <string name="games_sudoku">Sudoku</string>
+    <string name="games_sudoku_hint">1–9 in every row, column and box.</string>
+    <string name="games_sudoku_board">Sudoku board</string>
+    <string name="games_sudoku_pick">Tap a cell, pick a digit</string>
+    <string name="games_sudoku_notes_mode">Notes mode: small digits</string>
+    <string name="games_digit">Digit %1$d</string>
+    <string name="games_new_puzzle">New puzzle</string>
+    <string name="games_solved">Solved!</string>
+    <string name="games_time">Time: %1$s</string>
+    <string name="games_notes">Notes</string>
+    <string name="games_erase">Delete</string>
+    <string name="games_new">New</string>
+    <string name="games_leave_puzzle">Leave this puzzle for a new one?</string>
+</resources>

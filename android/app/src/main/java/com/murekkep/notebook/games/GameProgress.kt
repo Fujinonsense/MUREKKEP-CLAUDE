@@ -96,6 +96,14 @@ object GamePanelSize {
     }
 
     /**
+     * Where the panel's bottom stands, from the canvas's bottom edge: [aboveTile] (over the corner's
+     * tile) while the compact panel fits between it and [top]; on a shorter window (a phone on its
+     * side) it comes down to [low], over the tile, which it hides while it is open.
+     */
+    fun bottom(canvasHeight: Double, top: Double, aboveTile: Double, low: Double): Double =
+        if (canvasHeight - top - aboveTile >= compact.height) aboveTile else low
+
+    /**
      * Android's windows run smaller than any iPad's (a phone, a split screen): [size] cut down to
      * the room there is, so the panel never runs off the canvas. The iPad keeps the compact size.
      */

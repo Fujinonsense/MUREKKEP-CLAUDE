@@ -77,5 +77,9 @@ class GameProgressTest {
         assertEquals(PanelSize(336.0, 420.0), GamePanelSize.fitted(GamePanelSize.compact, 336.4, 600.0))
         assertEquals(PanelSize(340.0, 250.0), GamePanelSize.fitted(GamePanelSize.compact, 700.0, 250.0))
         assertEquals(PanelSize(0.0, 0.0), GamePanelSize.fitted(GamePanelSize.compact, -10.0, -1.0))
+        // A tablet keeps the panel over the tile; a phone on its side brings it down over the tile.
+        assertEquals(148.0, GamePanelSize.bottom(canvasHeight = 800.0, top = 12.0, aboveTile = 148.0, low = 12.0), 0.0)
+        assertEquals(12.0, GamePanelSize.bottom(canvasHeight = 336.0, top = 12.0, aboveTile = 168.0, low = 12.0), 0.0)
+        assertEquals("exactly room for the compact panel", 148.0, GamePanelSize.bottom(580.0, 12.0, 148.0, 12.0), 0.0)
     }
 }

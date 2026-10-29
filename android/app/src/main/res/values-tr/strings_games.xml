@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mola köşesi (iPad'in GameCorner'ı; iPad'in "iPad" dediği yerde "cihaz"): kutucuğu ve paneli -->
+    <string name="games_tile_open">Mola: küçük oyunlar</string>
+    <string name="games_tile_close">Molayı kapat</string>
+    <string name="games_break">Mola</string>
+    <string name="games_break_subtitle">Kısa bir mola; kalemle de parmakla da.</string>
+    <string name="games_back">Oyunlara dön</string>
+    <string name="games_restart">Yeniden başlat</string>
+    <string name="games_enlarge">Büyüt</string>
+    <string name="games_shrink">Küçült</string>
+    <string name="games_close">Kapat</string>
+    <string name="games_layer">Katman</string>
+    <string name="games_layer_games">Oyunlar</string>
+    <string name="games_layer_creative">Yaratıcılık</string>
+
+    <!-- Her oyunun ortak yanları: zorluk, en iyi, turun sonu -->
+    <string name="games_difficulty">Zorluk</string>
+    <string name="games_easy">Kolay</string>
+    <string name="games_medium">Orta</string>
+    <string name="games_hard">Zor</string>
+    <string name="games_best">En iyi: %1$d</string>
+    <string name="games_wins">Galibiyet: %1$d</string>
+    <string name="games_best_time">En iyi süre: %1$s</string>
+    <string name="games_new_best">Yeni rekor!</string>
+    <string name="games_again">Tekrar</string>
+    <string name="games_you_won">Kazandın!</string>
+    <string name="games_device_won">Cihaz kazandı.</string>
+    <string name="games_draw">Berabere.</string>
+    <string name="games_device_thinking">Cihaz düşünüyor…</string>
+
+    <!-- Seviyeli oyunların haritası ve yıldızları -->
+    <string name="games_stars">%1$d yıldız</string>
+    <string name="games_stars_in_all">Toplam %1$d yıldız</string>
+    <string name="games_level">Seviye %1$d</string>
+    <string name="games_level_open">Seviye %1$d açık</string>
+    <string name="games_level_locked">Seviye %1$d, kilitli</string>
+    <string name="games_level_done">Seviye tamam!</string>
+    <string name="games_not_this_time">Bu sefer olmadı.</string>
+    <string name="games_levels">Seviyeler</string>
+    <string name="games_next">Sonraki</string>
+
+    <!-- Mürekkep balonları -->
+    <string name="games_bubbles">Mürekkep balonları</string>
+    <string name="games_bubbles_hint">Balonları patlat, lekelere dokunma. 60 saniye.</string>
+    <string name="games_score">Puan</string>
+    <string name="games_best_label">En iyi</string>
+    <string name="games_seconds_left">Kalan süre %1$d saniye</string>
+    <string name="games_bubble_field">Balon alanı</string>
+    <string name="games_leave_the_blots">Lekelere dokunma</string>
+    <string name="games_multiplier">Çarpan %1$d</string>
+    <string name="games_times_up">Süre doldu</string>
+    <string name="games_score_value">Puan: %1$d</string>
+    <string name="games_bubbles_blots">%1$d balon · %2$d leke</string>
+    <!-- Dokunulan lekenin bedeli, lekeden yükselen yazı: puan ve saniye -->
+    <string name="games_blot_cost">−%1$d · −%2$d sn</string>
+
+    <!-- XOX -->
+    <string name="games_xox">XOX</string>
+    <string name="games_xox_hint">Cihaza karşı; sen X\'sin.</string>
+    <string name="games_xox_your_turn">Sıra sende: X çiz.</string>
+    <string name="games_xox_board">XOX tahtası</string>
+    <string name="games_xox_easy">Kolay: cihaz çoğu zaman rastgele oynar.</string>
+    <string name="games_xox_medium">Orta: cihaz kazanmayı ve engellemeyi bilir.</string>
+    <string name="games_xox_hard">Zor: cihaz hata yapmaz; berabere kalmak başarıdır.</string>
+
+    <!-- Kare kapmaca -->
+    <string name="games_dots">Kare kapmaca</string>
+    <string name="games_dots_hint">Noktaları birleştir; kareyi kapatan alır, bir daha oynar.</string>
+    <string name="games_you">Sen</string>
+    <string name="games_device">Cihaz</string>
+    <string name="games_dots_your_turn">Sıra sende: bir çizgi çiz.</string>
+    <string name="games_dots_board">Kare kapmaca tahtası</string>
+    <string name="games_dots_easy">Kolay: 3×3; cihaz sık sık dalgın.</string>
+    <string name="games_dots_medium">Orta: 4×4; cihaz kolay kare vermez.</string>
+    <string name="games_dots_hard">Zor: 5×5; cihaz oyunun sonunu hesaplar.</string>
+
+    <!-- Sudoku -->
+    <string name="games_sudoku">Sudoku</string>
+    <string name="games_sudoku_hint">Her satır, sütun ve kutuda 1–9.</string>
+    <string name="games_sudoku_board">Sudoku tahtası</string>
+    <string name="games_sudoku_pick">Hücreye dokun, rakamı seç</string>
+    <string name="games_sudoku_notes_mode">Not modu: küçük rakamlar</string>
+    <string name="games_digit">Rakam %1$d</string>
+    <string name="games_new_puzzle">Yeni bulmaca</string>
+    <string name="games_solved">Çözüldü!</string>
+    <string name="games_time">Süre: %1$s</string>
+    <string name="games_notes">Notlar</string>
+    <string name="games_erase">Sil</string>
+    <string name="games_new">Yeni</string>
+    <string name="games_leave_puzzle">Bulmacayı bırakıp yenisine geçilsin mi?</string>
+</resources>
