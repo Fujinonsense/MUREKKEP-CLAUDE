@@ -219,8 +219,9 @@ class EditorState(
     /** The edge the pen bar stands on. */
     var paletteEdge: PaletteEdge by kept(prefs?.paletteEdge ?: PaletteEdge.BOTTOM) { prefs?.paletteEdge = it }
 
-    /** The pen bar folded. */
-    var paletteCollapsed: Boolean by kept(prefs?.paletteCollapsed ?: false) { prefs?.paletteCollapsed = it }
+    /** The pen bar folded, while this note is open: every note opens with the whole bar (the
+     *  iPad's @State in its editor). */
+    var paletteCollapsed by mutableStateOf(false)
 
     /** The pen panel's shelf used last ("" until one is picked). */
     var penPanelShelf: String by kept(prefs?.penPanelShelf ?: "") { prefs?.penPanelShelf = it }

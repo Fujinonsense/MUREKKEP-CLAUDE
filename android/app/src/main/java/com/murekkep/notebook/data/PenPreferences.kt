@@ -102,11 +102,6 @@ class PenPreferences(context: Context) {
         get() = PaletteEdge.fromRaw(prefs.getString("paletteEdge", null))
         set(value) = prefs.edit().putString("paletteEdge", value.raw).apply()
 
-    /** The bar folded to its undo, redo and the ink in hand. */
-    var paletteCollapsed: Boolean
-        get() = prefs.getBoolean("paletteCollapsed", false)
-        set(value) = prefs.edit().putBoolean("paletteCollapsed", value).apply()
-
     /** The pen panel's shelf used last ("" until one is picked). */
     var penPanelShelf: String
         get() = prefs.getString("penPanelShelf", "")!!
